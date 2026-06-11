@@ -1,86 +1,98 @@
-import { PlaywrightCrawler } from "crawlee";
+import { getBrowser } from "./browser.js";
 
 export const scrapeXProfile = async (username) => {
-  let profileData = null;
+  let page;
 
-  const crawler = new PlaywrightCrawler({
-    maxRequestsPerCrawl: 1,
+  try {
+    const browser = await getBrowser();
 
-    launchContext: {
-      launchOptions: {
-        headless: true,
-      },
-    },
+    page = await browser.newPage();
 
-    async requestHandler({ page }) {
-      try {
-        await page.goto(`https://x.com/${username}`, {
-          waitUntil: "domcontentloaded",
-          timeout: 60000,
+    // Block heavy resources
+    await page.route("**/*", (route) => {
+      const type = route.request().resourceType();
+
+      if (type === "image" || type === "media" || type === "font") {
+        return route.abort();
+      }
+
+      route.continue();
+    });
+
+    await page.goto(`https://x.com/${username}`, {
+      waitUntil: "domcontentloaded",
+      timeout: 10000,
+    });
+
+    await page.waitForTimeout(1500);
+
+    const data = await page.evaluate(() => {
+      const body = document.body.innerText;
+
+      const extract = (regex) => body.match(regex)?.[1] || "0";
+
+      return {
+        body,
+        title: document.title,
+      };
+    });
+
+    const bodyText = data.body;
+
+    const followers =
+      bodyText.match(/([\d.,]+[KMB]?)\s*Followers/i)?.[1] || "0";
+
+    const following =
+      bodyText.match(/([\d.,]+[KMB]?)\s*Following/i)?.[1] || "0";
+
+    const posts =
+      bodyText.match(/([\d.,]+[KMB]?)\s*Posts/i)?.[1] ||
+      bodyText.match(/([\d.,]+[KMB]?)\s*posts/i)?.[1] ||
+      "0";
+
+    let name = username;
+
+    try {
+      const txt = await page
+        .locator('[data-testid="UserName"]')
+        .first()
+        .textContent({
+          timeout: 3000,
         });
 
-        await page.waitForTimeout(8000);
-
-        const bodyText =
-          (await page.evaluate(() => document.body.innerText)) || "";
-
-        const nameElement = await page
-          .locator('[data-testid="UserName"]')
-          .first()
-          .textContent()
-          .catch(() => "");
-
-        const bioElement = await page
-          .locator('[data-testid="UserDescription"]')
-          .textContent()
-          .catch(() => "");
-
-        const name = nameElement?.split("@")[0]?.trim() || username;
-
-        const followersMatch = bodyText.match(/([\d.,]+[KMB]?)\sFollowers/i);
-
-        const followingMatch = bodyText.match(/([\d.,]+[KMB]?)\sFollowing/i);
-
-        const postsMatch = bodyText.match(/([\d.,]+[KMB]?)\sposts/i);
-
-        profileData = {
-          username,
-
-          name,
-
-          bio: bioElement || "",
-
-          followers: followersMatch?.[1] || "0",
-
-          following: followingMatch?.[1] || "0",
-
-          posts: postsMatch?.[1] || "0",
-
-          profileUrl: `https://x.com/${username}`,
-        };
-
-        console.log("X PROFILE:");
-        console.log(profileData);
-
-        // Debug output
-        const followingIndex = bodyText.indexOf("Following");
-
-        if (followingIndex > -1) {
-          console.log(
-            "\n===== FOLLOWING DEBUG =====\n",
-            bodyText.substring(
-              Math.max(0, followingIndex - 100),
-              followingIndex + 100,
-            ),
-          );
-        }
-      } catch (error) {
-        console.error("X Scraper Error:", error.message);
+      if (txt) {
+        name = txt.split("@")[0].trim();
       }
-    },
-  });
+    } catch {}
 
-  await crawler.run([`https://x.com/${username}`]);
+    let bio = "";
 
-  return profileData;
+    try {
+      bio =
+        (await page.locator('[data-testid="UserDescription"]').textContent({
+          timeout: 2000,
+        })) || "";
+    } catch {}
+
+    const joinedDate = bodyText.match(/Joined\s([A-Za-z]+\s\d{4})/i)?.[1] || "";
+
+    return {
+      username,
+      name,
+      bio,
+      followers,
+      following,
+      posts,
+      joinedDate,
+      profileUrl: `https://x.com/${username}`,
+    };
+  } catch (err) {
+    console.error("SCRAPER ERROR:", err.message);
+
+    return null;
+  } finally {
+    if (page) {
+      await page.close();
+    }
+  }
 };

@@ -1,61 +1,83 @@
-import { Bell, Search, Sparkles } from "lucide-react";
+import { Bell, Sparkles } from "lucide-react";
+import { motion } from "framer-motion";
 
 export default function Navbar() {
   return (
-    <header className="h-20 bg-white border-b border-slate-200 flex items-center justify-between px-8">
-      {/* Left */}
-      <div>
-        <h1 className="text-3xl font-bold text-slate-900">Dashboard</h1>
-
-        <p className="text-slate-500 text-sm">
-          Monitor your social media analytics
+    <motion.header
+      initial={{ opacity: 0, y: -8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+      className="h-20 w-full bg-[#111319] border-b border-white/[0.08] flex items-center justify-between px-4 sm:px-6 lg:px-8 relative z-50 shadow-lg shadow-black/50 select-none"
+    >
+      {/* Left Section: High-Contrast Contextual Title */}
+      <div className="min-w-0 py-2">
+        <h1 className="text-base sm:text-lg font-bold text-white tracking-tight truncate">
+          Social Analytics Node
+        </h1>
+        <p className="hidden sm:block text-[11px] text-slate-400 font-medium tracking-wide mt-0.5">
+          Real-time cross-platform analytics engine
         </p>
       </div>
 
-      {/* Right */}
-      <div className="flex items-center gap-4">
-        {/* Search */}
-        <div className="hidden md:flex items-center gap-3 bg-slate-100 px-4 py-3 rounded-xl w-80">
-          <Search size={18} className="text-slate-400" />
+      {/* Right Section: System Metrics & Profile */}
+      <div className="flex items-center gap-3 sm:gap-4 shrink-0">
+        {/* Premium AI Status Badge - Enhanced Visibility */}
+        <motion.div
+          whileHover={{ scale: 1.02 }}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-500/10 border border-indigo-500/30 text-indigo-300 text-xs font-semibold tracking-wide"
+        >
+          <Sparkles size={13} className="animate-pulse text-indigo-400" />
+          <span className="hidden xs:inline">AI Engine Active</span>
+          <span className="xs:hidden">AI</span>
+        </motion.div>
 
-          <input
-            type="text"
-            placeholder="Search channels..."
-            className="bg-transparent outline-none w-full text-sm"
+        {/* System Version Pin */}
+        <div className="hidden md:block px-3 py-1.5 rounded-xl bg-white/[0.04] border border-white/[0.08] text-slate-400 font-mono text-[11px]">
+          v1.0.4_core
+        </div>
+
+        {/* Notification Bell with Drop Shadow and High Contrast */}
+        <motion.button
+          whileHover={{ scale: 1.04 }}
+          whileTap={{ scale: 0.96 }}
+          className="relative p-2.5 rounded-xl bg-white/[0.04] border border-white/[0.08] text-slate-200 hover:text-white hover:bg-white/[0.08] transition-colors group focus:outline-none shadow-sm"
+        >
+          <Bell
+            size={18}
+            className="group-hover:rotate-12 transition-transform"
           />
-        </div>
+          {/* Active Ping Indicator */}
+          <span className="absolute top-2 right-2 flex h-2 w-2">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-500"></span>
+          </span>
+        </motion.button>
 
-        {/* AI Badge */}
-        <div className="hidden lg:flex items-center gap-2 px-4 py-2 rounded-xl bg-purple-100 text-purple-700 font-medium">
-          <Sparkles size={16} />
-          AI Enabled
-        </div>
+        {/* Separator Line */}
+        <div className="h-6 w-[1px] bg-white/[0.12] hidden sm:block" />
 
-        {/* Notification */}
-        <button className="relative p-3 rounded-xl bg-slate-100 hover:bg-slate-200 transition">
-          <Bell size={20} />
-
-          <span className="absolute top-2 right-2 h-2 w-2 rounded-full bg-red-500" />
-        </button>
-
-        {/* Version Badge */}
-        <div className="hidden md:flex px-4 py-2 rounded-xl bg-slate-100 text-slate-700 font-medium">
-          v1.0
-        </div>
-
-        {/* Profile */}
-        <div className="flex items-center gap-3 bg-slate-100 rounded-2xl px-3 py-2">
-          <div className="h-10 w-10 rounded-full bg-gradient-to-r from-purple-600 to-blue-600 flex items-center justify-center text-white font-bold">
+        {/* Premium User Profile Block */}
+        <motion.div
+          whileHover={{ x: 1 }}
+          className="flex items-center gap-2.5 bg-white/[0.03] border border-white/[0.06] p-1.5 pr-3 rounded-xl cursor-pointer"
+        >
+          {/* Avatar with Strong Layering */}
+          <div className="relative h-8 w-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-xs font-black shadow-md shadow-indigo-600/30">
             P
+            <div className="absolute inset-0 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 blur-[4px] opacity-40 -z-10" />
           </div>
 
-          <div className="hidden md:block">
-            <p className="font-semibold text-sm">Pallav</p>
-
-            <p className="text-xs text-slate-500">Developer</p>
+          {/* User Data Metas */}
+          <div className="hidden sm:block text-left max-w-[100px]">
+            <p className="font-semibold text-xs text-slate-100 leading-none truncate">
+              Pallav
+            </p>
+            <p className="text-[10px] text-slate-400 font-medium tracking-wide mt-1 leading-none">
+              Developer
+            </p>
           </div>
-        </div>
+        </motion.div>
       </div>
-    </header>
+    </motion.header>
   );
 }

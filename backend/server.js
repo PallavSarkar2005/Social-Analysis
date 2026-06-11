@@ -20,7 +20,7 @@ console.log("MONGO_URI:", process.env.MONGO_URI);
 
 connectDB();
 
-startCronJobs();
+// startCronJobs();
 startSnapshotJob();
 
 const app = express();

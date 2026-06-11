@@ -36,7 +36,8 @@ Extract Username
 
 const extractUsername = (url) => {
   try {
-    const match = url.match(/x\.com\/([^/?]+)/i);
+    const match = url.match(/(?:x|twitter)\.com\/([^/?]+)/i);
+
     return match?.[1] || null;
   } catch {
     return null;
@@ -52,8 +53,6 @@ Analyze X Profile
 export const analyzeXProfile = async (req, res) => {
   try {
     const { url } = req.body;
-
-    console.log("REQUEST URL:", url);
 
     if (!url) {
       return res.status(400).json({
@@ -71,14 +70,21 @@ export const analyzeXProfile = async (req, res) => {
       });
     }
 
-    console.log("STEP 1 - Username:", username);
+    console.log("================================");
+    console.log("REQUEST URL:", url);
+    console.log("USERNAME:", username);
+    console.log("================================");
+
+    /*
+    ========================================
+    SCRAPE PROFILE
+    ========================================
+    */
 
     const profile = await scrapeXProfile(username);
 
     console.log("PROFILE VALUE:");
     console.log(profile);
-    console.log("PROFILE TYPE:", typeof profile);
-    console.log("PROFILE EXISTS:", !!profile);
 
     if (!profile) {
       return res.status(404).json({
@@ -86,6 +92,12 @@ export const analyzeXProfile = async (req, res) => {
         message: "Profile not found",
       });
     }
+
+    /*
+    ========================================
+    FIND OR CREATE ACCOUNT
+    ========================================
+    */
 
     let account = await Account.findOne({
       accountId: username,
@@ -98,14 +110,45 @@ export const analyzeXProfile = async (req, res) => {
         accountId: username,
         profileUrl: profile.profileUrl,
       });
+    } else {
+      account.name = profile.name;
+      account.profileUrl = profile.profileUrl;
+
+      await account.save();
     }
 
-    await Snapshot.create({
+    /*
+    ========================================
+    SAVE SNAPSHOT ONLY IF CHANGED
+    ========================================
+    */
+
+    const followerCount = parseNumber(profile.followers);
+
+    const latestSnapshot = await Snapshot.findOne({
       account: account._id,
-      followers: parseNumber(profile.followers),
-      views: 0,
-      engagementRate: 0,
+    }).sort({
+      capturedAt: -1,
     });
+
+    if (!latestSnapshot || latestSnapshot.followers !== followerCount) {
+      await Snapshot.create({
+        account: account._id,
+        followers: followerCount,
+        views: 0,
+        engagementRate: 0,
+      });
+
+      console.log("NEW SNAPSHOT SAVED");
+    } else {
+      console.log("FOLLOWER COUNT UNCHANGED");
+    }
+
+    /*
+    ========================================
+    HISTORY
+    ========================================
+    */
 
     const history = await Snapshot.find({
       account: account._id,
@@ -113,17 +156,31 @@ export const analyzeXProfile = async (req, res) => {
       .sort({ capturedAt: 1 })
       .lean();
 
+    /*
+    ========================================
+    RESPONSE
+    ========================================
+    */
+
     return res.json({
       success: true,
       type: "x",
+
       data: {
         mongoId: account._id,
+
         username: profile.username,
+
         name: profile.name,
+
         bio: profile.bio,
+
         followers: profile.followers,
+
         following: profile.following,
+
         posts: profile.posts,
+
         profileUrl: profile.profileUrl,
 
         history: history.map((item) => ({
@@ -133,8 +190,10 @@ export const analyzeXProfile = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("X Controller Error:");
+    console.error("================================");
+    console.error("X CONTROLLER ERROR");
     console.error(error);
+    console.error("================================");
 
     return res.status(500).json({
       success: false,
