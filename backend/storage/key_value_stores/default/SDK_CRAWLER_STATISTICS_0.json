@@ -1,0 +1,52 @@
+{
+  "requestsFinished": 0,
+  "requestsFailed": 1,
+  "requestsRetries": 1,
+  "requestsFailedPerMinute": 0,
+  "requestsFinishedPerMinute": 0,
+  "requestMinDurationMillis": null,
+  "requestMaxDurationMillis": 0,
+  "requestTotalFailedDurationMillis": 103389,
+  "requestTotalFinishedDurationMillis": 0,
+  "crawlerStartedAt": "2026-06-11T05:17:31.777Z",
+  "crawlerFinishedAt": "2026-06-11T05:23:47.580Z",
+  "statsPersistedAt": "2026-06-11T05:23:47.580Z",
+  "crawlerRuntimeMillis": 377754,
+  "crawlerLastStartTimestamp": 1781155049826,
+  "requestRetryHistogram": [
+    null,
+    null,
+    null,
+    1
+  ],
+  "statsId": 0,
+  "requestAvgFailedDurationMillis": 103389,
+  "requestAvgFinishedDurationMillis": null,
+  "requestTotalDurationMillis": 103389,
+  "requestsTotal": 1,
+  "requestsWithStatusCode": {
+    "200": 4
+  },
+  "errors": {
+    "C:\\Users\\palla\\Desktop\\Socail-Analyst-dashboard\\backend\\node_modules\\@apify\\timeout\\cjs\\index.cjs:64:68": {
+      "missing error code": {
+        "Error": {
+          "requestHandler timed out after 60 seconds.": {
+            "count": 1
+          }
+        }
+      }
+    }
+  },
+  "retryErrors": {
+    "C:\\Users\\palla\\Desktop\\Socail-Analyst-dashboard\\backend\\node_modules\\@apify\\timeout\\cjs\\index.cjs:64:68": {
+      "missing error code": {
+        "Error": {
+          "requestHandler timed out after 60 seconds.": {
+            "count": 3
+          }
+        }
+      }
+    }
+  }
+}

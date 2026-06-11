@@ -1,0 +1,14 @@
+{
+  "ignore": [
+    "storage/*",
+    "storage/**",
+    "tmp/*",
+    "tmp/**",
+    "datasets/*",
+    "datasets/**",
+    "request_queues/*",
+    "request_queues/**",
+    "key_value_stores/*",
+    "key_value_stores/**"
+  ]
+}

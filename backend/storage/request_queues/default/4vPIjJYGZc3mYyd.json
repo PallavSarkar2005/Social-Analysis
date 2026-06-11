@@ -1,0 +1,9 @@
+{
+	"id": "4vPIjJYGZc3mYyd",
+	"json": "{\"id\":\"4vPIjJYGZc3mYyd\",\"url\":\"https://x.com/myogiadityanath\",\"loadedUrl\":\"https://x.com/myogiadityanath\",\"uniqueKey\":\"https://x.com/myogiadityanath\",\"method\":\"GET\",\"noRetry\":false,\"retryCount\":3,\"errorMessages\":[\"Error: requestHandler timed out after 60 seconds.\\n    at Timeout._onTimeout (C:\\\\Users\\\\palla\\\\Desktop\\\\Socail-Analyst-dashboard\\\\backend\\\\node_modules\\\\@apify\\\\timeout\\\\cjs\\\\index.cjs:64:68)\\n    at listOnTimeout (node:internal/timers:605:17)\\n    at process.processTimers (node:internal/timers:541:7)\",\"Error: requestHandler timed out after 60 seconds.\\n    at Timeout._onTimeout (C:\\\\Users\\\\palla\\\\Desktop\\\\Socail-Analyst-dashboard\\\\backend\\\\node_modules\\\\@apify\\\\timeout\\\\cjs\\\\index.cjs:64:68)\\n    at listOnTimeout (node:internal/timers:605:17)\\n    at process.processTimers (node:internal/timers:541:7)\",\"Error: requestHandler timed out after 60 seconds.\\n    at Timeout._onTimeout (C:\\\\Users\\\\palla\\\\Desktop\\\\Socail-Analyst-dashboard\\\\backend\\\\node_modules\\\\@apify\\\\timeout\\\\cjs\\\\index.cjs:64:68)\\n    at listOnTimeout (node:internal/timers:605:17)\\n    at process.processTimers (node:internal/timers:541:7)\",\"Error: requestHandler timed out after 60 seconds.\\n    at Timeout._onTimeout (C:\\\\Users\\\\palla\\\\Desktop\\\\Socail-Analyst-dashboard\\\\backend\\\\node_modules\\\\@apify\\\\timeout\\\\cjs\\\\index.cjs:64:68)\\n    at listOnTimeout (node:internal/timers:605:17)\\n    at process.processTimers (node:internal/timers:541:7)\"],\"headers\":{},\"userData\":{\"__crawlee\":{\"state\":5}},\"handledAt\":\"2026-06-11T05:23:41.522Z\"}",
+	"method": "GET",
+	"orderNo": null,
+	"retryCount": 3,
+	"uniqueKey": "https://x.com/myogiadityanath",
+	"url": "https://x.com/myogiadityanath"
+}
