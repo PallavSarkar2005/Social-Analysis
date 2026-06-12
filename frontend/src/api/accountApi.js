@@ -1,7 +1,7 @@
 import axios from "axios";
 
 const API = axios.create({
-  baseURL: "http://localhost:5000/api",
+  baseURL: import.meta.env.VITE_API_URL,
 });
 
 export const getAccounts = async () => {
@@ -9,23 +9,14 @@ export const getAccounts = async () => {
   return res.data;
 };
 
-export const createAccount = async (
-  data
-) => {
-  const res = await API.post(
-    "/accounts",
-    data
-  );
+export const createAccount = async (data) => {
+  const res = await API.post("/accounts", data);
 
   return res.data;
 };
 
-export const deleteAccount = async (
-  id
-) => {
-  const res = await API.delete(
-    `/accounts/${id}`
-  );
+export const deleteAccount = async (id) => {
+  const res = await API.delete(`/accounts/${id}`);
 
   return res.data;
 };
