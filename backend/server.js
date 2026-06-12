@@ -14,6 +14,7 @@ import aiChannelRoutes from "./routes/aiChannelRoutes.js";
 import historyRoutes from "./routes/historyRoutes.js";
 import { startSnapshotJob } from "./jobs/snapshotJob.js";
 import xRoutes from "./routes/xRoutes.js";
+import compareRoutes from "./routes/compareRoutes.js";
 
 dotenv.config();
 console.log("MONGO_URI:", process.env.MONGO_URI);
@@ -33,7 +34,9 @@ app.use("/api/analyzer", analyzerRoutes);
 app.use("/api/ai", aiRoutes);
 app.use("/api/ai", aiChannelRoutes);
 app.use("/api/history", historyRoutes);
+app.use("/api/compare", compareRoutes);
 app.use("/api/x", xRoutes);
+
 app.get("/", (req, res) => {
   res.json({
     success: true,
