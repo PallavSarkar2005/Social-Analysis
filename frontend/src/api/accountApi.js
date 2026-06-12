@@ -5,18 +5,16 @@ const API = axios.create({
 });
 
 export const getAccounts = async () => {
-  const res = await API.get("/accounts");
+  const res = await API.get("/api/accounts");
   return res.data;
 };
 
 export const createAccount = async (data) => {
-  const res = await API.post("/accounts", data);
-
+  const res = await API.post("/api/accounts", data);
   return res.data;
 };
 
 export const deleteAccount = async (id) => {
-  const res = await API.delete(`/accounts/${id}`);
-
+  const res = await API.delete(`/api/accounts/${id}`);
   return res.data;
 };

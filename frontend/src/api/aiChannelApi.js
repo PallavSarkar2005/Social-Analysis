@@ -5,7 +5,7 @@ const API = axios.create({
 });
 
 export const getChannelInsights = async (channel) => {
-  const response = await axios.post(`${API}/ai/channel-insights`, channel);
+  const response = await API.post("/api/ai/channel-insights", channel);
 
   return response.data;
 };

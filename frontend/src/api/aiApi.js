@@ -5,7 +5,7 @@ const API = axios.create({
 });
 
 export const getVideoInsights = async (video) => {
-  const response = await axios.post(`${API_URL}/ai/video-insights`, video);
+  const response = await API.post("/api/ai/video-insights", video);
 
   return response.data;
 };
