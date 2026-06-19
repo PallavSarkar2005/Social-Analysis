@@ -6,6 +6,10 @@ export const generateChannelInsights = async (channel) => {
     baseURL: "https://api.groq.com/openai/v1",
   });
 
+  const recentVideosText = Array.isArray(channel.recentTitles) 
+    ? channel.recentTitles.join(", ") 
+    : "No recent titles available";
+
   const response = await client.chat.completions.create({
     model: "llama-3.3-70b-versatile",
 
@@ -32,7 +36,7 @@ Video Count:
 ${channel.videoCount}
 
 Recent Videos:
-${channel.recentTitles.join(", ")}
+${recentVideosText}
 
 Provide:
 
@@ -50,3 +54,4 @@ Provide:
 
   return response.choices[0].message.content;
 };
+

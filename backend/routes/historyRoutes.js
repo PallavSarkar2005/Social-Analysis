@@ -1,14 +1,12 @@
 import express from "express";
-
-import {
-  getChannelHistory,
-} from "../controllers/historyController.js";
+import { getChannelHistory, getAllHistory } from "../controllers/historyController.js";
 
 const router = express.Router();
 
-router.get(
-  "/:accountId",
-  getChannelHistory
-);
+// Base route for global history logs
+router.get("/", getAllHistory);
+
+// Specific account history route
+router.get("/:accountId", getChannelHistory);
 
 export default router;
