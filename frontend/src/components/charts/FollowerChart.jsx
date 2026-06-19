@@ -10,28 +10,38 @@ import {
 
 export default function FollowerChart({ data }) {
   return (
-    <div className="bg-white rounded-3xl shadow-xl p-6">
-      <h2 className="text-2xl font-bold mb-6">
-        Follower Growth
-      </h2>
-
-      <ResponsiveContainer width="100%" height={350}>
-        <LineChart data={data}>
-          <CartesianGrid strokeDasharray="3 3" />
-
-          <XAxis dataKey="date" />
-
-          <YAxis />
-
-          <Tooltip />
-
-          <Line
-            type="monotone"
-            dataKey="followers"
-            strokeWidth={3}
-          />
-        </LineChart>
-      </ResponsiveContainer>
-    </div>
+    <ResponsiveContainer width="100%" height={260}>
+      <LineChart data={data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+        <CartesianGrid stroke="rgba(255, 255, 255, 0.04)" vertical={false} />
+        <XAxis
+          dataKey="date"
+          tick={{ fill: "rgba(255, 255, 255, 0.4)", fontSize: 10, fontFamily: "monospace" }}
+          axisLine={false}
+          tickLine={false}
+        />
+        <YAxis
+          tick={{ fill: "rgba(255, 255, 255, 0.4)", fontSize: 10, fontFamily: "monospace" }}
+          axisLine={false}
+          tickLine={false}
+        />
+        <Tooltip
+          contentStyle={{
+            background: "rgba(17, 19, 25, 0.9)",
+            border: "1px solid rgba(255, 255, 255, 0.08)",
+            borderRadius: "12px",
+            color: "#fff",
+            fontSize: "12px",
+          }}
+        />
+        <Line
+          type="monotone"
+          dataKey="followers"
+          stroke="#6366f1" // Indigo
+          strokeWidth={2}
+          dot={{ fill: "#6366f1", strokeWidth: 1 }}
+          activeDot={{ r: 6 }}
+        />
+      </LineChart>
+    </ResponsiveContainer>
   );
 }

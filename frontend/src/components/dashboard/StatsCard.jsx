@@ -1,27 +1,13 @@
 import { motion } from "framer-motion";
 
-export default function StatsCard({
-  title,
-  value,
-}) {
+export default function StatsCard({ title, value }) {
   return (
     <motion.div
-      whileHover={{
-        y: -8,
-        scale: 1.02,
-      }}
-      transition={{
-        duration: 0.2,
-      }}
-      className="bg-white rounded-3xl p-6 shadow-lg border"
+      whileHover={{ y: -4 }}
+      className="bg-[#121318]/40 backdrop-blur-md rounded-2xl border border-white/[0.06] p-5 shadow-xl"
     >
-      <p className="text-gray-500 text-sm">
-        {title}
-      </p>
-
-      <h2 className="text-4xl font-bold mt-3 text-slate-800">
-        {value}
-      </h2>
+      <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{title}</p>
+      <h2 className="text-xl sm:text-2xl font-black text-white mt-2 tracking-tight">{value}</h2>
     </motion.div>
   );
 }

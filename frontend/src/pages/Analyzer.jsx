@@ -27,6 +27,30 @@ const itemVariants = {
   visible: { opacity: 1, scale: 1, transition: { duration: 0.3 } },
 };
 
+const calculateInfluenceScore = (followers, posts) => {
+  const parseNum = (val) => {
+    if (!val) return 0;
+    if (typeof val === "number") return val;
+    const clean = val.replace(/,/g, "");
+    if (clean.endsWith("K")) return parseFloat(clean) * 1000;
+    if (clean.endsWith("M")) return parseFloat(clean) * 1000000;
+    return parseFloat(clean) || 0;
+  };
+  const f = parseNum(followers);
+  const p = parseNum(posts);
+  if (!f) return 50;
+  const followerScore = Math.min(70, Math.round(Math.log10(f) * 10));
+  const postScore = Math.min(30, Math.round(Math.log10(Math.max(p, 1)) * 6));
+  return Math.max(10, Math.min(100, followerScore + postScore));
+};
+
+const getInfluenceText = (score) => {
+  if (score >= 90) return "Dominant authority profile with exceptional reach and viral conversions.";
+  if (score >= 75) return "High-tier influencer node with consistent audience engagement metrics.";
+  if (score >= 50) return "Established social channel showing healthy conversion possibilities.";
+  return "Emerging media node building initial audience velocity.";
+};
+
 function Analyzer() {
   const [url, setUrl] = useState("");
   const [result, setResult] = useState(null);
@@ -524,11 +548,10 @@ function Analyzer() {
                         Influence Score
                       </h4>
                       <div className="text-4xl sm:text-5xl font-black text-white mt-2 tracking-tight">
-                        96
+                        {calculateInfluenceScore(result.data.followers, result.data.posts)}
                       </div>
                       <p className="mt-3 text-[11px] text-slate-300 leading-normal">
-                        High capacity authority profile with extreme macro
-                        conversion rate capabilities.
+                        {getInfluenceText(calculateInfluenceScore(result.data.followers, result.data.posts))}
                       </p>
                     </div>
 

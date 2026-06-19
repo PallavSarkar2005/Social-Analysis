@@ -1,4 +1,9 @@
 import dotenv from "dotenv";
+import { validateEnv } from "./config/env.js";
+
+dotenv.config();
+validateEnv();
+
 import express from "express";
 import cors from "cors";
 import connectDB from "./config/db.js";
@@ -15,9 +20,6 @@ import historyRoutes from "./routes/historyRoutes.js";
 import { startSnapshotJob } from "./jobs/snapshotJob.js";
 import xRoutes from "./routes/xRoutes.js";
 import compareRoutes from "./routes/compareRoutes.js";
-
-dotenv.config();
-console.log("MONGO_URI:", process.env.MONGO_URI);
 
 connectDB();
 

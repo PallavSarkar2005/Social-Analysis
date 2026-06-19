@@ -1,11 +1,6 @@
-import axios from "axios";
-
-const API = axios.create({
-  baseURL: import.meta.env.VITE_API_URL,
-});
+import client from "./client";
 
 export const getChannelInsights = async (channel) => {
-  const response = await API.post("/api/ai/channel-insights", channel);
-
+  const response = await client.post("/api/ai/channel-insights", channel);
   return response.data;
 };

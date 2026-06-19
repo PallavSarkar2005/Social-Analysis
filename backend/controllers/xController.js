@@ -75,21 +75,21 @@ export const analyzeXProfile = async (req, res) => {
     console.log("USERNAME:", username);
     console.log("================================");
 
-    /*
-    ========================================
-    SCRAPE PROFILE
-    ========================================
-    */
-
-    const profile = await scrapeXProfile(username);
-
-    console.log("PROFILE VALUE:");
-    console.log(profile);
+    let profile;
+    try {
+      profile = await scrapeXProfile(username);
+    } catch (scrapeErr) {
+      console.error("[X Controller Scraper Error]:", scrapeErr.message);
+      return res.status(502).json({
+        success: false,
+        message: `Scraper Access Restricted: Failed to parse X profile for @${username}. X.com is currently rate-limiting or blocking automated access.`,
+      });
+    }
 
     if (!profile) {
       return res.status(404).json({
         success: false,
-        message: "Profile not found",
+        message: `Profile @${username} was not found on X.com.`,
       });
     }
 

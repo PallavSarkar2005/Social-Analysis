@@ -1,17 +1,11 @@
-import axios from "axios";
-
-const API = axios.create({
-  baseURL: import.meta.env.VITE_API_URL,
-});
+import client from "./client";
 
 export const analyzeYoutubeUrl = async (url) => {
-  const response = await API.post("/api/analyzer/youtube", { url });
-
+  const response = await client.post("/api/analyzer/youtube", { url });
   return response.data;
 };
 
 export const analyzeXUrl = async (url) => {
-  const response = await API.post("/api/x/analyze", { url });
-
+  const response = await client.post("/api/x/analyze", { url });
   return response.data;
 };

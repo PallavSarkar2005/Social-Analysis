@@ -1,11 +1,6 @@
-import axios from "axios";
-
-const API = axios.create({
-  baseURL: import.meta.env.VITE_API_URL,
-});
+import client from "./client";
 
 export const getChannelHistory = async (accountId) => {
-  const response = await API.get(`/api/history/${accountId}`);
-
+  const response = await client.get(`/api/history/${accountId}`);
   return response.data;
 };

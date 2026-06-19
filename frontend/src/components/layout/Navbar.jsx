@@ -1,7 +1,11 @@
 import { Bell, Sparkles } from "lucide-react";
 import { motion } from "framer-motion";
+import { Link } from "react-router-dom";
+import { useAuth } from "../../context/AuthContext.jsx";
 
 export default function Navbar() {
+  const { user } = useAuth();
+
   return (
     <motion.header
       initial={{ opacity: 0, y: -8 }}
@@ -9,7 +13,7 @@ export default function Navbar() {
       transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
       className="h-20 w-full bg-[#111319] border-b border-white/[0.08] flex items-center justify-between px-4 sm:px-6 lg:px-8 relative z-50 shadow-lg shadow-black/50 select-none"
     >
-      {/* Left Section: High-Contrast Contextual Title */}
+      {/* Left Section: Contextual Title */}
       <div className="min-w-0 py-2">
         <h1 className="text-base sm:text-lg font-bold text-white tracking-tight truncate">
           Social Analytics Node
@@ -21,7 +25,7 @@ export default function Navbar() {
 
       {/* Right Section: System Metrics & Profile */}
       <div className="flex items-center gap-3 sm:gap-4 shrink-0">
-        {/* Premium AI Status Badge - Enhanced Visibility */}
+        {/* Premium AI Status Badge */}
         <motion.div
           whileHover={{ scale: 1.02 }}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-500/10 border border-indigo-500/30 text-indigo-300 text-xs font-semibold tracking-wide"
@@ -36,7 +40,7 @@ export default function Navbar() {
           v1.0.4_core
         </div>
 
-        {/* Notification Bell with Drop Shadow and High Contrast */}
+        {/* Notification Bell */}
         <motion.button
           whileHover={{ scale: 1.04 }}
           whileTap={{ scale: 0.96 }}
@@ -56,27 +60,29 @@ export default function Navbar() {
         {/* Separator Line */}
         <div className="h-6 w-[1px] bg-white/[0.12] hidden sm:block" />
 
-        {/* Premium User Profile Block */}
-        <motion.div
-          whileHover={{ x: 1 }}
-          className="flex items-center gap-2.5 bg-white/[0.03] border border-white/[0.06] p-1.5 pr-3 rounded-xl cursor-pointer"
-        >
-          {/* Avatar with Strong Layering */}
-          <div className="relative h-8 w-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-xs font-black shadow-md shadow-indigo-600/30">
-            P
-            <div className="absolute inset-0 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 blur-[4px] opacity-40 -z-10" />
-          </div>
+        {/* User Profile Block Linked to Settings */}
+        <Link to="/settings" className="block">
+          <motion.div
+            whileHover={{ x: 1 }}
+            className="flex items-center gap-2.5 bg-white/[0.03] border border-white/[0.06] p-1.5 pr-3 rounded-xl cursor-pointer"
+          >
+            {/* Avatar */}
+            <div className="relative h-8 w-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-xs font-black shadow-md shadow-indigo-600/30">
+              {user.avatar}
+              <div className="absolute inset-0 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 blur-[4px] opacity-40 -z-10" />
+            </div>
 
-          {/* User Data Metas */}
-          <div className="hidden sm:block text-left max-w-[100px]">
-            <p className="font-semibold text-xs text-slate-100 leading-none truncate">
-              Pallav
-            </p>
-            <p className="text-[10px] text-slate-400 font-medium tracking-wide mt-1 leading-none">
-              Developer
-            </p>
-          </div>
-        </motion.div>
+            {/* User Data Metas */}
+            <div className="hidden sm:block text-left max-w-[100px]">
+              <p className="font-semibold text-xs text-slate-100 leading-none truncate">
+                {user.name}
+              </p>
+              <p className="text-[10px] text-slate-400 font-medium tracking-wide mt-1 leading-none">
+                {user.role}
+              </p>
+            </div>
+          </motion.div>
+        </Link>
       </div>
     </motion.header>
   );

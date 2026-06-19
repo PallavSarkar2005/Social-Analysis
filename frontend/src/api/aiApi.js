@@ -1,11 +1,6 @@
-import axios from "axios";
-
-const API = axios.create({
-  baseURL: import.meta.env.VITE_API_URL,
-});
+import client from "./client";
 
 export const getVideoInsights = async (video) => {
-  const response = await API.post("/api/ai/video-insights", video);
-
+  const response = await client.post("/api/ai/video-insights", video);
   return response.data;
 };
