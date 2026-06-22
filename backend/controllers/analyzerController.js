@@ -64,6 +64,10 @@ Main Analyzer
 */
 export const analyzeYoutubeUrl = async (req, res, next) => {
   try {
+    console.log("========== ANALYZER START ==========");
+    console.log("REQUEST BODY:", req.body);
+    console.log("YOUTUBE_API_KEY EXISTS:", !!process.env.YOUTUBE_API_KEY);
+
     const { url } = req.body;
 
     if (!url) {
@@ -72,13 +76,6 @@ export const analyzeYoutubeUrl = async (req, res, next) => {
         message: "URL is required",
       });
     }
-
-    console.log("========== ANALYZER ==========");
-    console.log("INPUT URL:", url);
-
-    const videoId = extractVideoId(url);
-
-    console.log("VIDEO ID:", videoId);
 
     /*
     ========================================
@@ -294,11 +291,13 @@ export const analyzeYoutubeUrl = async (req, res, next) => {
     ========================================
     */
 
-    if (videoId) {
-      console.log("Calling YouTube Videos API");
-      console.log("API KEY EXISTS:", !!process.env.YOUTUBE_API_KEY);
-      console.log("VIDEO ID:", videoId);
+    console.log("INPUT URL:", url);
+    const videoId = extractVideoId(url);
+    console.log("EXTRACTED VIDEO ID:", videoId);
 
+    if (videoId) {
+      console.log("CALLING YOUTUBE VIDEO API");
+      console.log("VIDEO ID:", videoId);
       const response = await axios.get(
         "https://www.googleapis.com/youtube/v3/videos",
         {
@@ -371,9 +370,9 @@ export const analyzeYoutubeUrl = async (req, res, next) => {
     });
   } catch (error) {
     console.error("ANALYZER ERROR:", error);
-    console.error("MESSAGE:", error.message);
+    console.error("ERROR MESSAGE:", error.message);
     console.error(
-      "RESPONSE:",
+      "ERROR RESPONSE:",
       error.response?.data
     );
     next(error);
