@@ -8,27 +8,45 @@ Extract Video ID
 ========================================
 */
 const extractVideoId = (url) => {
-  try {
-    if (url.includes("watch?v=")) {
-      return new URL(url).searchParams.get("v");
-    }
+  if (!url || typeof url !== "string") return null;
 
-    if (url.includes("youtu.be/")) {
-      return url.split("youtu.be/")[1].split("?")[0];
-    }
+  const cleanUrl = url.trim();
 
-    if (url.includes("/live/")) {
-      return url.split("/live/")[1].split("?")[0];
-    }
+  const regexes = [
+    /(?:https?:\/\/)?(?:www\.)?youtube\.com\/watch\?v=([a-zA-Z0-9_-]{11})/,
+    /(?:https?:\/\/)?(?:www\.)?youtube\.com\/embed\/([a-zA-Z0-9_-]{11})/,
+    /(?:https?:\/\/)?(?:www\.)?youtube\.com\/shorts\/([a-zA-Z0-9_-]{11})/,
+    /(?:https?:\/\/)?(?:www\.)?youtube\.com\/live\/([a-zA-Z0-9_-]{11})/,
+    /(?:https?:\/\/)?(?:www\.)?youtu\.be\/([a-zA-Z0-9_-]{11})/,
+    /(?:youtube\.com\/watch\?v=)([a-zA-Z0-9_-]{11})/,
+    /(?:youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})/,
+    /(?:youtube\.com\/shorts\/)([a-zA-Z0-9_-]{11})/,
+    /(?:youtube\.com\/live\/)([a-zA-Z0-9_-]{11})/,
+    /(?:youtu\.be\/)([a-zA-Z0-9_-]{11})/
+  ];
 
-    if (url.includes("/shorts/")) {
-      return url.split("/shorts/")[1].split("?")[0];
+  for (const regex of regexes) {
+    const match = cleanUrl.match(regex);
+    if (match && match[1]) {
+      return match[1];
     }
-
-    return null;
-  } catch {
-    return null;
   }
+
+  try {
+    const urlWithProtocol = cleanUrl.match(/^https?:\/\//i) ? cleanUrl : `https://${cleanUrl}`;
+    const parsed = new URL(urlWithProtocol);
+    
+    if (parsed.hostname.includes("youtube.com")) {
+      const v = parsed.searchParams.get("v");
+      if (v && /^[a-zA-Z0-9_-]{11}$/.test(v)) {
+        return v;
+      }
+    }
+  } catch (e) {
+    // Ignore URL parsing errors
+  }
+
+  return null;
 };
 
 /*
