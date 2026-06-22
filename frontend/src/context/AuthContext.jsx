@@ -5,21 +5,42 @@ const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
-  const [token, setToken] = useState(null);
+  const [token, setToken] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("token");
+    }
+    return null;
+  });
   const [loading, setLoading] = useState(true);
 
-  // Initialize Auth state from cookies
+  // Initialize Auth state
   useEffect(() => {
     const initializeAuth = async () => {
+      const storedToken = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+      if (storedToken) {
+        setToken(storedToken);
+      }
       try {
-        // Verify/refresh user data from backend using cookies
+        // Verify/refresh user data from backend using token or cookies
         const res = await client.get("/api/auth/me");
         if (res.data && res.data.success) {
           setUser(res.data.data);
+          const currentToken = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+          setToken(currentToken);
+        } else {
+          if (typeof window !== "undefined") {
+            localStorage.removeItem("token");
+          }
+          setUser(null);
+          setToken(null);
         }
       } catch (err) {
         console.log("No active session or session expired.");
+        if (typeof window !== "undefined") {
+          localStorage.removeItem("token");
+        }
         setUser(null);
+        setToken(null);
       } finally {
         setLoading(false);
       }
@@ -29,6 +50,9 @@ export const AuthProvider = ({ children }) => {
 
     // Listen for custom logout events dispatched by Axios interceptor
     const handleAuthLogout = () => {
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("token");
+      }
       setUser(null);
       setToken(null);
     };
@@ -45,6 +69,9 @@ export const AuthProvider = ({ children }) => {
       const res = await client.post("/api/auth/register", { name, email, password });
       if (res.data && res.data.success) {
         const { token: userToken, ...userData } = res.data.data;
+        if (typeof window !== "undefined") {
+          localStorage.setItem("token", userToken);
+        }
         setUser(userData);
         setToken(userToken);
         return { success: true };
@@ -61,6 +88,9 @@ export const AuthProvider = ({ children }) => {
       const res = await client.post("/api/auth/login", { email, password });
       if (res.data && res.data.success) {
         const { token: userToken, ...userData } = res.data.data;
+        if (typeof window !== "undefined") {
+          localStorage.setItem("token", userToken);
+        }
         setUser(userData);
         setToken(userToken);
         return { success: true };
@@ -77,6 +107,9 @@ export const AuthProvider = ({ children }) => {
       await client.post("/api/auth/logout");
     } catch (err) {
       console.warn("Server-side logout warning:", err);
+    }
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("token");
     }
     setUser(null);
     setToken(null);
