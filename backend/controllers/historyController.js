@@ -1,22 +1,19 @@
 import Snapshot from "../models/Snapshot.js";
 
-export const getChannelHistory = async (req, res) => {
+export const getChannelHistory = async (req, res, next) => {
   try {
     const { accountId } = req.params;
 
     const snapshots = await Snapshot.find({
       account: accountId,
+      userId: req.user._id,
     }).sort({
       capturedAt: 1,
     });
 
     const chartData = snapshots.map((snapshot) => ({
-      date: new Date(
-        snapshot.capturedAt
-      ).toLocaleDateString(),
-
+      date: new Date(snapshot.capturedAt).toLocaleDateString(),
       followers: snapshot.followers,
-
       views: snapshot.views,
     }));
 
@@ -25,23 +22,20 @@ export const getChannelHistory = async (req, res) => {
       data: chartData,
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    next(error);
   }
 };
 
-export const getAllHistory = async (req, res) => {
+export const getAllHistory = async (req, res, next) => {
   try {
-    const snapshots = await Snapshot.find()
+    const snapshots = await Snapshot.find({ userId: req.user._id })
       .populate("account", "name platform accountId")
       .sort({ capturedAt: -1 })
       .limit(100);
 
     const formattedData = snapshots.map((snapshot) => ({
       id: snapshot._id,
-      accountName: snapshot.account?.name || "Unknown Node",
+      accountName: snapshot.account?.name || "Unknown Account",
       platform: snapshot.account?.platform || "Unknown",
       followers: snapshot.followers,
       views: snapshot.views,
@@ -53,9 +47,6 @@ export const getAllHistory = async (req, res) => {
       data: formattedData,
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    next(error);
   }
 };

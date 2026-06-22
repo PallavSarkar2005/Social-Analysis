@@ -1,6 +1,6 @@
 import { generateChannelInsights } from "../services/aiChannelInsightService.js";
 
-export const getChannelInsights = async (req, res) => {
+export const getChannelInsights = async (req, res, next) => {
   try {
     const insights = await generateChannelInsights(req.body);
 
@@ -9,9 +9,6 @@ export const getChannelInsights = async (req, res) => {
       insights,
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    next(error);
   }
 };

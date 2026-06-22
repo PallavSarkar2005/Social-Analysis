@@ -1,7 +1,7 @@
 import dotenv from "dotenv";
 dotenv.config();
 
-const REQUIRED_ENV_VARS = ["MONGO_URI", "YOUTUBE_API_KEY", "GROQ_API_KEY"];
+const REQUIRED_ENV_VARS = ["MONGO_URI", "YOUTUBE_API_KEY", "GROQ_API_KEY", "JWT_SECRET"];
 
 export const validateEnv = () => {
   const missing = [];

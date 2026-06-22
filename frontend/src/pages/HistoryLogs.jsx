@@ -3,15 +3,27 @@ import Sidebar from "../components/layout/Sidebar";
 import Navbar from "../components/layout/Navbar";
 import { getAccounts } from "../api/accountApi";
 import { getChannelHistory } from "../api/historyApi";
+import { getForecast } from "../api/analyticsApi";
 import FollowerChart from "../components/charts/FollowerChart";
 import { Calendar, Layers, ShieldAlert, TrendingUp } from "lucide-react";
 import { motion } from "framer-motion";
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  Tooltip as ChartTooltip,
+  ResponsiveContainer,
+  CartesianGrid,
+} from "recharts";
 
 export default function HistoryLogs() {
   const [accounts, setAccounts] = useState([]);
   const [selectedAccountId, setSelectedAccountId] = useState("");
   const [history, setHistory] = useState([]);
+  const [forecast, setForecast] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [loadingForecast, setLoadingForecast] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -33,21 +45,34 @@ export default function HistoryLogs() {
   useEffect(() => {
     if (!selectedAccountId) return;
 
-    const fetchHistory = async () => {
+    const fetchHistoryAndForecast = async () => {
       try {
         setLoading(true);
+        setLoadingForecast(true);
         setError("");
-        const response = await getChannelHistory(selectedAccountId);
-        setHistory(response.data || []);
+        
+        const [histRes, forecastRes] = await Promise.all([
+          getChannelHistory(selectedAccountId),
+          getForecast(selectedAccountId).catch((err) => {
+            console.warn("Forecast failed, might not have enough historical snapshots yet:", err);
+            return { success: true, data: { hasEnoughData: false } };
+          })
+        ]);
+
+        setHistory(histRes.data || []);
+        if (forecastRes && forecastRes.success) {
+          setForecast(forecastRes.data);
+        }
       } catch (err) {
         console.error(err);
-        setError("Failed to load historical snapshots.");
+        setError("Failed to load historical snapshots and forecast data.");
       } finally {
         setLoading(false);
+        setLoadingForecast(false);
       }
     };
 
-    fetchHistory();
+    fetchHistoryAndForecast();
   }, [selectedAccountId]);
 
   const activeAccount = accounts.find((a) => a._id === selectedAccountId);
@@ -101,7 +126,8 @@ export default function HistoryLogs() {
               <div className="h-48 w-full bg-[#121318]/40 border border-white/[0.06] rounded-2xl animate-pulse" />
             </div>
           ) : history.length > 0 ? (
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+            <>
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
               
               {/* Follower chart */}
               <div className="lg:col-span-2 bg-[#121318]/40 backdrop-blur-md rounded-2xl border border-white/[0.06] p-5 sm:p-6 shadow-xl space-y-6">
@@ -152,7 +178,121 @@ export default function HistoryLogs() {
               </div>
 
             </div>
-          ) : (
+
+            {/* Forecasting Panel */}
+            {forecast && (
+              <div className="bg-[#121318]/40 backdrop-blur-md rounded-2xl border border-white/[0.06] p-5 sm:p-6 shadow-xl space-y-6">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-white/[0.06] pb-4 gap-2">
+                  <div>
+                    <h3 className="text-sm font-semibold text-white tracking-tight flex items-center gap-2">
+                      <TrendingUp size={16} className="text-purple-400" />
+                      Predictive Projections Engine
+                    </h3>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      Growth trajectory predictions computed over historical database capture snapshots.
+                    </p>
+                  </div>
+                  {forecast.hasEnoughData && forecast.scores && (
+                    <div className="flex gap-2">
+                      <span className="px-2.5 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-bold uppercase tracking-wider">
+                        Growth Score: {forecast.scores.growthScore}/100
+                      </span>
+                      <span className="px-2.5 py-1 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-[10px] font-bold uppercase tracking-wider">
+                        Perf Score: {forecast.scores.performanceScore}/100
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                {!forecast.hasEnoughData ? (
+                  <div className="p-6 text-center bg-white/[0.01] rounded-xl border border-dashed border-white/[0.06] text-xs text-slate-400">
+                    {forecast.message || "At least 2 historical snapshots are required to calculate forecasting trends."}
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    {/* Cards */}
+                    <div className="lg:col-span-1 grid grid-cols-2 gap-4">
+                      <div className="bg-white/[0.02] border border-white/[0.06] p-4 rounded-xl space-y-1.5">
+                        <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">30d Predicted Followers</p>
+                        <h4 className="text-lg font-black text-white">{forecast.predictions?.followers30d?.toLocaleString()}</h4>
+                        <p className="text-[9px] text-emerald-400 flex items-center gap-1">
+                          +{(forecast.rates?.followersPerDay * 30).toFixed(0).toLocaleString()} projected
+                        </p>
+                      </div>
+                      <div className="bg-white/[0.02] border border-white/[0.06] p-4 rounded-xl space-y-1.5">
+                        <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">90d Predicted Followers</p>
+                        <h4 className="text-lg font-black text-white">{forecast.predictions?.followers90d?.toLocaleString()}</h4>
+                        <p className="text-[9px] text-emerald-400 flex items-center gap-1">
+                          +{(forecast.rates?.followersPerDay * 90).toFixed(0).toLocaleString()} projected
+                        </p>
+                      </div>
+                      <div className="bg-white/[0.02] border border-white/[0.06] p-4 rounded-xl space-y-1.5">
+                        <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">30d Predicted Views</p>
+                        <h4 className="text-lg font-black text-white">{forecast.predictions?.views30d?.toLocaleString()}</h4>
+                        <p className="text-[9px] text-blue-400 flex items-center gap-1">
+                          +{(forecast.rates?.viewsPerDay * 30).toFixed(0).toLocaleString()} projected
+                        </p>
+                      </div>
+                      <div className="bg-white/[0.02] border border-white/[0.06] p-4 rounded-xl space-y-1.5">
+                        <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">90d Predicted Views</p>
+                        <h4 className="text-lg font-black text-white">{forecast.predictions?.views90d?.toLocaleString()}</h4>
+                        <p className="text-[9px] text-blue-400 flex items-center gap-1">
+                          +{(forecast.rates?.viewsPerDay * 90).toFixed(0).toLocaleString()} projected
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Chart */}
+                    <div className="lg:col-span-2 bg-[#121318]/20 border border-white/[0.06] p-4 rounded-xl">
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-4">90-Day Growth Trend Projection</p>
+                      <ResponsiveContainer width="100%" height={180}>
+                        <LineChart data={forecast.trend} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                          <CartesianGrid stroke="rgba(255, 255, 255, 0.04)" vertical={false} />
+                          <XAxis
+                            dataKey="label"
+                            tick={{ fill: "rgba(255, 255, 255, 0.4)", fontSize: 9 }}
+                            axisLine={false}
+                            tickLine={false}
+                          />
+                          <YAxis
+                            tick={{ fill: "rgba(255, 255, 255, 0.4)", fontSize: 9 }}
+                            axisLine={false}
+                            tickLine={false}
+                          />
+                          <ChartTooltip
+                            contentStyle={{
+                              background: "rgba(17, 19, 25, 0.9)",
+                              border: "1px solid rgba(255, 255, 255, 0.08)",
+                              borderRadius: "12px",
+                              color: "#fff",
+                              fontSize: "11px",
+                            }}
+                          />
+                          <Line
+                            type="monotone"
+                            dataKey="followers"
+                            name="Followers"
+                            stroke="#a855f7"
+                            strokeWidth={2}
+                            dot={{ fill: "#a855f7", strokeWidth: 1 }}
+                          />
+                          <Line
+                            type="monotone"
+                            dataKey="views"
+                            name="Views"
+                            stroke="#3b82f6"
+                            strokeWidth={1.5}
+                            strokeDasharray="4 4"
+                            dot={{ fill: "#3b82f6", strokeWidth: 1 }}
+                          />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </>) : (
             <div className="text-center py-20 bg-[#121318]/30 rounded-2xl border border-white/[0.06] border-dashed space-y-3">
               <p className="text-sm font-semibold text-slate-400">No telemetry checkpoints loaded.</p>
               <p className="text-xs text-slate-500 max-w-sm mx-auto">

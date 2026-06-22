@@ -124,24 +124,28 @@ export default function Dashboard() {
                     value: overview?.totalAccounts || 0,
                     icon: Users,
                     color: "text-blue-400 bg-blue-500/10 border-blue-500/20",
+                    growth: null,
                   },
                   {
                     title: "Total Subscribers",
-                    value: Number(overview?.totalFollowers || 0).toLocaleString(),
+                    value: Number(overview?.growth?.subscribers?.current ?? overview?.totalFollowers ?? 0).toLocaleString(),
                     icon: TrendingUp,
                     color: "text-indigo-400 bg-indigo-500/10 border-indigo-500/20",
+                    growth: overview?.growth?.subscribers,
                   },
                   {
                     title: "Total Video Views",
-                    value: Number(overview?.totalViews || 0).toLocaleString(),
+                    value: Number(overview?.growth?.views?.current ?? overview?.totalViews ?? 0).toLocaleString(),
                     icon: Eye,
                     color: "text-purple-400 bg-purple-500/10 border-purple-500/20",
+                    growth: overview?.growth?.views,
                   },
                   {
                     title: "Avg Engagement Rate",
-                    value: `${overview?.avgEngagement || 0}%`,
+                    value: `${overview?.growth?.engagement?.current ?? overview?.avgEngagement ?? 0}%`,
                     icon: Percent,
                     color: "text-pink-400 bg-pink-500/10 border-pink-500/20",
+                    growth: overview?.growth?.engagement,
                   },
                 ].map((card, idx) => {
                   const Icon = card.icon;
@@ -151,15 +155,25 @@ export default function Dashboard() {
                       whileHover={{ y: -2 }}
                       className="bg-[#121318]/40 backdrop-blur-md rounded-2xl border border-white/[0.06] p-5 shadow-xl flex items-center justify-between"
                     >
-                      <div className="space-y-2">
-                        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                      <div className="space-y-2 min-w-0 flex-1">
+                        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest truncate">
                           {card.title}
                         </p>
-                        <h3 className="text-xl sm:text-2xl font-black text-white tracking-tight">
+                        <h3 className="text-xl sm:text-2xl font-black text-white tracking-tight truncate">
                           {card.value}
                         </h3>
+                        {card.growth && (
+                          <div className="flex flex-col text-[10px] space-y-0.5 mt-1 border-t border-white/[0.04] pt-1">
+                            <span className={card.growth.lastWeek.value >= 0 ? "text-emerald-400" : "text-rose-400"}>
+                              Wk: {card.growth.lastWeek.value >= 0 ? "+" : ""}{card.growth.lastWeek.value.toLocaleString()} ({card.growth.lastWeek.percentage}%)
+                            </span>
+                            <span className={card.growth.lastMonth.value >= 0 ? "text-emerald-400" : "text-rose-400"}>
+                              Mo: {card.growth.lastMonth.value >= 0 ? "+" : ""}{card.growth.lastMonth.value.toLocaleString()} ({card.growth.lastMonth.percentage}%)
+                            </span>
+                          </div>
+                        )}
                       </div>
-                      <div className={`p-3 rounded-xl border shrink-0 ${card.color}`}>
+                      <div className={`p-3 rounded-xl border shrink-0 ml-4 ${card.color}`}>
                         <Icon size={18} />
                       </div>
                     </motion.div>

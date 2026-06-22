@@ -4,11 +4,18 @@ import {
   getAccounts,
   deleteAccount,
 } from "../controllers/accountController.js";
+import { protect } from "../middleware/authMiddleware.js";
+import {
+  validateCreateAccount,
+  validateMongoId,
+} from "../middleware/validationMiddleware.js";
 
 const router = express.Router();
 
-router.post("/", createAccount);
+router.use(protect);
+
+router.post("/", validateCreateAccount, createAccount);
 router.get("/", getAccounts);
-router.delete("/:id", deleteAccount);
+router.delete("/:id", validateMongoId, deleteAccount);
 
 export default router;

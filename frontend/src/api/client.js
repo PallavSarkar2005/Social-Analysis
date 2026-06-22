@@ -6,10 +6,25 @@ const baseURL = import.meta.env.VITE_API_URL || "http://localhost:5000";
 const client = axios.create({
   baseURL,
   timeout: 30000, // Scraper calls or AI analysis might take up to 30 seconds
+  withCredentials: true, // Enable cookies for cross-origin requests
   headers: {
     "Content-Type": "application/json",
   },
 });
+
+let isRefreshing = false;
+let failedQueue = [];
+
+const processQueue = (error) => {
+  failedQueue.forEach((prom) => {
+    if (error) {
+      prom.reject(error);
+    } else {
+      prom.resolve();
+    }
+  });
+  failedQueue = [];
+};
 
 // Request Interceptor
 client.interceptors.request.use(
@@ -29,12 +44,56 @@ client.interceptors.response.use(
     console.log(`[API Response] ${response.status} ${response.config.url}`);
     return response;
   },
-  (error) => {
+  async (error) => {
+    const originalRequest = error.config;
+
     console.error("[API Response Error]", {
-      url: error.config?.url,
+      url: originalRequest?.url,
       status: error.response?.status,
       message: error.response?.data?.message || error.message,
     });
+
+    // Check if error is 401 (Unauthorized) and not already retried
+    if (
+      error.response?.status === 401 &&
+      !originalRequest._retry &&
+      originalRequest.url &&
+      !originalRequest.url.includes("/auth/refresh") &&
+      !originalRequest.url.includes("/auth/login") &&
+      !originalRequest.url.includes("/auth/register")
+    ) {
+      if (isRefreshing) {
+        return new Promise((resolve, reject) => {
+          failedQueue.push({ resolve, reject });
+        })
+          .then(() => {
+            return client(originalRequest);
+          })
+          .catch((err) => {
+            return Promise.reject(err);
+          });
+      }
+
+      originalRequest._retry = true;
+      isRefreshing = true;
+
+      try {
+        await client.post("/api/auth/refresh");
+        isRefreshing = false;
+        processQueue(null);
+        return client(originalRequest);
+      } catch (refreshError) {
+        isRefreshing = false;
+        processQueue(refreshError);
+        
+        // Dispatch custom event to notify AuthContext to log user out
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new CustomEvent("auth-logout"));
+        }
+        return Promise.reject(refreshError);
+      }
+    }
+
     return Promise.reject(error);
   }
 );

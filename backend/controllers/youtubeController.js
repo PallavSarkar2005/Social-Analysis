@@ -1,14 +1,11 @@
 import Account from "../models/Account.js";
 import Snapshot from "../models/Snapshot.js";
 import Content from "../models/Content.js";
-
 import { getChannelStats } from "../services/youtubeService.js";
-
 import {
   getChannelVideos,
   getVideoStats,
 } from "../services/youtubeVideoService.js";
-
 import { syncAllYoutubeChannels } from "../jobs/youtubeSyncJob.js";
 
 /*
@@ -16,16 +13,16 @@ import { syncAllYoutubeChannels } from "../jobs/youtubeSyncJob.js";
 Sync Single Channel Snapshot
 ========================================
 */
-export const syncYoutubeChannel = async (req, res) => {
+export const syncYoutubeChannel = async (req, res, next) => {
   try {
     const { accountId } = req.params;
 
-    const account = await Account.findById(accountId);
+    const account = await Account.findOne({ _id: accountId, userId: req.user._id });
 
     if (!account) {
       return res.status(404).json({
         success: false,
-        message: "Account not found",
+        message: "Account not found or unauthorized",
       });
     }
 
@@ -35,6 +32,7 @@ export const syncYoutubeChannel = async (req, res) => {
       account: account._id,
       followers: Number(channel.statistics.subscriberCount || 0),
       views: Number(channel.statistics.viewCount || 0),
+      userId: req.user._id,
     });
 
     res.status(200).json({
@@ -43,31 +41,25 @@ export const syncYoutubeChannel = async (req, res) => {
       snapshot,
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    next(error);
   }
 };
 
 /*
 ========================================
-Sync All Channels
+Sync All Channels for current user
 ========================================
 */
-export const syncAllChannels = async (req, res) => {
+export const syncAllChannels = async (req, res, next) => {
   try {
-    await syncAllYoutubeChannels();
+    await syncAllYoutubeChannels(req.user._id);
 
     res.status(200).json({
       success: true,
-      message: "Sync completed",
+      message: "Sync completed for your channels",
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    next(error);
   }
 };
 
@@ -76,16 +68,16 @@ export const syncAllChannels = async (req, res) => {
 Sync Channel Videos
 ========================================
 */
-export const syncChannelContent = async (req, res) => {
+export const syncChannelContent = async (req, res, next) => {
   try {
     const { accountId } = req.params;
 
-    const account = await Account.findById(accountId);
+    const account = await Account.findOne({ _id: accountId, userId: req.user._id });
 
     if (!account) {
       return res.status(404).json({
         success: false,
-        message: "Account not found",
+        message: "Account not found or unauthorized",
       });
     }
 
@@ -103,10 +95,12 @@ export const syncChannelContent = async (req, res) => {
       await Content.findOneAndUpdate(
         {
           contentId: video.id.videoId,
+          userId: req.user._id,
         },
         {
           account: account._id,
           contentId: video.id.videoId,
+          userId: req.user._id,
           title: stats.snippet?.title || "",
           thumbnail:
             stats.snippet?.thumbnails?.high?.url ||
@@ -132,9 +126,6 @@ export const syncChannelContent = async (req, res) => {
       stored,
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    next(error);
   }
 };

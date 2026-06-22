@@ -82,7 +82,8 @@ export default function AIInsights() {
       setInsights(response.insights);
     } catch (err) {
       console.error(err);
-      setError("AI generation failed. Please verify Groq API key is valid in your .env configuration.");
+      const msg = err.response?.data?.message || err.message || "AI generation failed. Please verify Groq API key is valid in your .env configuration.";
+      setError(`Error: ${msg}`);
     } finally {
       setGenerating(false);
     }

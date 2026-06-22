@@ -12,6 +12,8 @@ import {
   Search,
   Brain,
   History,
+  Trophy,
+  FileText,
 } from "lucide-react";
 
 export default function Sidebar() {
@@ -23,8 +25,11 @@ export default function Sidebar() {
     { name: "Analyzer", path: "/analyzer", icon: Search },
     { name: "Compare Node", path: "/compare", icon: BarChart3 },
     { name: "Tracked Nodes", path: "/accounts", icon: Users },
+    { name: "Competitors", path: "/competitors", icon: Trophy },
+    { name: "Saved Reports", path: "/reports", icon: FileText },
     { name: "AI Strategy", path: "/ai-insights", icon: Brain },
-    { name: "Audit Trail", path: "/history", icon: History },
+    { name: "Snapshot History", path: "/history", icon: History },
+    { name: "Audit Trail", path: "/activity", icon: History },
   ];
 
   const toggleSidebar = () => setIsOpen(!isOpen);

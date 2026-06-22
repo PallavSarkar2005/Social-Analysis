@@ -1,49 +1,106 @@
 import { createContext, useContext, useState, useEffect } from "react";
+import client from "../api/client";
 
 const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState({
-    name: "Pallav Sarkar",
-    email: "developer@socialiq.ai",
-    company: "SocialIQ Lab",
-    role: "Lead Analytics Architect",
-    avatar: "P",
-    tier: "Developer Pro",
-    activeSince: "June 2026",
-    limits: {
-      used: 8402,
-      total: 25000,
-      nodesUsed: 2,
-      nodesTotal: 50
-    }
-  });
+  const [user, setUser] = useState(null);
+  const [token, setToken] = useState(null);
+  const [loading, setLoading] = useState(true);
 
-  // Sync with local storage if modified
+  // Initialize Auth state from cookies
   useEffect(() => {
-    const saved = localStorage.getItem("socialiq_user");
-    if (saved) {
+    const initializeAuth = async () => {
       try {
-        setUser(JSON.parse(saved));
-      } catch (e) {
-        console.error("Failed to parse saved user settings:", e);
+        // Verify/refresh user data from backend using cookies
+        const res = await client.get("/api/auth/me");
+        if (res.data && res.data.success) {
+          setUser(res.data.data);
+        }
+      } catch (err) {
+        console.log("No active session or session expired.");
+        setUser(null);
+      } finally {
+        setLoading(false);
       }
-    }
+    };
+
+    initializeAuth();
+
+    // Listen for custom logout events dispatched by Axios interceptor
+    const handleAuthLogout = () => {
+      setUser(null);
+      setToken(null);
+    };
+
+    window.addEventListener("auth-logout", handleAuthLogout);
+    return () => {
+      window.removeEventListener("auth-logout", handleAuthLogout);
+    };
   }, []);
+
+  // Register user
+  const register = async (name, email, password) => {
+    try {
+      const res = await client.post("/api/auth/register", { name, email, password });
+      if (res.data && res.data.success) {
+        const { token: userToken, ...userData } = res.data.data;
+        setUser(userData);
+        setToken(userToken);
+        return { success: true };
+      }
+    } catch (err) {
+      const msg = err.response?.data?.message || err.response?.data?.errors?.[0]?.message || "Registration failed";
+      return { success: false, message: msg };
+    }
+  };
+
+  // Login user
+  const login = async (email, password) => {
+    try {
+      const res = await client.post("/api/auth/login", { email, password });
+      if (res.data && res.data.success) {
+        const { token: userToken, ...userData } = res.data.data;
+        setUser(userData);
+        setToken(userToken);
+        return { success: true };
+      }
+    } catch (err) {
+      const msg = err.response?.data?.message || err.response?.data?.errors?.[0]?.message || "Login failed";
+      return { success: false, message: msg };
+    }
+  };
+
+  // Logout user
+  const logout = async () => {
+    try {
+      await client.post("/api/auth/logout");
+    } catch (err) {
+      console.warn("Server-side logout warning:", err);
+    }
+    setUser(null);
+    setToken(null);
+  };
 
   const updateUser = (newData) => {
     setUser((prev) => {
-      const updated = { ...prev, ...newData, avatar: newData.name ? newData.name.charAt(0).toUpperCase() : prev.avatar };
-      localStorage.setItem("socialiq_user", JSON.stringify(updated));
-      return updated;
+      if (!prev) return null;
+      return { ...prev, ...newData };
     });
   };
 
-  return (
-    <AuthContext.Provider value={{ user, updateUser }}>
-      {children}
-    </AuthContext.Provider>
-  );
+  const value = {
+    user,
+    token,
+    loading,
+    login,
+    register,
+    logout,
+    updateUser,
+    isAuthenticated: !!user,
+  };
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
 
 export const useAuth = () => {

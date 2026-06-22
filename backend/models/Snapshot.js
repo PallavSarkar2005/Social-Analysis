@@ -2,6 +2,12 @@ import mongoose from "mongoose";
 
 const snapshotSchema = new mongoose.Schema(
   {
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+
     account: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Account",
@@ -32,6 +38,9 @@ const snapshotSchema = new mongoose.Schema(
     timestamps: true,
   }
 );
+
+// Indexing for quick query execution per user and account
+snapshotSchema.index({ userId: 1, account: 1, capturedAt: -1 });
 
 const Snapshot = mongoose.model("Snapshot", snapshotSchema);
 

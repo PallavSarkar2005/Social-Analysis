@@ -2,6 +2,12 @@ import mongoose from "mongoose";
 
 const contentSchema = new mongoose.Schema(
   {
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+
     account: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Account",
@@ -11,7 +17,6 @@ const contentSchema = new mongoose.Schema(
     contentId: {
       type: String,
       required: true,
-      unique: true,
     },
 
     title: String,
@@ -46,7 +51,7 @@ const contentSchema = new mongoose.Schema(
   }
 );
 
-export default mongoose.model(
-  "Content",
-  contentSchema
-);
+// Compound index to allow different users to track the same contentId
+contentSchema.index({ contentId: 1, userId: 1 }, { unique: true });
+
+export default mongoose.model("Content", contentSchema);

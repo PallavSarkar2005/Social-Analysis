@@ -1,6 +1,6 @@
 import { generateVideoInsights } from "../services/aiInsightService.js";
 
-export const getVideoInsights = async (req, res) => {
+export const getVideoInsights = async (req, res, next) => {
   try {
     const { title, views, likes, comments } = req.body;
 
@@ -16,9 +16,6 @@ export const getVideoInsights = async (req, res) => {
       insights,
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    next(error);
   }
 };

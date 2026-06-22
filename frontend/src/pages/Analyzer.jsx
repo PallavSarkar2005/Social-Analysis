@@ -105,7 +105,8 @@ function Analyzer() {
       setInsights(response.insights);
     } catch (err) {
       console.error(err);
-      setInsights("Failed to generate AI insights.");
+      const msg = err.response?.data?.message || err.message || "Failed to generate AI insights.";
+      setInsights(`Error: ${msg}`);
     } finally {
       setLoadingInsights(false);
     }
@@ -124,6 +125,8 @@ function Analyzer() {
       setChannelInsights(response.insights);
     } catch (error) {
       console.error(error);
+      const msg = error.response?.data?.message || error.message || "Failed to generate channel insights.";
+      setChannelInsights(`Error: ${msg}`);
     } finally {
       setLoadingChannelInsights(false);
     }

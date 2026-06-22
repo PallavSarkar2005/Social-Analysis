@@ -61,7 +61,7 @@ const getYoutubeStats = async (channelId) => {
   };
 };
 
-export const compareAccounts = async (req, res) => {
+export const compareAccounts = async (req, res, next) => {
   try {
     const { url1, url2 } = req.body;
 
@@ -168,10 +168,6 @@ export const compareAccounts = async (req, res) => {
       message: "Please compare similar platforms: X vs X or YouTube vs YouTube",
     });
   } catch (error) {
-    console.error(error);
-    return res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    next(error);
   }
 };

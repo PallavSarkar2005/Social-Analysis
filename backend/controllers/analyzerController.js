@@ -62,7 +62,7 @@ const getChannelByHandle = async (handle) => {
 Main Analyzer
 ========================================
 */
-export const analyzeYoutubeUrl = async (req, res) => {
+export const analyzeYoutubeUrl = async (req, res, next) => {
   try {
     const { url } = req.body;
 
@@ -106,6 +106,7 @@ export const analyzeYoutubeUrl = async (req, res) => {
 
       let account = await Account.findOne({
         accountId: channelId,
+        userId: req.user._id,
       });
 
       if (!account) {
@@ -114,6 +115,7 @@ export const analyzeYoutubeUrl = async (req, res) => {
           platform: "youtube",
           accountId: channelId,
           profileUrl: url,
+          userId: req.user._id,
         });
       }
 
@@ -121,10 +123,12 @@ export const analyzeYoutubeUrl = async (req, res) => {
         account: account._id,
         followers: Number(channel.statistics.subscriberCount || 0),
         views: Number(channel.statistics.viewCount || 0),
+        userId: req.user._id,
       });
 
       const history = await Snapshot.find({
         account: account._id,
+        userId: req.user._id,
       })
         .sort({ capturedAt: 1 })
         .lean();
@@ -202,6 +206,7 @@ export const analyzeYoutubeUrl = async (req, res) => {
 
       let account = await Account.findOne({
         accountId: channelId,
+        userId: req.user._id,
       });
 
       if (!account) {
@@ -210,6 +215,7 @@ export const analyzeYoutubeUrl = async (req, res) => {
           platform: "youtube",
           accountId: channelId,
           profileUrl: url,
+          userId: req.user._id,
         });
       }
 
@@ -217,10 +223,12 @@ export const analyzeYoutubeUrl = async (req, res) => {
         account: account._id,
         followers: Number(channel.statistics.subscriberCount || 0),
         views: Number(channel.statistics.viewCount || 0),
+        userId: req.user._id,
       });
 
       const history = await Snapshot.find({
         account: account._id,
+        userId: req.user._id,
       })
         .sort({ capturedAt: 1 })
         .lean();
@@ -348,11 +356,6 @@ export const analyzeYoutubeUrl = async (req, res) => {
       message: "Unsupported YouTube URL",
     });
   } catch (error) {
-    console.error(error);
-
-    return res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    next(error);
   }
 };

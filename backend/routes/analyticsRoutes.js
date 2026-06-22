@@ -10,28 +10,69 @@ import {
   getBestPostingTime,
   getGrowthRate,
   getDashboardOverview,
+  getForecast,
 } from "../controllers/analyticsController.js";
+import { protect } from "../middleware/authMiddleware.js";
+import { param } from "express-validator";
+import { validateResult } from "../middleware/validationMiddleware.js";
 
 const router = express.Router();
 
+router.use(protect);
+
 router.get("/top-videos", getTopVideos);
-
 router.get("/highest-engagement", getHighestEngagement);
-
-router.get("/channel-summary/:accountId", getChannelSummary);
-
+router.get("/dashboard-overview", getDashboardOverview);
 router.get("/compare", compareAccounts);
 
-router.get("/growth/:accountId", getGrowthData);
+// Param validations for endpoints requiring accountId
+router.get(
+  "/channel-summary/:accountId",
+  param("accountId").isMongoId().withMessage("Invalid account ID format"),
+  validateResult,
+  getChannelSummary
+);
 
-router.get("/posting-frequency/:accountId", getPostingFrequency);
+router.get(
+  "/growth/:accountId",
+  param("accountId").isMongoId().withMessage("Invalid account ID format"),
+  validateResult,
+  getGrowthData
+);
 
-router.get("/top-content/:accountId", getTopContent);
+router.get(
+  "/posting-frequency/:accountId",
+  param("accountId").isMongoId().withMessage("Invalid account ID format"),
+  validateResult,
+  getPostingFrequency
+);
 
-router.get("/best-posting-time/:accountId", getBestPostingTime);
+router.get(
+  "/top-content/:accountId",
+  param("accountId").isMongoId().withMessage("Invalid account ID format"),
+  validateResult,
+  getTopContent
+);
 
-router.get("/growth-rate/:accountId", getGrowthRate);
+router.get(
+  "/best-posting-time/:accountId",
+  param("accountId").isMongoId().withMessage("Invalid account ID format"),
+  validateResult,
+  getBestPostingTime
+);
 
-router.get("/dashboard-overview", getDashboardOverview);
+router.get(
+  "/growth-rate/:accountId",
+  param("accountId").isMongoId().withMessage("Invalid account ID format"),
+  validateResult,
+  getGrowthRate
+);
+
+router.get(
+  "/forecast/:accountId",
+  param("accountId").isMongoId().withMessage("Invalid account ID format"),
+  validateResult,
+  getForecast
+);
 
 export default router;

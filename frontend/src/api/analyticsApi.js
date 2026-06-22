@@ -49,3 +49,8 @@ export const getDashboardOverview = async () => {
   const res = await client.get("/api/analytics/dashboard-overview");
   return res.data;
 };
+
+export const getForecast = async (accountId) => {
+  const res = await client.get(`/api/analytics/forecast/${accountId}`);
+  return res.data;
+};

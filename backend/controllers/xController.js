@@ -50,7 +50,7 @@ Analyze X Profile
 ========================================
 */
 
-export const analyzeXProfile = async (req, res) => {
+export const analyzeXProfile = async (req, res, next) => {
   try {
     const { url } = req.body;
 
@@ -101,6 +101,7 @@ export const analyzeXProfile = async (req, res) => {
 
     let account = await Account.findOne({
       accountId: username,
+      userId: req.user._id,
     });
 
     if (!account) {
@@ -109,6 +110,7 @@ export const analyzeXProfile = async (req, res) => {
         platform: "x",
         accountId: username,
         profileUrl: profile.profileUrl,
+        userId: req.user._id,
       });
     } else {
       account.name = profile.name;
@@ -127,6 +129,7 @@ export const analyzeXProfile = async (req, res) => {
 
     const latestSnapshot = await Snapshot.findOne({
       account: account._id,
+      userId: req.user._id,
     }).sort({
       capturedAt: -1,
     });
@@ -137,6 +140,7 @@ export const analyzeXProfile = async (req, res) => {
         followers: followerCount,
         views: 0,
         engagementRate: 0,
+        userId: req.user._id,
       });
 
       console.log("NEW SNAPSHOT SAVED");
@@ -152,6 +156,7 @@ export const analyzeXProfile = async (req, res) => {
 
     const history = await Snapshot.find({
       account: account._id,
+      userId: req.user._id,
     })
       .sort({ capturedAt: 1 })
       .lean();
@@ -190,14 +195,6 @@ export const analyzeXProfile = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("================================");
-    console.error("X CONTROLLER ERROR");
-    console.error(error);
-    console.error("================================");
-
-    return res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    next(error);
   }
 };

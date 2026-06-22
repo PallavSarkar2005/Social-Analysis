@@ -1,24 +1,38 @@
 import Account from "../models/Account.js";
 
-export const createAccount = async (req, res) => {
+export const createAccount = async (req, res, next) => {
   try {
-    const account = await Account.create(req.body);
+    const { name, platform, accountId, profileUrl } = req.body;
+
+    // Check if account already tracked by this user
+    const existing = await Account.findOne({ accountId, userId: req.user._id });
+    if (existing) {
+      return res.status(400).json({
+        success: false,
+        message: "You are already tracking this account",
+      });
+    }
+
+    const account = await Account.create({
+      name,
+      platform,
+      accountId,
+      profileUrl,
+      userId: req.user._id,
+    });
 
     res.status(201).json({
       success: true,
       data: account,
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    next(error);
   }
 };
 
-export const getAccounts = async (req, res) => {
+export const getAccounts = async (req, res, next) => {
   try {
-    const accounts = await Account.find();
+    const accounts = await Account.find({ userId: req.user._id, isCompetitor: { $ne: true } });
 
     res.status(200).json({
       success: true,
@@ -26,27 +40,28 @@ export const getAccounts = async (req, res) => {
       data: accounts,
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    next(error);
   }
 };
 
-export const deleteAccount = async (req, res) => {
+export const deleteAccount = async (req, res, next) => {
   try {
     const { id } = req.params;
 
-    await Account.findByIdAndDelete(id);
+    const account = await Account.findOneAndDelete({ _id: id, userId: req.user._id });
+
+    if (!account) {
+      return res.status(404).json({
+        success: false,
+        message: "Account not found or not authorized to delete",
+      });
+    }
 
     res.json({
       success: true,
       message: "Account deleted",
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    next(error);
   }
 };
