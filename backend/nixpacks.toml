@@ -1,0 +1,10 @@
+# nixpacks.toml
+[phases.setup]
+nixPkgs = ["nodejs_20", "python3", "python3Packages.pip"]
+
+[phases.install]
+cmds = [
+  "npm install",
+  "pip install --break-system-packages twscrape twikit || pip install twscrape twikit",
+  "npx playwright install chromium --with-deps"
+]

@@ -241,10 +241,9 @@ export const analyzeXProfile = async (req, res, next) => {
       profile = await scrapeXProfile(username);
     } catch (scrapeErr) {
       console.error("[X Controller Scraper Error]:", scrapeErr.message);
-      return res.status(500).json({
+      return res.status(503).json({
         success: false,
-        provider: scrapeErr.provider || "twscrape",
-        error: scrapeErr.errorDetails || scrapeErr.message || "X Scraping Pipeline Failed"
+        message: "X providers unavailable"
       });
     }
 

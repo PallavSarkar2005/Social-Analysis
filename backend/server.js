@@ -1,5 +1,9 @@
 import dotenv from "dotenv";
 import { validateEnv } from "./config/env.js";
+import { exec } from "child_process";
+import { promisify } from "util";
+
+const execPromise = promisify(exec);
 
 dotenv.config();
 validateEnv();
@@ -47,6 +51,8 @@ startSnapshotJob();
 startEmailReportJobs();
 
 const app = express();
+
+app.set("trust proxy", 1);
 
 // Strict CORS whitelisting with credentials support for HttpOnly cookies
 const corsWhitelist = [
@@ -190,6 +196,42 @@ cron.schedule("0 * * * *", async () => {
   await syncAllYoutubeChannels();
 });
 
+const logRuntimeDiagnostics = async () => {
+  console.log("\n=== Railway Runtime Diagnostics ===");
+  console.log("Platform:", process.platform);
+  console.log("Node version:", process.version);
+  
+  try {
+    const { stdout } = await execPromise(process.platform === "win32" ? "where.exe python" : "which python3 || which python");
+    console.log("python3 path:", stdout.trim());
+  } catch (e) {
+    console.log("python3 path: not found");
+  }
+
+  try {
+    const { stdout } = await execPromise(process.platform === "win32" ? "python --version" : "python3 --version || python --version");
+    console.log("python3 version:", stdout.trim());
+  } catch (e) {
+    console.log("python3 version: not found");
+  }
+
+  try {
+    const { stdout } = await execPromise(process.platform === "win32" ? "pip --version" : "pip3 --version || pip --version");
+    console.log("pip version:", stdout.trim());
+  } catch (e) {
+    console.log("pip version: not found");
+  }
+
+  try {
+    const { stdout } = await execPromise("npx playwright --version");
+    console.log("playwright version:", stdout.trim());
+  } catch (e) {
+    console.log("playwright version: not found");
+  }
+  console.log("===================================\n");
+};
+
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
+  logRuntimeDiagnostics();
 });
