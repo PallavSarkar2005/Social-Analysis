@@ -452,9 +452,9 @@ export default function Competitors() {
                   </div>
                 </div>
 
-                <div className="h-96 w-full">
+                <div className="h-[380px] w-full">
                   {activeChartTab === "history" ? (
-                    <ResponsiveContainer width="100%" height="100%">
+                    <ResponsiveContainer width="100%" height={350} minHeight={100}>
                       <LineChart data={getHistoricalData()} margin={{ top: 15, right: 30, left: 10, bottom: 5 }}>
                         <CartesianGrid stroke="rgba(255, 255, 255, 0.04)" vertical={false} />
                         <XAxis
@@ -492,7 +492,7 @@ export default function Competitors() {
                       </LineChart>
                     </ResponsiveContainer>
                   ) : (
-                    <ResponsiveContainer width="100%" height="100%">
+                    <ResponsiveContainer width="100%" height={350} minHeight={100}>
                       <BarChart data={getComparisonData()} margin={{ top: 15, right: 30, left: 10, bottom: 5 }}>
                         <CartesianGrid stroke="rgba(255, 255, 255, 0.04)" vertical={false} />
                         <XAxis

@@ -2,7 +2,6 @@ import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "../context/AuthContext";
-import CountUp from "react-countup";
 import { 
   Sparkles, 
   TrendingUp, 
@@ -52,6 +51,49 @@ const previewChartData = {
     { name: "Jun", followers: 850000, views: 6700000 },
   ]
 };
+
+/*
+========================================
+Animated Counter Component
+========================================
+A safe, dependency-free counter that works consistently across
+all environments (avoiding ESM/CommonJS wrapper mismatch crashes).
+*/
+function AnimatedCounter({ end, duration = 1.5, decimals = 0, suffix = "" }) {
+  const [count, setCount] = useState(0);
+
+  useEffect(() => {
+    let startTimestamp = null;
+    let animationFrameId;
+
+    const step = (timestamp) => {
+      if (!startTimestamp) startTimestamp = timestamp;
+      const progress = Math.min((timestamp - startTimestamp) / (duration * 1000), 1);
+      const current = progress * end;
+      setCount(current);
+      if (progress < 1) {
+        animationFrameId = window.requestAnimationFrame(step);
+      }
+    };
+
+    animationFrameId = window.requestAnimationFrame(step);
+    return () => {
+      if (animationFrameId) {
+        window.cancelAnimationFrame(animationFrameId);
+      }
+    };
+  }, [end, duration]);
+
+  return (
+    <span>
+      {count.toLocaleString(undefined, {
+        minimumFractionDigits: decimals,
+        maximumFractionDigits: decimals,
+      })}
+      {suffix}
+    </span>
+  );
+}
 
 export default function LandingPage() {
   const { isAuthenticated } = useAuth();
@@ -376,7 +418,7 @@ export default function LandingPage() {
 
           {/* Area Chart mockup */}
           <div className="h-64 w-full mt-6 bg-white/[0.01] border border-white/[0.04] rounded-xl p-4">
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height={220} minHeight={100}>
               <AreaChart data={previewChartData.youtube}>
                 <defs>
                   <linearGradient id="colorViews" x1="0" y1="0" x2="0" y2="1">
@@ -497,10 +539,9 @@ export default function LandingPage() {
               <div className="p-4 rounded-xl bg-white/[0.02] border border-white/[0.05]">
                 <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1">Followers Node</span>
                 <h4 className="text-xl sm:text-2xl font-black text-white">
-                  <CountUp
+                  <AnimatedCounter
                     end={selectedPlatform === "youtube" ? 1200000 : selectedPlatform === "twitter" ? 450000 : 850000}
                     duration={1.5}
-                    separator=","
                   />
                 </h4>
                 <p className="text-[10px] text-green-400 font-semibold mt-1 flex items-center gap-1">
@@ -512,10 +553,9 @@ export default function LandingPage() {
               <div className="p-4 rounded-xl bg-white/[0.02] border border-white/[0.05]">
                 <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1">Estimated Views</span>
                 <h4 className="text-xl sm:text-2xl font-black text-white">
-                  <CountUp
+                  <AnimatedCounter
                     end={selectedPlatform === "youtube" ? 10500000 : selectedPlatform === "twitter" ? 4800000 : 6700000}
                     duration={1.5}
-                    separator=","
                   />
                 </h4>
                 <p className="text-[10px] text-green-400 font-semibold mt-1 flex items-center gap-1">
@@ -527,8 +567,8 @@ export default function LandingPage() {
               <div className="p-4 rounded-xl bg-white/[0.02] border border-white/[0.05]">
                 <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1">Engagement Rate</span>
                 <h4 className="text-xl sm:text-2xl font-black text-white">
-                  <CountUp
-                    end={selectedPlatform === "youtube" ? 482 : selectedPlatform === "twitter" ? 310 : 256}
+                  <AnimatedCounter
+                    end={selectedPlatform === "youtube" ? 4.82 : selectedPlatform === "twitter" ? 3.10 : 2.56}
                     decimals={2}
                     duration={1}
                     suffix="%"
@@ -541,8 +581,8 @@ export default function LandingPage() {
               <div className="p-4 rounded-xl bg-white/[0.02] border border-white/[0.05]">
                 <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1">Weekly Growth %</span>
                 <h4 className="text-xl sm:text-2xl font-black text-white">
-                  <CountUp
-                    end={selectedPlatform === "youtube" ? 185 : selectedPlatform === "twitter" ? 142 : 118}
+                  <AnimatedCounter
+                    end={selectedPlatform === "youtube" ? 18.5 : selectedPlatform === "twitter" ? 14.2 : 11.8}
                     decimals={2}
                     duration={1}
                     suffix="%"
@@ -554,7 +594,7 @@ export default function LandingPage() {
 
             {/* Dynamic Recharts Area Chart */}
             <div className="h-72 w-full bg-white/[0.01] border border-white/[0.04] rounded-xl p-4">
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer width="100%" height={250} minHeight={100}>
                 <AreaChart data={previewChartData[selectedPlatform]}>
                   <defs>
                     <linearGradient id="colorPlatViews" x1="0" y1="0" x2="0" y2="1">
@@ -580,21 +620,21 @@ export default function LandingPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid grid-cols-1 md:grid-cols-3 gap-12 text-center">
           <div className="space-y-2">
             <h3 className="text-4xl sm:text-5xl font-black bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">
-              <CountUp end={10000} duration={2} suffix="+" separator="," />
+              <AnimatedCounter end={10000} duration={2} suffix="+" />
             </h3>
             <p className="text-xs uppercase tracking-widest text-slate-500 font-bold">Reports Generated</p>
           </div>
 
           <div className="space-y-2">
             <h3 className="text-4xl sm:text-5xl font-black bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
-              <CountUp end={500} duration={2} suffix="+" separator="," />
+              <AnimatedCounter end={500} duration={2} suffix="+" />
             </h3>
             <p className="text-xs uppercase tracking-widest text-slate-500 font-bold">Creators Tracked</p>
           </div>
 
           <div className="space-y-2">
             <h3 className="text-4xl sm:text-5xl font-black bg-gradient-to-r from-pink-400 to-rose-400 bg-clip-text text-transparent">
-              <CountUp end={50} duration={2.5} suffix="M+" separator="," />
+              <AnimatedCounter end={50} duration={2.5} suffix="M+" />
             </h3>
             <p className="text-xs uppercase tracking-widest text-slate-500 font-bold">Data Points Processed</p>
           </div>
