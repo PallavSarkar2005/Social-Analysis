@@ -28,7 +28,16 @@ export const fetchWithTwscrape = async (username) => {
       source: "Live Data",
     };
   } catch (err) {
-    console.warn(`[Twscrape Provider] Failed for @${username}:`, err.message);
+    const isMissing = err.message.includes("not recognized") || 
+                      err.message.includes("not found") || 
+                      err.message.includes("ENOENT") || 
+                      err.message.includes("command not found");
+    if (isMissing) {
+      const runErr = new Error("Python runtime unavailable");
+      runErr.isRuntimeUnavailable = true;
+      runErr.provider = "twscrape";
+      throw runErr;
+    }
     throw new Error(`Twscrape failed: ${err.message}`);
   }
 };

@@ -25,45 +25,46 @@ const getDemoData = (username) => {
 };
 
 export const fetchXProfileData = async (username) => {
-  console.log(`\n========================================`);
-  console.log(`[xService] Resolving profile data for @${username}`);
-  console.log(`========================================`);
-  
   // 1. Try Twscrape
+  console.log("Provider Start:", "twscrape");
   try {
     const data = await fetchWithTwscrape(username);
-    console.log(`[xService] Data supplied by: Twscrape (Live)`);
-    // Cache the successful live response
+    console.log("Provider Success:", "twscrape");
     await setCachedProfile(username, data);
     return { ...data, source: "Live Data" };
   } catch (err) {
-    console.warn(`[xService] Twscrape failed: ${err.message}. Trying Twikit...`);
+    console.log("Provider Failure:", "twscrape", err.message || err);
+    if (err.isRuntimeUnavailable) {
+      throw err;
+    }
   }
 
   // 2. Try Twikit
+  console.log("Provider Start:", "twikit");
   try {
     const data = await fetchWithTwikit(username);
-    console.log(`[xService] Data supplied by: Twikit (Live)`);
-    // Cache the successful live response
+    console.log("Provider Success:", "twikit");
     await setCachedProfile(username, data);
     return { ...data, source: "Live Data" };
   } catch (err) {
-    console.warn(`[xService] Twikit failed: ${err.message}. Trying MongoDB Cache...`);
+    console.log("Provider Failure:", "twikit", err.message || err);
   }
 
   // 3. Try MongoDB Cache
+  console.log("Provider Start:", "cache");
   try {
     const data = await getCachedProfile(username);
     if (data) {
-      console.log(`[xService] Data supplied by: MongoDB Cache`);
+      console.log("Provider Success:", "cache");
       return { ...data, source: "Cached Data" };
     }
+    console.log("Provider Failure:", "cache", "Cache miss or expired");
   } catch (err) {
-    console.error(`[xService] MongoDB Cache failed:`, err.message);
+    console.log("Provider Failure:", "cache", err.message || err);
   }
 
   // 4. Final Fallback: Demo Dataset
+  console.log("Returning Demo Data");
   const data = getDemoData(username);
-  console.log(`[xService] Data supplied by: Demo Dataset`);
   return data;
 };
