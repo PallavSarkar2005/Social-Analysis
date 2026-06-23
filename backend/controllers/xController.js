@@ -240,9 +240,10 @@ export const analyzeXProfile = async (req, res, next) => {
       profile = await scrapeXProfile(username);
     } catch (scrapeErr) {
       console.error("[X Controller Scraper Error]:", scrapeErr.message);
-      return res.status(502).json({
+      return res.status(403).json({
         success: false,
-        message: `Scraper Access Restricted: Failed to parse X profile for @${username}. X.com is currently rate-limiting or blocking automated access.`,
+        message: "X API integration not configured. Current implementation relies on scraping and X is blocking access.",
+        reason: scrapeErr.message
       });
     }
 

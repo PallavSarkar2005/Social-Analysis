@@ -24,15 +24,29 @@ export const scrapeXProfile = async (username) => {
       route.continue();
     });
 
-    console.log(`[X Scraper] Navigating to X profile: https://x.com/${username}`);
+    const requestUrl = `https://x.com/${username}`;
     
     // Attempt navigation with domcontentloaded wait state
-    await page.goto(`https://x.com/${username}`, {
+    const pageResponse = await page.goto(requestUrl, {
       waitUntil: "domcontentloaded",
       timeout: 8000,
     });
 
     await page.waitForTimeout(2000);
+
+    const html = await page.content();
+    
+    // Map response metadata to standard console.log format requested
+    const response = {
+      status: pageResponse ? pageResponse.status() : 500,
+      headers: pageResponse ? pageResponse.headers() : {}
+    };
+
+    console.log("USERNAME:", username);
+    console.log("REQUEST URL:", requestUrl);
+    console.log("HTTP STATUS:", response.status);
+    console.log("CONTENT TYPE:", response.headers["content-type"] || "unknown");
+    console.log("HTML LENGTH:", html?.length || 0);
 
     const data = await page.evaluate(() => {
       const body = document.body.innerText;
@@ -43,19 +57,33 @@ export const scrapeXProfile = async (username) => {
     });
 
     const bodyText = data.body;
-    console.log(`[X Scraper] Document Title: ${data.title}`);
+    const lowerBody = bodyText.toLowerCase();
+    const lowerTitle = data.title.toLowerCase();
 
-    // If redirected to login, X is blocking us
-    if (bodyText.includes("Log in to") || bodyText.includes("Sign in") || page.url().includes("login")) {
-      console.warn(`[X Scraper] Blocked: Redirected to login page or bot gate encountered.`);
-      throw new Error("X.com redirected request to login gateway (rate limit/bot detection).");
+    // Granular block reasons checks
+    if (page.url().includes("login") || lowerBody.includes("log in") || lowerBody.includes("sign in") || lowerTitle.includes("login")) {
+      throw new Error("X returned login page");
+    }
+    if (lowerBody.includes("rate limit") || lowerBody.includes("rate_limit") || lowerBody.includes("too many requests")) {
+      throw new Error("X returned rate limit page");
+    }
+    if (lowerBody.includes("suspicious activity") || lowerBody.includes("suspicious")) {
+      throw new Error("suspicious activity detected");
+    }
+    if (lowerBody.includes("javascript is not enabled") || lowerBody.includes("javascript required") || lowerBody.includes("enable javascript")) {
+      throw new Error("javascript required");
+    }
+    if (lowerBody.includes("this account doesn’t exist") || lowerBody.includes("account doesn't exist")) {
+      throw new Error("Profile not found");
     }
 
-    const followers =
-      bodyText.match(/([\d.,]+[KMB]?)\s*Followers/i)?.[1];
+    const followers = bodyText.match(/([\d.,]+[KMB]?)\s*Followers/i)?.[1];
     
     if (!followers) {
-      throw new Error("Followers metric not found in page structure.");
+      if (response.status === 403 || response.status === 401) {
+        throw new Error("X returned access denied");
+      }
+      throw new Error("HTML structure changed");
     }
 
     const following =
