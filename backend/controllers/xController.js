@@ -241,17 +241,10 @@ export const analyzeXProfile = async (req, res, next) => {
       profile = await scrapeXProfile(username);
     } catch (scrapeErr) {
       console.error("[X Controller Scraper Error]:", scrapeErr.message);
-      if (scrapeErr.isRuntimeUnavailable) {
-        return res.status(500).json({
-          success: false,
-          provider: scrapeErr.provider || "twscrape",
-          reason: "Python runtime unavailable",
-        });
-      }
-      return res.status(403).json({
+      return res.status(500).json({
         success: false,
-        message: "X API integration not configured. Current implementation relies on scraping and X is blocking access.",
-        reason: scrapeErr.message
+        provider: scrapeErr.provider || "twscrape",
+        error: scrapeErr.errorDetails || scrapeErr.message || "X Scraping Pipeline Failed"
       });
     }
 

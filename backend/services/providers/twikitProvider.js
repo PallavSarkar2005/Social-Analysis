@@ -6,19 +6,40 @@ import { fileURLToPath } from "url";
 const execPromise = promisify(exec);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-export const fetchWithTwikit = async (username) => {
-  console.log(`[Twikit Provider] Attempting to fetch X profile for @${username}`);
-  
-  const cleanUsername = username.replace("@", "").trim();
-  
+const getPythonVersion = async () => {
   try {
-    // Executes python script to interact with twikit library
-    const scriptPath = path.join(__dirname, "../../scripts/twikit_fetch.py");
-    const { stdout } = await execPromise(`python "${scriptPath}" ${cleanUsername}`);
+    const { stdout, stderr } = await execPromise("python --version");
+    return (stdout || stderr || "").trim();
+  } catch (err) {
+    try {
+      const { stdout, stderr } = await execPromise("python3 --version");
+      return (stdout || stderr || "").trim();
+    } catch (err2) {
+      return "Python not found";
+    }
+  }
+};
+
+export const fetchWithTwikit = async (username) => {
+  const cleanUsername = username.replace("@", "").trim();
+  const scriptPath = path.join(__dirname, "../../scripts/twikit_fetch.py");
+  const command = `python "${scriptPath}" ${cleanUsername}`;
+  const providerName = "twikit";
+  const pythonVersion = await getPythonVersion();
+
+  console.log("\n--- Diagnostic Log Start ---");
+  console.log("selected provider:", providerName);
+  console.log("executed command:", command);
+  console.log("Python version:", pythonVersion);
+
+  try {
+    const { stdout, stderr } = await execPromise(command);
     
+    console.log("stdout:", stdout || "(empty)");
+    console.log("stderr:", stderr || "(empty)");
+    console.log("--- Diagnostic Log End ---\n");
+
     const data = JSON.parse(stdout.trim());
-    
-    console.log(`[Twikit Provider] Successfully fetched data for @${username}`);
     return {
       username: data.username || cleanUsername,
       name: data.name || cleanUsername,
@@ -32,7 +53,18 @@ export const fetchWithTwikit = async (username) => {
       source: "Live Data",
     };
   } catch (err) {
-    console.warn(`[Twikit Provider] Failed for @${username}:`, err.message);
-    throw new Error(`Twikit failed: ${err.message}`);
+    console.log("stdout:", err.stdout || "(empty)");
+    console.log("stderr:", err.stderr || "(empty)");
+    console.log("provider failure reason:", err.message);
+    console.log("--- Diagnostic Log End ---\n");
+
+    const runErr = new Error(err.message);
+    runErr.provider = providerName;
+    runErr.command = command;
+    runErr.stdout = err.stdout || "";
+    runErr.stderr = err.stderr || "";
+    runErr.pythonVersion = pythonVersion;
+    runErr.errorDetails = err.stderr ? err.stderr.trim() : err.message;
+    throw runErr;
   }
 };

@@ -25,6 +25,8 @@ const getDemoData = (username) => {
 };
 
 export const fetchXProfileData = async (username) => {
+  let twscrapeErr = null;
+
   // 1. Try Twscrape
   console.log("Provider Start:", "twscrape");
   try {
@@ -33,10 +35,8 @@ export const fetchXProfileData = async (username) => {
     await setCachedProfile(username, data);
     return { ...data, source: "Live Data" };
   } catch (err) {
+    twscrapeErr = err;
     console.log("Provider Failure:", "twscrape", err.message || err);
-    if (err.isRuntimeUnavailable) {
-      throw err;
-    }
   }
 
   // 2. Try Twikit
@@ -48,23 +48,20 @@ export const fetchXProfileData = async (username) => {
     return { ...data, source: "Live Data" };
   } catch (err) {
     console.log("Provider Failure:", "twikit", err.message || err);
-  }
 
-  // 3. Try MongoDB Cache
-  console.log("Provider Start:", "cache");
-  try {
-    const data = await getCachedProfile(username);
-    if (data) {
-      console.log("Provider Success:", "cache");
-      return { ...data, source: "Cached Data" };
+    // Fail loudly with the exact root cause
+    const mainErr = twscrapeErr || err;
+    const pipelineErr = new Error("X Scraping Pipeline Failed");
+    pipelineErr.isPipelineFailure = true;
+    pipelineErr.provider = mainErr.provider || "twscrape";
+    
+    let rootCause = mainErr.errorDetails || mainErr.message;
+    if (rootCause.includes("ModuleNotFoundError")) {
+      const match = rootCause.match(/ModuleNotFoundError: [^\n]+/);
+      if (match) rootCause = match[0];
     }
-    console.log("Provider Failure:", "cache", "Cache miss or expired");
-  } catch (err) {
-    console.log("Provider Failure:", "cache", err.message || err);
+    
+    pipelineErr.errorDetails = rootCause;
+    throw pipelineErr;
   }
-
-  // 4. Final Fallback: Demo Dataset
-  console.log("Returning Demo Data");
-  const data = getDemoData(username);
-  return data;
 };

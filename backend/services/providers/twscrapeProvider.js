@@ -3,18 +3,39 @@ import { promisify } from "util";
 
 const execPromise = promisify(exec);
 
-export const fetchWithTwscrape = async (username) => {
-  console.log(`[Twscrape Provider] Attempting to fetch X profile for @${username}`);
-  
-  const cleanUsername = username.replace("@", "").trim();
-  
+const getPythonVersion = async () => {
   try {
-    // Executes: twscrape user_by_username <username>
-    const { stdout } = await execPromise(`twscrape user_by_username ${cleanUsername}`);
+    const { stdout, stderr } = await execPromise("python --version");
+    return (stdout || stderr || "").trim();
+  } catch (err) {
+    try {
+      const { stdout, stderr } = await execPromise("python3 --version");
+      return (stdout || stderr || "").trim();
+    } catch (err2) {
+      return "Python not found";
+    }
+  }
+};
+
+export const fetchWithTwscrape = async (username) => {
+  const cleanUsername = username.replace("@", "").trim();
+  const command = `twscrape user_by_username ${cleanUsername}`;
+  const providerName = "twscrape";
+  const pythonVersion = await getPythonVersion();
+
+  console.log("\n--- Diagnostic Log Start ---");
+  console.log("selected provider:", providerName);
+  console.log("executed command:", command);
+  console.log("Python version:", pythonVersion);
+
+  try {
+    const { stdout, stderr } = await execPromise(command);
     
+    console.log("stdout:", stdout || "(empty)");
+    console.log("stderr:", stderr || "(empty)");
+    console.log("--- Diagnostic Log End ---\n");
+
     const data = JSON.parse(stdout.trim());
-    
-    console.log(`[Twscrape Provider] Successfully fetched data for @${username}`);
     return {
       username: data.username || cleanUsername,
       name: data.displayname || data.name || cleanUsername,
@@ -28,16 +49,29 @@ export const fetchWithTwscrape = async (username) => {
       source: "Live Data",
     };
   } catch (err) {
+    console.log("stdout:", err.stdout || "(empty)");
+    console.log("stderr:", err.stderr || "(empty)");
+    console.log("provider failure reason:", err.message);
+    console.log("--- Diagnostic Log End ---\n");
+
     const isMissing = err.message.includes("not recognized") || 
                       err.message.includes("not found") || 
                       err.message.includes("ENOENT") || 
                       err.message.includes("command not found");
+    
+    const runErr = new Error(err.message);
+    runErr.provider = providerName;
+    runErr.command = command;
+    runErr.stdout = err.stdout || "";
+    runErr.stderr = err.stderr || "";
+    runErr.pythonVersion = pythonVersion;
+    
     if (isMissing) {
-      const runErr = new Error("Python runtime unavailable");
       runErr.isRuntimeUnavailable = true;
-      runErr.provider = "twscrape";
-      throw runErr;
+      runErr.errorDetails = "Python runtime unavailable (twscrape command not found)";
+    } else {
+      runErr.errorDetails = err.stderr ? err.stderr.trim() : err.message;
     }
-    throw new Error(`Twscrape failed: ${err.message}`);
+    throw runErr;
   }
 };
