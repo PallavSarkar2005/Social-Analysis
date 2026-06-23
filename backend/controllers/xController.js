@@ -8,9 +8,10 @@ Convert Followers
 ========================================
 */
 const parseNumber = (value) => {
-  if (!value) return 0;
+  if (value === null || value === undefined) return 0;
+  if (typeof value === "number") return value;
 
-  const clean = value.replace(/,/g, "");
+  const clean = String(value).replace(/,/g, "").trim();
 
   if (clean.endsWith("K")) {
     return Math.round(parseFloat(clean) * 1000);
@@ -24,7 +25,7 @@ const parseNumber = (value) => {
     return Math.round(parseFloat(clean) * 1000000000);
   }
 
-  return Number(clean);
+  return Number(clean) || 0;
 };
 
 /*
@@ -333,6 +334,7 @@ export const analyzeXProfile = async (req, res, next) => {
         following: profile.following,
         posts: profile.posts,
         profileUrl: profile.profileUrl,
+        source: profile.source || "Live Data",
         history: history.map((item) => ({
           date: new Date(item.capturedAt).toLocaleDateString(),
           followers: item.followers,

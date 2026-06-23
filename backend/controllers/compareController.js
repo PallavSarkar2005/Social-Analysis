@@ -100,11 +100,12 @@ export const compareAccounts = async (req, res, next) => {
 
       // Convert metrics for comparison
       const parseMetric = (val) => {
-        if (!val) return 0;
-        const clean = val.replace(/,/g, "");
+        if (val === null || val === undefined) return 0;
+        if (typeof val === "number") return val;
+        const clean = String(val).replace(/,/g, "").trim();
         if (clean.endsWith("K")) return parseFloat(clean) * 1000;
         if (clean.endsWith("M")) return parseFloat(clean) * 1000000;
-        return parseFloat(clean);
+        return parseFloat(clean) || 0;
       };
 
       return res.json({

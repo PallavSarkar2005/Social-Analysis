@@ -495,8 +495,19 @@ function Analyzer() {
                             />
                           </svg>
                         </h2>
-                        <p className="text-xs sm:text-sm font-medium text-slate-400 truncate">
+                        <p className="text-xs sm:text-sm font-medium text-slate-400 flex items-center gap-2 truncate">
                           @{result.data.username}
+                          {result.data.source && (
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-semibold border ${
+                              result.data.source === "Live Data"
+                                ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+                                : result.data.source === "Cached Data"
+                                ? "bg-amber-500/10 text-amber-400 border-amber-500/20"
+                                : "bg-indigo-500/10 text-indigo-400 border-indigo-500/20"
+                            }`}>
+                              {result.data.source}
+                            </span>
+                          )}
                         </p>
                       </div>
                     </div>
