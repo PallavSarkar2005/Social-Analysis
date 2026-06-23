@@ -13,7 +13,7 @@ export default function Login() {
 
   useEffect(() => {
     if (isAuthenticated) {
-      navigate("/");
+      navigate("/dashboard");
     }
   }, [isAuthenticated, navigate]);
 
@@ -29,7 +29,7 @@ export default function Login() {
       const res = await login(email, password);
       if (res.success) {
         toast.success("Successfully logged in!");
-        navigate("/");
+        navigate("/dashboard");
       } else {
         toast.error(res.message || "Invalid credentials");
       }

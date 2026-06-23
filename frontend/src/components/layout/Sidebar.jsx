@@ -21,7 +21,7 @@ export default function Sidebar() {
   const [isOpen, setIsOpen] = useState(false);
 
   const menuItems = [
-    { name: "Dashboard", path: "/", icon: LayoutDashboard },
+    { name: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
     { name: "Analyzer", path: "/analyzer", icon: Search },
     { name: "Compare Node", path: "/compare", icon: BarChart3 },
     { name: "Tracked Nodes", path: "/accounts", icon: Users },
@@ -39,7 +39,7 @@ export default function Sidebar() {
       {/* Logo */}
       <div className="px-6 py-7 border-b border-white/[0.06] flex items-center justify-between">
         <div>
-          <Link to="/">
+          <Link to="/dashboard">
             <h1 className="text-xl font-black text-white tracking-wider flex items-center gap-2">
               Social<span className="text-indigo-400">IQ</span>
             </h1>

@@ -14,7 +14,7 @@ export default function Register() {
 
   useEffect(() => {
     if (isAuthenticated) {
-      navigate("/");
+      navigate("/dashboard");
     }
   }, [isAuthenticated, navigate]);
 
@@ -34,7 +34,7 @@ export default function Register() {
       const res = await register(name, email, password);
       if (res.success) {
         toast.success("Successfully registered! Workspace ready.");
-        navigate("/");
+        navigate("/dashboard");
       } else {
         toast.error(res.message || "Registration failed. Try again.");
       }
