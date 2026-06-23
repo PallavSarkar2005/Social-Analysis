@@ -3,6 +3,7 @@ import { validateEnv } from "./config/env.js";
 
 dotenv.config();
 validateEnv();
+console.log("YOUTUBE_API_KEY loaded:", !!process.env.YOUTUBE_API_KEY);
 
 import express from "express";
 import cors from "cors";
@@ -160,6 +161,16 @@ app.use("/api/accounts", accountRoutes);
 app.use("/api/analytics", analyticsRoutes);
 app.use("/api/history", historyRoutes);
 app.use("/api/x", xRoutes);
+
+app.get("/api/debug/youtube", (req, res) => {
+  const apiKey = process.env.YOUTUBE_API_KEY || "";
+  res.json({
+    youtubeApiKeyPresent: !!apiKey,
+    youtubeApiKeyLength: apiKey.length,
+    nodeEnv: process.env.NODE_ENV || null,
+    railway: process.env.RAILWAY_ENVIRONMENT || null
+  });
+});
 
 app.get("/", (req, res) => {
   res.json({
