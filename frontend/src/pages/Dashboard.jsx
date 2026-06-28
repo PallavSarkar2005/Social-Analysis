@@ -2,7 +2,11 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import Sidebar from "../components/layout/Sidebar";
 import Navbar from "../components/layout/Navbar";
-import { getDashboardOverview, getCompareAccounts, getTopVideos } from "../api/analyticsApi";
+import {
+  getDashboardOverview,
+  getCompareAccounts,
+  getTopVideos,
+} from "../api/analyticsApi";
 import { syncAllChannels } from "../api/youtubeApi";
 import {
   Users,
@@ -55,7 +59,9 @@ export default function Dashboard() {
   const handleSyncAll = async () => {
     try {
       setSyncing(true);
-      toast.loading("Syncing all active nodes with YouTube APIs...", { id: "sync" });
+      toast.loading("Syncing all active nodes with YouTube APIs...", {
+        id: "sync",
+      });
       await syncAllChannels();
       toast.success("All channels synced successfully!", { id: "sync" });
       await loadData();
@@ -69,7 +75,16 @@ export default function Dashboard() {
 
   return (
     <div className="flex min-h-screen bg-[#090a0f] text-slate-100 antialiased font-sans selection:bg-indigo-500/30 selection:text-indigo-200">
-      <Toaster position="top-right" toastOptions={{ style: { background: "#111319", color: "#fff", border: "1px solid rgba(255,255,255,0.08)" } }} />
+      <Toaster
+        position="top-right"
+        toastOptions={{
+          style: {
+            background: "#111319",
+            color: "#fff",
+            border: "1px solid rgba(255,255,255,0.08)",
+          },
+        }}
+      />
       <Sidebar />
 
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative z-10">
@@ -79,11 +94,13 @@ export default function Dashboard() {
           {/* Header & Quick Sync */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/[0.06] pb-6">
             <div>
-              <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight bg-gradient-to-r from-white via-slate-200 to-slate-400 bg-clip-text text-transparent">
-                SaaS Overview Portal
+              <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
+                <span className="text-white">Profile </span>
+                <span className="text-indigo-400">Dashboard</span>
               </h1>
               <p className="text-xs sm:text-sm text-slate-400 font-medium mt-1">
-                Real-time cross-platform metrics distribution and node index statistics.
+                Real-time cross-platform metrics distribution and node index
+                statistics.
               </p>
             </div>
 
@@ -93,7 +110,10 @@ export default function Dashboard() {
                 disabled={syncing || loading}
                 className="h-10 px-4 rounded-xl bg-white/[0.04] border border-white/[0.08] hover:bg-white/[0.08] text-xs font-semibold text-white transition flex items-center gap-2"
               >
-                <RefreshCw size={14} className={syncing ? "animate-spin text-indigo-400" : ""} />
+                <RefreshCw
+                  size={14}
+                  className={syncing ? "animate-spin text-indigo-400" : ""}
+                />
                 Batch Sync Nodes
               </button>
               <Link to="/accounts">
@@ -109,7 +129,10 @@ export default function Dashboard() {
             <div className="space-y-6">
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 animate-pulse">
                 {[...Array(4)].map((_, i) => (
-                  <div key={i} className="h-24 bg-[#121318]/40 border border-white/[0.06] rounded-xl" />
+                  <div
+                    key={i}
+                    className="h-24 bg-[#121318]/40 border border-white/[0.06] rounded-xl"
+                  />
                 ))}
               </div>
               <div className="h-80 bg-[#121318]/40 border border-white/[0.06] rounded-xl animate-pulse" />
@@ -128,16 +151,26 @@ export default function Dashboard() {
                   },
                   {
                     title: "Total Subscribers",
-                    value: Number(overview?.growth?.subscribers?.current ?? overview?.totalFollowers ?? 0).toLocaleString(),
+                    value: Number(
+                      overview?.growth?.subscribers?.current ??
+                        overview?.totalFollowers ??
+                        0,
+                    ).toLocaleString(),
                     icon: TrendingUp,
-                    color: "text-indigo-400 bg-indigo-500/10 border-indigo-500/20",
+                    color:
+                      "text-indigo-400 bg-indigo-500/10 border-indigo-500/20",
                     growth: overview?.growth?.subscribers,
                   },
                   {
                     title: "Total Video Views",
-                    value: Number(overview?.growth?.views?.current ?? overview?.totalViews ?? 0).toLocaleString(),
+                    value: Number(
+                      overview?.growth?.views?.current ??
+                        overview?.totalViews ??
+                        0,
+                    ).toLocaleString(),
                     icon: Eye,
-                    color: "text-purple-400 bg-purple-500/10 border-purple-500/20",
+                    color:
+                      "text-purple-400 bg-purple-500/10 border-purple-500/20",
                     growth: overview?.growth?.views,
                   },
                   {
@@ -164,16 +197,34 @@ export default function Dashboard() {
                         </h3>
                         {card.growth && (
                           <div className="flex flex-col text-[10px] space-y-0.5 mt-1 border-t border-white/[0.04] pt-1">
-                            <span className={card.growth.lastWeek.value >= 0 ? "text-emerald-400" : "text-rose-400"}>
-                              Wk: {card.growth.lastWeek.value >= 0 ? "+" : ""}{card.growth.lastWeek.value.toLocaleString()} ({card.growth.lastWeek.percentage}%)
+                            <span
+                              className={
+                                card.growth.lastWeek.value >= 0
+                                  ? "text-emerald-400"
+                                  : "text-rose-400"
+                              }
+                            >
+                              Wk: {card.growth.lastWeek.value >= 0 ? "+" : ""}
+                              {card.growth.lastWeek.value.toLocaleString()} (
+                              {card.growth.lastWeek.percentage}%)
                             </span>
-                            <span className={card.growth.lastMonth.value >= 0 ? "text-emerald-400" : "text-rose-400"}>
-                              Mo: {card.growth.lastMonth.value >= 0 ? "+" : ""}{card.growth.lastMonth.value.toLocaleString()} ({card.growth.lastMonth.percentage}%)
+                            <span
+                              className={
+                                card.growth.lastMonth.value >= 0
+                                  ? "text-emerald-400"
+                                  : "text-rose-400"
+                              }
+                            >
+                              Mo: {card.growth.lastMonth.value >= 0 ? "+" : ""}
+                              {card.growth.lastMonth.value.toLocaleString()} (
+                              {card.growth.lastMonth.percentage}%)
                             </span>
                           </div>
                         )}
                       </div>
-                      <div className={`p-3 rounded-xl border shrink-0 ml-4 ${card.color}`}>
+                      <div
+                        className={`p-3 rounded-xl border shrink-0 ml-4 ${card.color}`}
+                      >
                         <Icon size={18} />
                       </div>
                     </motion.div>
@@ -191,18 +242,41 @@ export default function Dashboard() {
                   </div>
                   <div className="space-y-2.5">
                     {[
-                      { title: "Run Analyzer", desc: "Audit single profile links via AI", path: "/analyzer" },
-                      { title: "Competitor Comparison", desc: "Compare handles side-by-side", path: "/compare" },
-                      { title: "Verify Audit Trail", desc: "View detailed capture tables", path: "/history" },
-                      { title: "Settings Engine", desc: "Configure session variables", path: "/settings" },
+                      {
+                        title: "Run Analyzer",
+                        desc: "Audit single profile links via AI",
+                        path: "/analyzer",
+                      },
+                      {
+                        title: "Competitor Comparison",
+                        desc: "Compare handles side-by-side",
+                        path: "/compare",
+                      },
+                      {
+                        title: "Verify Audit Trail",
+                        desc: "View detailed capture tables",
+                        path: "/history",
+                      },
+                      {
+                        title: "Settings Engine",
+                        desc: "Configure session variables",
+                        path: "/settings",
+                      },
                     ].map((act, i) => (
                       <Link key={i} to={act.path} className="block group">
                         <div className="p-3 bg-white/[0.02] border border-white/[0.04] hover:bg-white/[0.04] hover:border-white/[0.08] rounded-xl flex items-center justify-between transition">
                           <div>
-                            <h4 className="text-xs font-bold text-slate-200">{act.title}</h4>
-                            <p className="text-[10px] text-slate-500 mt-0.5">{act.desc}</p>
+                            <h4 className="text-xs font-bold text-slate-200">
+                              {act.title}
+                            </h4>
+                            <p className="text-[10px] text-slate-500 mt-0.5">
+                              {act.desc}
+                            </p>
                           </div>
-                          <ArrowRight size={14} className="text-slate-500 group-hover:text-white transition group-hover:translate-x-1" />
+                          <ArrowRight
+                            size={14}
+                            className="text-slate-500 group-hover:text-white transition group-hover:translate-x-1"
+                          />
                         </div>
                       </Link>
                     ))}
@@ -218,21 +292,47 @@ export default function Dashboard() {
 
                   <div className="bg-indigo-500/[0.01] border border-indigo-500/10 rounded-xl p-4 space-y-3 font-mono text-xs">
                     <div className="flex items-start gap-2 text-slate-300">
-                      <CheckCircle size={14} className="text-indigo-400 mt-0.5 shrink-0" />
-                      <span>Cron scheduler running on active state. Sync tasks triggered hourly.</span>
+                      <CheckCircle
+                        size={14}
+                        className="text-indigo-400 mt-0.5 shrink-0"
+                      />
+                      <span>
+                        Cron scheduler running on active state. Sync tasks
+                        triggered hourly.
+                      </span>
                     </div>
                     <div className="flex items-start gap-2 text-slate-300">
-                      <CheckCircle size={14} className="text-indigo-400 mt-0.5 shrink-0" />
-                      <span>Playwright browser server launched successfully in headless mode.</span>
+                      <CheckCircle
+                        size={14}
+                        className="text-indigo-400 mt-0.5 shrink-0"
+                      />
+                      <span>
+                        Playwright browser server launched successfully in
+                        headless mode.
+                      </span>
                     </div>
                     <div className="flex items-start gap-2 text-slate-300">
-                      <CheckCircle size={14} className="text-indigo-400 mt-0.5 shrink-0" />
-                      <span>Groq client initialized with model `llama-3.3-70b-versatile`.</span>
+                      <CheckCircle
+                        size={14}
+                        className="text-indigo-400 mt-0.5 shrink-0"
+                      />
+                      <span>
+                        Groq client initialized with model
+                        `llama-3.3-70b-versatile`.
+                      </span>
                     </div>
                   </div>
 
                   <div className="text-xs text-slate-400 leading-normal">
-                    Index accounts from X (Twitter) or YouTube by entering their URL/handle inside the <Link to="/accounts" className="text-indigo-400 font-bold hover:underline">Tracked Nodes</Link> tab to sync stats historically and perform deep AI audits.
+                    Index accounts from X (Twitter) or YouTube by entering their
+                    URL/handle inside the{" "}
+                    <Link
+                      to="/accounts"
+                      className="text-indigo-400 font-bold hover:underline"
+                    >
+                      Tracked Nodes
+                    </Link>{" "}
+                    tab to sync stats historically and perform deep AI audits.
                   </div>
                 </div>
               </div>
@@ -241,10 +341,17 @@ export default function Dashboard() {
               <div className="bg-[#121318]/40 backdrop-blur-md border border-white/[0.06] rounded-2xl p-6 shadow-xl space-y-4">
                 <div className="flex items-center justify-between border-b border-white/[0.06] pb-4">
                   <div>
-                    <h3 className="text-sm font-semibold text-white tracking-tight">Active Index Matrix</h3>
-                    <p className="text-xs text-slate-400 mt-0.5">Real-time comparison values of all tracked social nodes.</p>
+                    <h3 className="text-sm font-semibold text-white tracking-tight">
+                      Active Index Matrix
+                    </h3>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      Real-time comparison values of all tracked social nodes.
+                    </p>
                   </div>
-                  <Link to="/accounts" className="text-xs font-semibold text-indigo-400 hover:text-indigo-300 flex items-center gap-1">
+                  <Link
+                    to="/accounts"
+                    className="text-xs font-semibold text-indigo-400 hover:text-indigo-300 flex items-center gap-1"
+                  >
                     Manage Accounts
                     <ArrowRight size={12} />
                   </Link>
@@ -265,11 +372,22 @@ export default function Dashboard() {
                         </thead>
                         <tbody className="divide-y divide-white/[0.04]">
                           {accounts.map((acc, idx) => (
-                            <tr key={idx} className="hover:bg-white/[0.01] transition-colors text-xs">
-                              <td className="p-4 font-bold text-slate-200">{acc.name}</td>
-                              <td className="p-4 text-slate-300">{Number(acc.followers).toLocaleString()}</td>
-                              <td className="p-4 text-slate-300">{Number(acc.totalViews).toLocaleString()}</td>
-                              <td className="p-4 text-indigo-400 font-bold">{acc.avgEngagement}%</td>
+                            <tr
+                              key={idx}
+                              className="hover:bg-white/[0.01] transition-colors text-xs"
+                            >
+                              <td className="p-4 font-bold text-slate-200">
+                                {acc.name}
+                              </td>
+                              <td className="p-4 text-slate-300">
+                                {Number(acc.followers).toLocaleString()}
+                              </td>
+                              <td className="p-4 text-slate-300">
+                                {Number(acc.totalViews).toLocaleString()}
+                              </td>
+                              <td className="p-4 text-indigo-400 font-bold">
+                                {acc.avgEngagement}%
+                              </td>
                               <td className="p-4 text-right">
                                 <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[9px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
                                   ● Tracking
@@ -283,7 +401,9 @@ export default function Dashboard() {
                   </div>
                 ) : (
                   <div className="text-center py-10 bg-white/[0.01] border border-white/[0.05] border-dashed rounded-xl space-y-3">
-                    <p className="text-xs text-slate-400">No tracked nodes indexed yet.</p>
+                    <p className="text-xs text-slate-400">
+                      No tracked nodes indexed yet.
+                    </p>
                     <Link to="/accounts">
                       <button className="h-8 px-3 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-[10px] font-bold text-white transition">
                         Index First Node

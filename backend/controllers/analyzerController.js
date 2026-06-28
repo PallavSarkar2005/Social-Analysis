@@ -9,7 +9,7 @@ Unescape URL
 Converts HTML entities (like &#x2F;, &amp;) back to normal characters.
 This is critical because global XSS sanitization encodes URL characters.
 */
-const unescapeUrl = (str) => {
+export const unescapeUrl = (str) => {
   if (typeof str !== "string") return str;
   return str
     .replace(/&amp;/g, "&")
@@ -26,7 +26,7 @@ Extract Video ID
 ========================================
 A robust regex extractor with multiple fallbacks to extract the 11-char video ID.
 */
-const extractVideoId = (url) => {
+export const extractVideoId = (url) => {
   console.log("LOG: [extractVideoId] Attempting extraction on URL:", url);
   try {
     // Matches standard watch?v=, short links youtu.be/, /embed/, /shorts/, /live/
@@ -84,9 +84,10 @@ const extractVideoId = (url) => {
 Find Channel ID from @handle
 ========================================
 */
-const getChannelByHandle = async (handle) => {
+export const getChannelByHandle = async (handle) => {
   console.log("STEP 4.1.a: Resolving channel ID for handle =", handle);
-  console.log("STEP 4.1.b: Calling YouTube search API for handle");
+  const apiRequestUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=channel&maxResults=1&q=${encodeURIComponent(handle)}&key=YOUR_API_KEY`;
+  console.log("YouTube API Request URL (Search):", apiRequestUrl);
   
   const response = await axios.get(
     "https://www.googleapis.com/youtube/v3/search",
@@ -101,6 +102,7 @@ const getChannelByHandle = async (handle) => {
     },
   );
 
+  console.log("Full YouTube API Response (Search):", JSON.stringify(response.data, null, 2));
   console.log("STEP 4.1.c: YouTube search API raw response items count =", response.data?.items?.length);
   
   if (!response.data || !response.data.items) {

@@ -23,7 +23,7 @@ export default function Sidebar() {
   const menuItems = [
     { name: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
     { name: "Analyzer", path: "/analyzer", icon: Search },
-    { name: "Compare Node", path: "/compare", icon: BarChart3 },
+    { name: "Creator Compare", path: "/compare", icon: BarChart3 },
     { name: "Tracked Nodes", path: "/accounts", icon: Users },
     { name: "Competitors", path: "/competitors", icon: Trophy },
     { name: "Saved Reports", path: "/reports", icon: FileText },
