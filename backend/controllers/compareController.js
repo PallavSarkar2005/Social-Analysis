@@ -282,7 +282,7 @@ const getChannelIdByHandleSafe = async (handleOrQuery) => {
   return null;
 };
 
-const getCreatorAnalyticsData = async (channelId) => {
+export const getCreatorAnalyticsData = async (channelId) => {
   console.log(`\nLOG [getCreatorAnalyticsData] Fetching channel metadata for channelId: ${channelId}`);
   const channelsRequestUrl = `https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics&id=${channelId}&key=YOUR_API_KEY`;
   console.log("YouTube API Request URL (Channels):", channelsRequestUrl);

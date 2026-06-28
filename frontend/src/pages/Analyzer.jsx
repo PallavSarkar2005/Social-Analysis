@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import Sidebar from "../components/layout/Sidebar";
 import Navbar from "../components/layout/Navbar";
@@ -54,6 +55,16 @@ const getInfluenceText = (score) => {
 function Analyzer() {
   const [url, setUrl] = useState("");
   const [result, setResult] = useState(null);
+  const [searchParams] = useSearchParams();
+
+  useEffect(() => {
+    const urlParam = searchParams.get("url");
+    if (urlParam) {
+      const decoded = decodeURIComponent(urlParam);
+      setUrl(decoded);
+      handleAnalyze(decoded);
+    }
+  }, [searchParams]);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -64,7 +75,7 @@ function Analyzer() {
 
   const [loadingInsights, setLoadingInsights] = useState(false);
 
-  const handleAnalyze = async () => {
+  const handleAnalyze = async (targetUrl = url) => {
     try {
       setLoading(true);
       setError("");
@@ -73,10 +84,16 @@ function Analyzer() {
       setChannelInsights("");
 
       let response;
-      if (url.includes("youtube.com") || url.includes("youtu.be")) {
-        response = await analyzeYoutubeUrl(url);
-      } else if (url.includes("x.com")) {
-        response = await analyzeXUrl(url);
+      const cleanTarget = targetUrl.trim();
+      if (
+        cleanTarget.includes("youtube.com") ||
+        cleanTarget.includes("youtu.be") ||
+        cleanTarget.startsWith("@") ||
+        cleanTarget.startsWith("UC")
+      ) {
+        response = await analyzeYoutubeUrl(cleanTarget);
+      } else if (cleanTarget.includes("x.com")) {
+        response = await analyzeXUrl(cleanTarget);
       } else {
         throw new Error("Please insert a valid YouTube or X link.");
       }

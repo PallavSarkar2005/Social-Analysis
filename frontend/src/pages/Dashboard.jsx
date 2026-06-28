@@ -7,6 +7,7 @@ import {
   getCompareAccounts,
   getTopVideos,
 } from "../api/analyticsApi";
+import { getGroupsList } from "../api/groupApi";
 import { syncAllChannels } from "../api/youtubeApi";
 import {
   Users,
@@ -29,21 +30,24 @@ export default function Dashboard() {
   const [overview, setOverview] = useState(null);
   const [accounts, setAccounts] = useState([]);
   const [topContent, setTopContent] = useState([]);
+  const [activeGroups, setActiveGroups] = useState([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
 
   const loadData = async () => {
     try {
       setLoading(true);
-      const [overRes, compRes, videoRes] = await Promise.all([
+      const [overRes, compRes, videoRes, groupRes] = await Promise.all([
         getDashboardOverview(),
         getCompareAccounts(),
         getTopVideos(),
+        getGroupsList().catch(() => ({ data: [] })),
       ]);
 
       setOverview(overRes.data);
       setAccounts(compRes.data || []);
       setTopContent(videoRes.data || []);
+      setActiveGroups(groupRes?.data || []);
     } catch (error) {
       console.error(error);
       toast.error("Failed to sync backend metrics overview.");
@@ -283,56 +287,89 @@ export default function Dashboard() {
                   </div>
                 </div>
 
-                {/* AI Insights summary */}
-                <div className="lg:col-span-2 bg-[#121318]/40 backdrop-blur-md border border-white/[0.06] rounded-2xl p-6 shadow-xl space-y-4">
-                  <div className="flex items-center gap-2 text-indigo-400 font-semibold text-xs uppercase tracking-wider">
-                    <Sparkles size={14} className="text-indigo-400" />
-                    System Status Logs
+                {/* Research Groups Section */}
+                <div className="lg:col-span-2 bg-[#121318]/45 border border-white/[0.06] rounded-2xl p-6 shadow-xl space-y-5 flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center gap-2 text-indigo-400 font-semibold text-xs uppercase tracking-wider">
+                      <Sparkles size={14} className="text-indigo-400 animate-pulse" />
+                      Research Groups
+                    </div>
+                    <p className="text-xs text-slate-400 mt-1.5 leading-normal">
+                      Select a political organization to explore analytics of all tracked leaders, spokespersons, ministers and official creators.
+                    </p>
                   </div>
 
-                  <div className="bg-indigo-500/[0.01] border border-indigo-500/10 rounded-xl p-4 space-y-3 font-mono text-xs">
-                    <div className="flex items-start gap-2 text-slate-300">
-                      <CheckCircle
-                        size={14}
-                        className="text-indigo-400 mt-0.5 shrink-0"
-                      />
-                      <span>
-                        Cron scheduler running on active state. Sync tasks
-                        triggered hourly.
-                      </span>
-                    </div>
-                    <div className="flex items-start gap-2 text-slate-300">
-                      <CheckCircle
-                        size={14}
-                        className="text-indigo-400 mt-0.5 shrink-0"
-                      />
-                      <span>
-                        Playwright browser server launched successfully in
-                        headless mode.
-                      </span>
-                    </div>
-                    <div className="flex items-start gap-2 text-slate-300">
-                      <CheckCircle
-                        size={14}
-                        className="text-indigo-400 mt-0.5 shrink-0"
-                      />
-                      <span>
-                        Groq client initialized with model
-                        `llama-3.3-70b-versatile`.
-                      </span>
-                    </div>
-                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Render BJP Card */}
+                    <Link to="/groups/bjp" className="block group">
+                      <div className="p-5 bg-[#171923]/45 border border-white/[0.05] hover:border-orange-500/30 hover:bg-orange-950/5 hover:shadow-orange-500/[0.04] hover:shadow-2xl rounded-2xl flex flex-col justify-between h-44 transition duration-300 relative overflow-hidden select-none cursor-pointer">
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <h4 className="text-sm font-bold text-white group-hover:text-orange-400 transition-colors">BJP Group</h4>
+                            <p className="text-[10px] text-slate-500 mt-1 leading-relaxed max-w-[170px]">
+                              Bharatiya Janata Party (BJP) - Explore statistics, tracked ministers, and key speakers.
+                            </p>
+                          </div>
+                          {/* BJP Lotus SVG */}
+                          <svg viewBox="0 0 64 64" className="w-12 h-12 text-orange-500 fill-current drop-shadow-[0_0_10px_rgba(249,115,22,0.25)] shrink-0">
+                            <path d="M32 4c-5 7-11 10-8 17 1.5 3.5 5 4 8 2 3 2 6.5 1.5 8-2 3-7-3-10-8-17z"/>
+                            <path d="M26 23c2 2 4 2 6 0-1-1.5-5-1.5-6 0z" className="text-emerald-500" />
+                            <path d="M31 26h2v4h-2z" className="text-amber-800" />
+                          </svg>
+                        </div>
+                        <span className="text-[10px] font-bold text-orange-400 flex items-center gap-1">
+                          Explore Analytics <ArrowRight size={10} className="group-hover:translate-x-0.5 transition-transform" />
+                        </span>
+                      </div>
+                    </Link>
 
-                  <div className="text-xs text-slate-400 leading-normal">
-                    Index accounts from X (Twitter) or YouTube by entering their
-                    URL/handle inside the{" "}
-                    <Link
-                      to="/accounts"
-                      className="text-indigo-400 font-bold hover:underline"
-                    >
-                      Tracked Nodes
-                    </Link>{" "}
-                    tab to sync stats historically and perform deep AI audits.
+                    {/* Render Congress Card */}
+                    <Link to="/groups/congress" className="block group">
+                      <div className="p-5 bg-[#171923]/45 border border-white/[0.05] hover:border-cyan-500/30 hover:bg-cyan-950/5 hover:shadow-cyan-500/[0.04] hover:shadow-2xl rounded-2xl flex flex-col justify-between h-44 transition duration-300 relative overflow-hidden select-none cursor-pointer">
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <h4 className="text-sm font-bold text-white group-hover:text-cyan-400 transition-colors">Congress Group</h4>
+                            <p className="text-[10px] text-slate-500 mt-1 leading-relaxed max-w-[170px]">
+                              Indian National Congress (INC) - Explore statistics, tracked leaders, and spokespersons.
+                            </p>
+                          </div>
+                          {/* Congress SVG */}
+                          <svg viewBox="0 0 64 64" className="w-12 h-12 text-cyan-400 fill-current drop-shadow-[0_0_10px_rgba(34,211,238,0.25)] shrink-0">
+                            <circle cx="32" cy="32" r="24" fill="none" stroke="currentColor" strokeWidth="2.5" />
+                            <path d="M25 25c2.5-1.5 5-1.5 7.5 0v14H25z" className="text-orange-500" />
+                            <path d="M32.5 25c2.5 1.5 2.5 12.5 0 14V25z" className="text-emerald-500" />
+                          </svg>
+                        </div>
+                        <span className="text-[10px] font-bold text-cyan-400 flex items-center gap-1">
+                          Explore Analytics <ArrowRight size={10} className="group-hover:translate-x-0.5 transition-transform" />
+                        </span>
+                      </div>
+                    </Link>
+
+                    {/* Render Dynamic groups from database (AAP, TMC, etc.) */}
+                    {activeGroups
+                      .filter(g => g !== "bjp" && g !== "congress")
+                      .map((g) => (
+                        <Link key={g} to={`/groups/${g}`} className="block group">
+                          <div className="p-5 bg-[#171923]/45 border border-white/[0.05] hover:border-indigo-500/30 hover:bg-indigo-950/5 hover:shadow-indigo-500/[0.04] hover:shadow-2xl rounded-2xl flex flex-col justify-between h-44 transition duration-300 relative overflow-hidden select-none cursor-pointer">
+                            <div className="flex items-start justify-between">
+                              <div>
+                                <h4 className="text-sm font-bold text-white group-hover:text-indigo-400 transition-colors uppercase">{g} Group</h4>
+                                <p className="text-[10px] text-slate-500 mt-1 leading-relaxed max-w-[170px]">
+                                  Explore analytics for tracked members, ministers, and leaders of the {g.toUpperCase()} organization.
+                                </p>
+                              </div>
+                              {/* Generic Political Node SVG */}
+                              <svg viewBox="0 0 64 64" className="w-12 h-12 text-indigo-400 fill-current drop-shadow-[0_0_10px_rgba(99,102,241,0.25)] shrink-0">
+                                <path d="M32 6L10 16v24l22 18 22-18V16L32 6zm0 6.5l16 8v19l-16 13-16-13v-19l16-8z"/>
+                              </svg>
+                            </div>
+                            <span className="text-[10px] font-bold text-indigo-400 flex items-center gap-1">
+                              Explore Analytics <ArrowRight size={10} className="group-hover:translate-x-0.5 transition-transform" />
+                            </span>
+                          </div>
+                        </Link>
+                      ))}
                   </div>
                 </div>
               </div>

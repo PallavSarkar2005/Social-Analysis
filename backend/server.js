@@ -36,6 +36,7 @@ import activityRoutes from "./routes/activityRoutes.js";
 import exportRoutes from "./routes/exportRoutes.js";
 import settingsRoutes from "./routes/settingsRoutes.js";
 import searchRoutes from "./routes/searchRoutes.js";
+import groupRoutes from "./routes/groupRoutes.js";
 
 // Jobs & Schedulers
 import { syncAllYoutubeChannels } from "./jobs/youtubeSyncJob.js";
@@ -167,6 +168,7 @@ app.use("/api/accounts", accountRoutes);
 app.use("/api/analytics", analyticsRoutes);
 app.use("/api/history", historyRoutes);
 app.use("/api/x", xRoutes);
+app.use("/api/groups", groupRoutes);
 
 app.get("/api/debug/youtube", (req, res) => {
   const apiKey = process.env.YOUTUBE_API_KEY || "";

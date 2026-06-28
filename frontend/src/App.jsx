@@ -12,6 +12,7 @@ import Reports from "./pages/Reports";
 import Activity from "./pages/Activity";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
+import GroupAnalytics from "./pages/GroupAnalytics";
 import ProtectedRoute from "./components/ProtectedRoute";
 
 function App() {
@@ -35,6 +36,7 @@ function App() {
           <Route path="/competitors" element={<Competitors />} />
           <Route path="/reports" element={<Reports />} />
           <Route path="/activity" element={<Activity />} />
+          <Route path="/groups/:groupName" element={<GroupAnalytics />} />
         </Route>
 
         {/* Fallback */}

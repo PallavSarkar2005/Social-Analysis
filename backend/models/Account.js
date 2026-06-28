@@ -37,6 +37,10 @@ const accountSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    group: {
+      type: String,
+      default: "",
+    },
   },
   {
     timestamps: true,
