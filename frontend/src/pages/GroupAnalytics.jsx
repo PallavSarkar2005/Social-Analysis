@@ -3,6 +3,7 @@ import { useParams, Link } from "react-router-dom";
 import Sidebar from "../components/layout/Sidebar";
 import Navbar from "../components/layout/Navbar";
 import { getGroupCreators } from "../api/groupApi";
+import { updateAccountGroup } from "../api/accountApi";
 import {
   Users,
   Eye,
@@ -23,6 +24,21 @@ export default function GroupAnalytics() {
   const { groupName } = useParams();
   const [creators, setCreators] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  const handleGroupChange = async (e, creatorId) => {
+    const newGroup = e.target.value;
+    try {
+      toast.loading("Updating group assignment...", { id: `group-${creatorId}` });
+      const res = await updateAccountGroup(creatorId, newGroup);
+      if (res.success) {
+        toast.success("Group updated successfully!", { id: `group-${creatorId}` });
+        loadCreators();
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to update group.", { id: `group-${creatorId}` });
+    }
+  };
 
   const loadCreators = async () => {
     try {
@@ -156,26 +172,47 @@ export default function GroupAnalytics() {
                     <div className={`absolute top-0 right-0 w-32 h-32 bg-gradient-to-br ${theme.accent} opacity-0 group-hover:opacity-5 rounded-full blur-2xl transition-opacity duration-300`} />
 
                     <div className="space-y-5">
-                      {/* Creator Metadata */}
-                      <div className="flex items-center gap-3">
-                        <div className="w-12 h-12 rounded-xl bg-slate-900 border border-white/[0.08] overflow-hidden flex items-center justify-center shrink-0">
-                          {creator.thumbnail ? (
-                            <img
-                              src={creator.thumbnail}
-                              alt=""
-                              className="w-full h-full object-cover"
-                            />
-                          ) : (
-                            <Award size={20} className="text-slate-500" />
-                          )}
+                      {/* Creator Metadata & Group Selection */}
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="w-12 h-12 rounded-xl bg-slate-900 border border-white/[0.08] overflow-hidden flex items-center justify-center shrink-0">
+                            {creator.thumbnail ? (
+                              <img
+                                src={creator.thumbnail}
+                                alt=""
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              <Award size={20} className="text-slate-500" />
+                            )}
+                          </div>
+                          <div className="min-w-0">
+                            <h3 className="text-sm font-bold text-white tracking-tight truncate group-hover:text-indigo-400 transition-colors">
+                              {creator.name}
+                            </h3>
+                            <p className="text-[10px] text-slate-500 font-mono mt-0.5 truncate">
+                              {creator.accountId}
+                            </p>
+                          </div>
                         </div>
-                        <div className="min-w-0">
-                          <h3 className="text-sm font-bold text-white tracking-tight truncate group-hover:text-indigo-400 transition-colors">
-                            {creator.name}
-                          </h3>
-                          <p className="text-[10px] text-slate-500 font-mono mt-0.5 truncate">
-                            {creator.accountId}
-                          </p>
+
+                        <div className="shrink-0" onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}>
+                          <select
+                            defaultValue={creator.group || groupName}
+                            onChange={(e) => handleGroupChange(e, creator._id)}
+                            className="bg-[#171923] border border-white/[0.08] text-[10px] text-slate-300 rounded px-1.5 py-1 focus:outline-none focus:border-indigo-500 font-semibold cursor-pointer"
+                          >
+                            <option value="BJP">BJP</option>
+                            <option value="Congress">Congress</option>
+                            <option value="AAP">AAP</option>
+                            <option value="TMC">TMC</option>
+                            <option value="BJD">BJD</option>
+                            <option value="DMK">DMK</option>
+                            <option value="Shiv Sena">Shiv Sena</option>
+                            <option value="NCP">NCP</option>
+                            <option value="Independent">Independent</option>
+                            <option value="Other">Other</option>
+                          </select>
                         </div>
                       </div>
 

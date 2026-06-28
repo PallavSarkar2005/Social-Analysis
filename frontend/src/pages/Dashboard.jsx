@@ -34,6 +34,14 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
 
+  const getGroupCount = (groupId) => {
+    if (!activeGroups) return 0;
+    const match = activeGroups.find(
+      (g) => g._id && g._id.trim().toLowerCase() === groupId.toLowerCase()
+    );
+    return match ? match.count : 0;
+  };
+
   const loadData = async () => {
     try {
       setLoading(true);
@@ -301,11 +309,14 @@ export default function Dashboard() {
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {/* Render BJP Card */}
-                    <Link to="/groups/bjp" className="block group">
+                    <Link to="/groups/BJP" className="block group">
                       <div className="p-5 bg-[#171923]/45 border border-white/[0.05] hover:border-orange-500/30 hover:bg-orange-950/5 hover:shadow-orange-500/[0.04] hover:shadow-2xl rounded-2xl flex flex-col justify-between h-44 transition duration-300 relative overflow-hidden select-none cursor-pointer">
                         <div className="flex items-start justify-between">
                           <div>
                             <h4 className="text-sm font-bold text-white group-hover:text-orange-400 transition-colors">BJP Group</h4>
+                            <p className="text-[10px] text-orange-400/90 font-bold mt-1">
+                              {getGroupCount("BJP")} {getGroupCount("BJP") === 1 ? "Account" : "Accounts"}
+                            </p>
                             <p className="text-[10px] text-slate-500 mt-1 leading-relaxed max-w-[170px]">
                               Bharatiya Janata Party (BJP) - Explore statistics, tracked ministers, and key speakers.
                             </p>
@@ -324,11 +335,14 @@ export default function Dashboard() {
                     </Link>
 
                     {/* Render Congress Card */}
-                    <Link to="/groups/congress" className="block group">
+                    <Link to="/groups/Congress" className="block group">
                       <div className="p-5 bg-[#171923]/45 border border-white/[0.05] hover:border-cyan-500/30 hover:bg-cyan-950/5 hover:shadow-cyan-500/[0.04] hover:shadow-2xl rounded-2xl flex flex-col justify-between h-44 transition duration-300 relative overflow-hidden select-none cursor-pointer">
                         <div className="flex items-start justify-between">
                           <div>
                             <h4 className="text-sm font-bold text-white group-hover:text-cyan-400 transition-colors">Congress Group</h4>
+                            <p className="text-[10px] text-cyan-400/90 font-bold mt-1">
+                              {getGroupCount("Congress")} {getGroupCount("Congress") === 1 ? "Account" : "Accounts"}
+                            </p>
                             <p className="text-[10px] text-slate-500 mt-1 leading-relaxed max-w-[170px]">
                               Indian National Congress (INC) - Explore statistics, tracked leaders, and spokespersons.
                             </p>
@@ -346,17 +360,44 @@ export default function Dashboard() {
                       </div>
                     </Link>
 
+                    {/* Render Other Card */}
+                    <Link to="/groups/Other" className="block group">
+                      <div className="p-5 bg-[#171923]/45 border border-white/[0.05] hover:border-indigo-500/30 hover:bg-indigo-950/5 hover:shadow-indigo-500/[0.04] hover:shadow-2xl rounded-2xl flex flex-col justify-between h-44 transition duration-300 relative overflow-hidden select-none cursor-pointer">
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <h4 className="text-sm font-bold text-white group-hover:text-indigo-400 transition-colors">Other Group</h4>
+                            <p className="text-[10px] text-indigo-400/90 font-bold mt-1">
+                              {getGroupCount("Other")} {getGroupCount("Other") === 1 ? "Account" : "Accounts"}
+                            </p>
+                            <p className="text-[10px] text-slate-500 mt-1 leading-relaxed max-w-[170px]">
+                              Independent, other, or uncategorized tracked creators and channels.
+                            </p>
+                          </div>
+                          {/* Generic Shield SVG */}
+                          <svg viewBox="0 0 64 64" className="w-12 h-12 text-indigo-400 fill-current drop-shadow-[0_0_10px_rgba(99,102,241,0.25)] shrink-0">
+                            <path d="M32 6L10 16v24l22 18 22-18V16L32 6zm0 6.5l16 8v19l-16 13-16-13v-19l16-8z"/>
+                          </svg>
+                        </div>
+                        <span className="text-[10px] font-bold text-indigo-400 flex items-center gap-1">
+                          Explore Analytics <ArrowRight size={10} className="group-hover:translate-x-0.5 transition-transform" />
+                        </span>
+                      </div>
+                    </Link>
+
                     {/* Render Dynamic groups from database (AAP, TMC, etc.) */}
                     {activeGroups
-                      .filter(g => g !== "bjp" && g !== "congress")
+                      .filter(g => g._id && g._id.toLowerCase() !== "bjp" && g._id.toLowerCase() !== "congress" && g._id.toLowerCase() !== "other")
                       .map((g) => (
-                        <Link key={g} to={`/groups/${g}`} className="block group">
+                        <Link key={g._id} to={`/groups/${g._id}`} className="block group">
                           <div className="p-5 bg-[#171923]/45 border border-white/[0.05] hover:border-indigo-500/30 hover:bg-indigo-950/5 hover:shadow-indigo-500/[0.04] hover:shadow-2xl rounded-2xl flex flex-col justify-between h-44 transition duration-300 relative overflow-hidden select-none cursor-pointer">
                             <div className="flex items-start justify-between">
                               <div>
-                                <h4 className="text-sm font-bold text-white group-hover:text-indigo-400 transition-colors uppercase">{g} Group</h4>
+                                <h4 className="text-sm font-bold text-white group-hover:text-indigo-400 transition-colors uppercase">{g._id} Group</h4>
+                                <p className="text-[10px] text-indigo-400/90 font-bold mt-1">
+                                  {g.count} {g.count === 1 ? "Account" : "Accounts"}
+                                </p>
                                 <p className="text-[10px] text-slate-500 mt-1 leading-relaxed max-w-[170px]">
-                                  Explore analytics for tracked members, ministers, and leaders of the {g.toUpperCase()} organization.
+                                  Explore analytics for tracked members, ministers, and leaders of the {g._id.toUpperCase()} organization.
                                 </p>
                               </div>
                               {/* Generic Political Node SVG */}

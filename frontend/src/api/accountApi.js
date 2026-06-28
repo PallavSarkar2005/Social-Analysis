@@ -14,3 +14,8 @@ export const deleteAccount = async (id) => {
   const res = await client.delete(`/api/accounts/${id}`);
   return res.data;
 };
+
+export const updateAccountGroup = async (id, groupName) => {
+  const res = await client.patch(`/api/accounts/${id}/group`, { group: groupName });
+  return res.data;
+};

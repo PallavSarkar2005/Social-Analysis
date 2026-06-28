@@ -172,6 +172,7 @@ export const analyzeYoutubeUrl = async (req, res, next) => {
     console.log("STEP 2.1: YOUTUBE_API_KEY is present (Length:", process.env.YOUTUBE_API_KEY.length, ")");
 
     const rawUrl = req.body?.url;
+    const selectedGroup = req.body?.group || "Other";
     if (!rawUrl || typeof rawUrl !== "string") {
       console.error("STEP 3 Error: URL parsing failed due to empty/invalid url parameter");
       return res.status(400).json({
@@ -271,6 +272,7 @@ export const analyzeYoutubeUrl = async (req, res, next) => {
             accountId: channelId,
             profileUrl: url,
             userId: req.user._id,
+            group: selectedGroup,
           });
         }
         console.log("STEP 4.4.b: MongoDB Account ID =", account._id);
@@ -410,6 +412,7 @@ export const analyzeYoutubeUrl = async (req, res, next) => {
             accountId: channelId,
             profileUrl: url,
             userId: req.user._id,
+            group: selectedGroup,
           });
         }
         console.log("STEP 4.4.b: MongoDB Account ID =", account._id);

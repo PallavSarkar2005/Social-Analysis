@@ -54,6 +54,7 @@ const getInfluenceText = (score) => {
 
 function Analyzer() {
   const [url, setUrl] = useState("");
+  const [group, setGroup] = useState("Other");
   const [result, setResult] = useState(null);
   const [searchParams] = useSearchParams();
 
@@ -91,7 +92,7 @@ function Analyzer() {
         cleanTarget.startsWith("@") ||
         cleanTarget.startsWith("UC")
       ) {
-        response = await analyzeYoutubeUrl(cleanTarget);
+        response = await analyzeYoutubeUrl(cleanTarget, group);
       } else if (cleanTarget.includes("x.com")) {
         response = await analyzeXUrl(cleanTarget);
       } else {
@@ -178,47 +179,63 @@ function Analyzer() {
                   </p>
                 </div>
 
-                <div className="flex flex-col sm:flex-row gap-3 items-stretch">
-                  <div className="relative flex-1">
-                    <input
-                      type="text"
-                      value={url}
-                      onChange={(e) => setUrl(e.target.value)}
-                      placeholder="Paste YouTube video/channel or X profile URL..."
-                      className="w-full h-12 px-4 rounded-xl bg-white/[0.02] border border-white/[0.08] text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/50 transition-all"
-                    />
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {/* URL Input */}
+                    <div className="md:col-span-2 space-y-1.5 text-left">
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                        YouTube URL or Handle
+                      </label>
+                      <input
+                        type="text"
+                        value={url}
+                        onChange={(e) => setUrl(e.target.value)}
+                        placeholder="Paste YouTube video/channel or X profile URL..."
+                        className="w-full h-12 px-4 rounded-xl bg-white/[0.02] border border-white/[0.08] text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/50 transition-all font-sans"
+                        required
+                      />
+                    </div>
+
+                    {/* Group Selection */}
+                    <div className="space-y-1.5 text-left">
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                        Group Assignment
+                      </label>
+                      <select
+                        value={group}
+                        onChange={(e) => setGroup(e.target.value)}
+                        className="w-full h-12 px-4 rounded-xl bg-[#171923] border border-white/[0.08] text-sm text-slate-200 focus:outline-none focus:border-indigo-500/50 transition-all font-semibold cursor-pointer"
+                        required
+                      >
+                        <option value="BJP">BJP</option>
+                        <option value="Congress">Congress</option>
+                        <option value="AAP">AAP</option>
+                        <option value="TMC">TMC</option>
+                        <option value="BJD">BJD</option>
+                        <option value="DMK">DMK</option>
+                        <option value="Shiv Sena">Shiv Sena</option>
+                        <option value="NCP">NCP</option>
+                        <option value="Independent">Independent</option>
+                        <option value="Other">Other</option>
+                      </select>
+                    </div>
                   </div>
 
                   <button
-                    onClick={handleAnalyze}
+                    onClick={() => handleAnalyze()}
                     disabled={loading}
-                    className="h-12 px-6 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 disabled:from-slate-800 disabled:to-slate-800 disabled:text-slate-500 text-xs font-semibold rounded-xl transition-all shadow-lg shadow-indigo-600/10 active:scale-[0.98] flex items-center justify-center gap-2"
+                    className="w-full h-12 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 disabled:from-slate-800 disabled:to-slate-800 disabled:text-slate-500 text-xs font-bold rounded-xl transition-all shadow-lg shadow-indigo-600/10 active:scale-[0.98] flex items-center justify-center gap-2 cursor-pointer"
                   >
                     {loading ? (
                       <>
-                        <svg
-                          className="animate-spin h-4 w-4"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                        >
-                          <circle
-                            className="opacity-25"
-                            cx="12"
-                            cy="12"
-                            r="10"
-                            stroke="currentColor"
-                            strokeWidth="4"
-                          />
-                          <path
-                            className="opacity-75"
-                            fill="currentColor"
-                            d="M4 12a8 8 0 0112-7.32V4a10 10 0 00-10 10h2z"
-                          />
+                        <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 0112-7.32V4a10 10 0 00-10 10h2z" />
                         </svg>
                         Parsing...
                       </>
                     ) : (
-                      "Run Analytics"
+                      "Run Audit Analysis"
                     )}
                   </button>
                 </div>
@@ -227,7 +244,7 @@ function Analyzer() {
                   <motion.p
                     initial={{ opacity: 0, y: 4 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="text-xs font-medium text-red-400 text-center"
+                    className="text-xs font-medium text-red-400 text-center mt-3"
                   >
                     {error}
                   </motion.p>

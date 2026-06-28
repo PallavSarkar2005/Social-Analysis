@@ -11,8 +11,11 @@ export const getGroupCreators = async (req, res, next) => {
     console.log(`\n================ [GET GROUP CREATORS START] ================`);
     console.log(`Group Name requested: "${groupName}" (cleaned: "${cleanGroup}")`);
 
-    const accounts = await Account.find({ group: cleanGroup });
-    console.log(`Found ${accounts.length} accounts in group "${cleanGroup}"`);
+    const accounts = await Account.find({
+      userId: req.user._id,
+      group: new RegExp("^" + cleanGroup + "$", "i"),
+    });
+    console.log(`Found ${accounts.length} accounts in group "${cleanGroup}" for user ${req.user._id}`);
 
     const data = [];
 
@@ -138,11 +141,13 @@ export const getGroupCreators = async (req, res, next) => {
 
 export const getGroupsList = async (req, res, next) => {
   try {
-    const groups = await Account.distinct("group");
-    const activeGroups = groups.filter(Boolean);
+    const groupCounts = await Account.aggregate([
+      { $match: { userId: req.user._id } },
+      { $group: { _id: "$group", count: { $sum: 1 } } }
+    ]);
     res.status(200).json({
       success: true,
-      data: activeGroups,
+      data: groupCounts,
     });
   } catch (error) {
     next(error);

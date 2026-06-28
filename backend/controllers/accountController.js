@@ -65,3 +65,38 @@ export const deleteAccount = async (req, res, next) => {
     next(error);
   }
 };
+
+export const updateAccountGroup = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { group } = req.body;
+
+    if (!group) {
+      return res.status(400).json({
+        success: false,
+        message: "Group value is required",
+      });
+    }
+
+    const account = await Account.findOneAndUpdate(
+      { _id: id, userId: req.user._id },
+      { $set: { group } },
+      { new: true }
+    );
+
+    if (!account) {
+      return res.status(404).json({
+        success: false,
+        message: "Account not found or not authorized to update group",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Group updated successfully",
+      data: account,
+    });
+  } catch (error) {
+    next(error);
+  }
+};

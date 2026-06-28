@@ -39,7 +39,7 @@ const accountSchema = new mongoose.Schema(
     },
     group: {
       type: String,
-      default: "",
+      default: "Other",
     },
   },
   {

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import Sidebar from "../components/layout/Sidebar";
 import Navbar from "../components/layout/Navbar";
-import { getAccounts, createAccount, deleteAccount } from "../api/accountApi";
+import { getAccounts, createAccount, deleteAccount, updateAccountGroup } from "../api/accountApi";
 import { syncYoutubeChannel, syncChannelContent } from "../api/youtubeApi";
 import { motion, AnimatePresence } from "framer-motion";
 import toast, { Toaster } from "react-hot-toast";
@@ -41,6 +41,21 @@ export default function Accounts() {
       toast.error("Failed to load accounts directory.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleGroupChange = async (e, id) => {
+    const newGroup = e.target.value;
+    try {
+      toast.loading("Updating group assignment...", { id: `group-${id}` });
+      const res = await updateAccountGroup(id, newGroup);
+      if (res.success) {
+        toast.success("Group updated successfully!", { id: `group-${id}` });
+        loadAccounts();
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to update group.", { id: `group-${id}` });
     }
   };
 
@@ -230,6 +245,7 @@ export default function Accounts() {
                           <th className="p-4">Profile Node</th>
                           <th className="p-4">Platform</th>
                           <th className="p-4">Connection ID</th>
+                          <th className="p-4">Group</th>
                           <th className="p-4 text-right">Actions</th>
                         </tr>
                       </thead>
@@ -248,6 +264,24 @@ export default function Accounts() {
                               </span>
                             </td>
                             <td className="p-4 font-mono text-[10px] text-slate-400">{acc.accountId}</td>
+                            <td className="p-4">
+                              <select
+                                value={acc.group || "Other"}
+                                onChange={(e) => handleGroupChange(e, acc._id)}
+                                className="bg-[#171923] border border-white/[0.08] text-[10px] text-slate-300 rounded px-1.5 py-1 focus:outline-none focus:border-indigo-500 font-semibold cursor-pointer"
+                              >
+                                <option value="BJP">BJP</option>
+                                <option value="Congress">Congress</option>
+                                <option value="AAP">AAP</option>
+                                <option value="TMC">TMC</option>
+                                <option value="BJD">BJD</option>
+                                <option value="DMK">DMK</option>
+                                <option value="Shiv Sena">Shiv Sena</option>
+                                <option value="NCP">NCP</option>
+                                <option value="Independent">Independent</option>
+                                <option value="Other">Other</option>
+                              </select>
+                            </td>
                             <td className="p-4 text-right space-x-1.5">
                               {acc.platform === "youtube" && (
                                 <button
