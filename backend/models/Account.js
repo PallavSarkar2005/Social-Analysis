@@ -125,10 +125,12 @@ const accountSchema = new mongoose.Schema(
   },
 );
 
-// Compound index to allow different users to track the same accountId
 accountSchema.index({ accountId: 1, userId: 1 }, { unique: true });
 accountSchema.index({ party: 1 });
 accountSchema.index({ state: 1 });
+accountSchema.index({ group: 1 });
+accountSchema.index({ createdAt: -1 });
+accountSchema.index({ updatedAt: -1 });
 accountSchema.index({ createdBy: 1 });
 
 const Account = mongoose.model("Account", accountSchema);

@@ -136,6 +136,8 @@ userSchema.pre("save", function () {
   }
 });
 
+userSchema.index({ email: 1 });
+userSchema.index({ createdAt: -1 });
 userSchema.index({ emailVerificationToken: 1 });
 userSchema.index({ passwordResetToken: 1 });
 

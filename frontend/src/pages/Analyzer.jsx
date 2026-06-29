@@ -3,7 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import Sidebar from "../components/layout/Sidebar";
 import Navbar from "../components/layout/Navbar";
-import { analyzeYoutubeUrl, analyzeXUrl } from "../api/analyzerApi";
+import { useAnalyzer } from "../hooks/useQueries";
 import { getVideoInsights } from "../api/aiApi";
 import { getChannelInsights } from "../api/aiChannelApi";
 import FollowerChart from "../components/charts/FollowerChart";
@@ -59,10 +59,31 @@ function Analyzer() {
   const [group, setGroup] = useState("Other");
   const [state, setState] = useState("");
   const [party, setParty] = useState("");
-  const [result, setResult] = useState(null);
   const [searchParams] = useSearchParams();
   const [photoFile, setPhotoFile] = useState(null);
   const [photoPreview, setPhotoPreview] = useState(null);
+
+  const [queryParams, setQueryParams] = useState({
+    url: "",
+    group: "Other",
+    force: false,
+    state: "",
+    party: "",
+    profileImage: "",
+    timestamp: 0,
+  });
+
+  const { data: result, isLoading: loading, error: queryError } = useAnalyzer(
+    queryParams.url,
+    queryParams.group,
+    queryParams.force,
+    queryParams.state,
+    queryParams.party,
+    queryParams.profileImage
+  );
+
+  const [error, setError] = useState("");
+  const displayError = queryError?.response?.data?.message || queryError?.message || error;
 
   const handlePhotoChange = (e) => {
     const file = e.target.files?.[0];
@@ -91,6 +112,49 @@ function Analyzer() {
     setPhotoPreview(null);
   };
 
+  const handleAnalyze = async (targetUrl = url, force = false) => {
+    setError("");
+    setInsights("");
+    setChannelInsights("");
+
+    const cleanTarget = targetUrl.trim();
+    if (!cleanTarget) {
+      setError("Please insert a valid YouTube channel/video link or handle.");
+      return;
+    }
+
+    try {
+      let profileImageUrl = "";
+      if (photoFile) {
+        toast.loading("Uploading profile photo...", { id: "photo-upload" });
+        const formData = new FormData();
+        formData.append("photo", photoFile);
+        const uploadRes = await client.post("/api/media/upload", formData, {
+          headers: { "Content-Type": "multipart/form-data" },
+        });
+        if (uploadRes.data && uploadRes.data.success) {
+          profileImageUrl = uploadRes.data.url;
+          toast.success("Profile photo uploaded!", { id: "photo-upload" });
+        } else {
+          throw new Error("Failed to upload profile photo");
+        }
+      }
+
+      setQueryParams({
+        url: cleanTarget,
+        group,
+        force,
+        state: state || "Unknown State",
+        party: party || "Independent",
+        profileImage: profileImageUrl,
+        timestamp: Date.now(),
+      });
+    } catch (err) {
+      console.error(err);
+      setError(err.message || "Failed to trigger analysis");
+    }
+  };
+
   useEffect(() => {
     const urlParam = searchParams.get("url");
     if (urlParam) {
@@ -100,71 +164,10 @@ function Analyzer() {
     }
   }, [searchParams]);
 
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
   const [channelInsights, setChannelInsights] = useState("");
-
   const [loadingChannelInsights, setLoadingChannelInsights] = useState(false);
   const [insights, setInsights] = useState("");
-
   const [loadingInsights, setLoadingInsights] = useState(false);
-
-  const handleAnalyze = async (targetUrl = url, force = false) => {
-    try {
-      setLoading(true);
-      setError("");
-      if (!force) {
-        setResult(null);
-      }
-      setInsights("");
-      setChannelInsights("");
-
-      let response;
-      const cleanTarget = targetUrl.trim();
-      if (
-        cleanTarget.includes("youtube.com") ||
-        cleanTarget.includes("youtu.be") ||
-        cleanTarget.startsWith("@") ||
-        cleanTarget.startsWith("UC")
-      ) {
-        let profileImageUrl = "";
-        if (photoFile) {
-          toast.loading("Uploading profile photo...", { id: "photo-upload" });
-          const formData = new FormData();
-          formData.append("photo", photoFile);
-          const uploadRes = await client.post("/api/media/upload", formData, {
-            headers: { "Content-Type": "multipart/form-data" },
-          });
-          if (uploadRes.data && uploadRes.data.success) {
-            profileImageUrl = uploadRes.data.url;
-            toast.success("Profile photo uploaded!", { id: "photo-upload" });
-          } else {
-            throw new Error("Failed to upload profile photo");
-          }
-        }
-
-        response = await analyzeYoutubeUrl(
-          cleanTarget,
-          group,
-          force,
-          state || "Unknown State",
-          party || "Independent",
-          profileImageUrl
-        );
-      } else {
-        throw new Error("Please insert a valid YouTube channel/video link or handle.");
-      }
-
-      setResult(response);
-    } catch (err) {
-      console.error(err);
-      setError(
-        err?.response?.data?.message || err.message || "Failed to analyze URL",
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleGenerateInsights = async () => {
     if (!result?.data) return;
@@ -372,13 +375,13 @@ function Analyzer() {
                   </div>
                 </div>
 
-                {error && (
+                {displayError && (
                   <motion.p
                     initial={{ opacity: 0, y: 4 }}
                     animate={{ opacity: 1, y: 0 }}
                     className="text-xs font-medium text-red-400 text-center mt-3"
                   >
-                    {error}
+                    {displayError}
                   </motion.p>
                 )}
               </div>

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import Sidebar from "../components/layout/Sidebar";
 import Navbar from "../components/layout/Navbar";
-import { getAccounts, createAccount, deleteAccount, updateAccountGroup, updateAccountPartyState } from "../api/accountApi";
+import { useAccounts } from "../hooks/useQueries";
 import { syncYoutubeChannel, syncChannelContent } from "../api/youtubeApi";
 import { motion, AnimatePresence } from "framer-motion";
 import toast, { Toaster } from "react-hot-toast";
@@ -19,9 +19,17 @@ const YoutubeIcon = (props) => (
 );
 
 export default function Accounts() {
-  const [accounts, setAccounts] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
+  const {
+    accounts,
+    loading,
+    createAccount,
+    creating: submitting,
+    deleteAccount: apiDeleteAccount,
+    updateAccountGroup,
+    updateAccountPartyState: apiUpdatePartyState,
+    refetch,
+  } = useAccounts();
+
   const [syncingId, setSyncingId] = useState("");
 
   const [form, setForm] = useState({
@@ -33,37 +41,17 @@ export default function Accounts() {
     party: "",
   });
 
-  const loadAccounts = async () => {
-    try {
-      setLoading(true);
-      const res = await getAccounts();
-      setAccounts(res.data || []);
-    } catch (err) {
-      console.error(err);
-      toast.error("Failed to load accounts directory.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleGroupChange = async (e, id) => {
     const newGroup = e.target.value;
     try {
       toast.loading("Updating group assignment...", { id: `group-${id}` });
-      const res = await updateAccountGroup(id, newGroup);
-      if (res.success) {
-        toast.success("Group updated successfully!", { id: `group-${id}` });
-        loadAccounts();
-      }
+      await updateAccountGroup({ id, group: newGroup });
+      toast.success("Group updated successfully!", { id: `group-${id}` });
     } catch (err) {
       console.error(err);
       toast.error("Failed to update group.", { id: `group-${id}` });
     }
   };
-
-  useEffect(() => {
-    loadAccounts();
-  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -73,7 +61,6 @@ export default function Accounts() {
     }
 
     try {
-      setSubmitting(true);
       await createAccount(form);
       toast.success(`Social node "${form.name}" registered successfully.`);
       setForm({
@@ -84,24 +71,21 @@ export default function Accounts() {
         state: "",
         party: "",
       });
-      loadAccounts();
     } catch (error) {
       console.error(error);
       toast.error(error?.response?.data?.message || "Failed to index social node.");
-    } finally {
-      setSubmitting(false);
     }
   };
 
   const handleDelete = async (id, name) => {
     if (!window.confirm(`Are you sure you want to stop tracking "${name}"?`)) return;
     try {
-      await deleteAccount(id);
-      toast.success("Account untracked successfully.");
-      loadAccounts();
+      toast.loading(`Untracking node "${name}"...`, { id: `delete-${id}` });
+      await apiDeleteAccount(id);
+      toast.success("Account untracked successfully.", { id: `delete-${id}` });
     } catch (error) {
       console.error(error);
-      toast.error("Deletion request failed.");
+      toast.error("Deletion request failed.", { id: `delete-${id}` });
     }
   };
 
@@ -114,7 +98,7 @@ export default function Accounts() {
         syncChannelContent(id)
       ]);
       toast.success(`Node "${name}" successfully synchronized!`, { id: "sync" });
-      loadAccounts();
+      refetch();
     } catch (err) {
       console.error(err);
       toast.error(`Sync failed for "${name}". Verify API key limits.`, { id: "sync" });
@@ -270,9 +254,8 @@ export default function Accounts() {
                                   const val = e.target.value.trim();
                                   if (val && val !== acc.state) {
                                     try {
-                                      await updateAccountPartyState(acc._id, undefined, val);
+                                      await apiUpdatePartyState({ id: acc._id, state: val });
                                       toast.success(`State updated for "${acc.name}"`);
-                                      loadAccounts();
                                     } catch (err) {
                                       console.error(err);
                                       toast.error("Failed to update state.");
@@ -290,9 +273,8 @@ export default function Accounts() {
                                   const val = e.target.value.trim();
                                   if (val && val !== acc.party) {
                                     try {
-                                      await updateAccountPartyState(acc._id, val, undefined);
+                                      await apiUpdatePartyState({ id: acc._id, party: val });
                                       toast.success(`Party updated for "${acc.name}"`);
-                                      loadAccounts();
                                     } catch (err) {
                                       console.error(err);
                                       toast.error("Failed to update party.");

@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import Sidebar from "../components/layout/Sidebar";
 import Navbar from "../components/layout/Navbar";
-import { getReports, deleteReport } from "../api/reportApi";
+import { useReports } from "../hooks/useQueries";
 import { triggerDownload } from "../api/exportApi";
 import {
   FileText,
@@ -20,29 +20,11 @@ import toast, { Toaster } from "react-hot-toast";
 import { motion, AnimatePresence } from "framer-motion";
 
 export default function Reports() {
-  const [reports, setReports] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const { reports, loading, deleteReport } = useReports();
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState("all");
   const [selectedReport, setSelectedReport] = useState(null);
   const [exportingId, setExportingId] = useState("");
-
-  const loadReports = async () => {
-    try {
-      setLoading(true);
-      const res = await getReports();
-      setReports(res.data || []);
-    } catch (err) {
-      console.error(err);
-      toast.error("Failed to load saved reports registry.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadReports();
-  }, []);
 
   const handleDelete = async (id, title) => {
     if (!window.confirm(`Are you sure you want to delete "${title}"?`)) return;
@@ -51,7 +33,6 @@ export default function Reports() {
       await deleteReport(id);
       toast.success("Report deleted successfully");
       if (selectedReport?._id === id) setSelectedReport(null);
-      await loadReports();
     } catch (err) {
       console.error(err);
       toast.error("Failed to delete report.");

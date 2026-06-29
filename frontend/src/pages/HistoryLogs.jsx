@@ -1,9 +1,7 @@
 import { useEffect, useState } from "react";
 import Sidebar from "../components/layout/Sidebar";
 import Navbar from "../components/layout/Navbar";
-import { getAccounts } from "../api/accountApi";
-import { getChannelHistory } from "../api/historyApi";
-import { getForecast } from "../api/analyticsApi";
+import { useTrackedNodes, useSnapshots } from "../hooks/useQueries";
 import FollowerChart from "../components/charts/FollowerChart";
 import { Calendar, Layers, ShieldAlert, TrendingUp } from "lucide-react";
 import { motion } from "framer-motion";
@@ -18,62 +16,25 @@ import {
 } from "recharts";
 
 export default function HistoryLogs() {
-  const [accounts, setAccounts] = useState([]);
   const [selectedAccountId, setSelectedAccountId] = useState("");
-  const [history, setHistory] = useState([]);
-  const [forecast, setForecast] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [loadingForecast, setLoadingForecast] = useState(false);
-  const [error, setError] = useState("");
+
+  const { data: accounts = [], isLoading: loadingAccounts, error: accountsError } = useTrackedNodes();
+
+  const { data: snapshotData, isLoading: loadingSnapshots, error: snapshotsError } = useSnapshots(selectedAccountId);
+
+  const history = snapshotData?.history || [];
+  const forecast = snapshotData?.forecast || null;
+
+  const loading = loadingAccounts || loadingSnapshots;
+  const loadingForecast = loadingSnapshots;
+
+  const error = accountsError?.message || snapshotsError?.message || "";
 
   useEffect(() => {
-    const fetchAccounts = async () => {
-      try {
-        const response = await getAccounts();
-        setAccounts(response.data || []);
-        if (response.data?.length > 0) {
-          setSelectedAccountId(response.data[0]._id);
-        }
-      } catch (err) {
-        console.error(err);
-        setError("Failed to load accounts.");
-      }
-    };
-    fetchAccounts();
-  }, []);
-
-  useEffect(() => {
-    if (!selectedAccountId) return;
-
-    const fetchHistoryAndForecast = async () => {
-      try {
-        setLoading(true);
-        setLoadingForecast(true);
-        setError("");
-        
-        const [histRes, forecastRes] = await Promise.all([
-          getChannelHistory(selectedAccountId),
-          getForecast(selectedAccountId).catch((err) => {
-            console.warn("Forecast failed, might not have enough historical snapshots yet:", err);
-            return { success: true, data: { hasEnoughData: false } };
-          })
-        ]);
-
-        setHistory(histRes.data || []);
-        if (forecastRes && forecastRes.success) {
-          setForecast(forecastRes.data);
-        }
-      } catch (err) {
-        console.error(err);
-        setError("Failed to load historical snapshots and forecast data.");
-      } finally {
-        setLoading(false);
-        setLoadingForecast(false);
-      }
-    };
-
-    fetchHistoryAndForecast();
-  }, [selectedAccountId]);
+    if (accounts.length > 0 && !selectedAccountId) {
+      setSelectedAccountId(accounts[0]._id);
+    }
+  }, [accounts, selectedAccountId]);
 
   const activeAccount = accounts.find((a) => a._id === selectedAccountId);
 

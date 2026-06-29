@@ -1,7 +1,7 @@
 import { useState } from "react";
 import Sidebar from "../components/layout/Sidebar";
 import Navbar from "../components/layout/Navbar";
-import { compareYoutubeCreators } from "../api/compareApi";
+import { useCompare } from "../hooks/useQueries";
 import {
   ResponsiveContainer,
   BarChart,
@@ -35,39 +35,19 @@ import toast, { Toaster } from "react-hot-toast";
 export default function Compare() {
   const [creator1, setCreator1] = useState("");
   const [creator2, setCreator2] = useState("");
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [searchParams, setSearchParams] = useState({ c1: "", c2: "" });
 
-  const handleCompare = async (e) => {
+  const { data, isLoading: loading, error: queryError } = useCompare(searchParams.c1, searchParams.c2);
+
+  const error = queryError?.response?.data?.message || queryError?.message || "";
+
+  const handleCompare = (e) => {
     e.preventDefault();
     if (!creator1 || !creator2) {
-      setError("Please fill in both YouTube URL or handle fields.");
+      toast.error("Please fill in both YouTube URL or handle fields.");
       return;
     }
-
-    try {
-      setLoading(true);
-      setError("");
-      setData(null);
-
-      const response = await compareYoutubeCreators(creator1, creator2);
-      if (response.success) {
-        setData(response);
-        toast.success("Creator analysis sheet generated successfully.");
-      } else {
-        setError(response.message || "Failed to generate comparison analysis.");
-      }
-    } catch (err) {
-      console.error(err);
-      setError(
-        err?.response?.data?.message ||
-          "Failed to compare handles. Verify that both exist on YouTube and try again."
-      );
-      toast.error("Analysis failed.");
-    } finally {
-      setLoading(false);
-    }
+    setSearchParams({ c1: creator1, c2: creator2 });
   };
 
   const getRelativeTime = (dateStr) => {

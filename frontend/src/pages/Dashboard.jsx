@@ -2,14 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import Sidebar from "../components/layout/Sidebar";
 import Navbar from "../components/layout/Navbar";
-import {
-  getDashboardOverview,
-  getCompareAccounts,
-  getTopVideos,
-} from "../api/analyticsApi";
-import { getGroupsList } from "../api/groupApi";
-import { syncAllChannels } from "../api/youtubeApi";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useDashboard } from "../hooks/useQueries";
 import {
   Users,
   Eye,
@@ -28,42 +21,15 @@ import { motion } from "framer-motion";
 import toast, { Toaster } from "react-hot-toast";
 
 export default function Dashboard() {
-  const queryClient = useQueryClient();
-  const [syncing, setSyncing] = useState(false);
-
-  const { data: overview, isLoading: overviewLoading } = useQuery({
-    queryKey: ["dashboard-overview"],
-    queryFn: async () => {
-      const res = await getDashboardOverview();
-      return res.data;
-    },
-  });
-
-  const { data: accounts = [], isLoading: accountsLoading } = useQuery({
-    queryKey: ["compare-accounts"],
-    queryFn: async () => {
-      const res = await getCompareAccounts();
-      return res.data || [];
-    },
-  });
-
-  const { data: topContent = [], isLoading: topContentLoading } = useQuery({
-    queryKey: ["top-videos"],
-    queryFn: async () => {
-      const res = await getTopVideos();
-      return res.data || [];
-    },
-  });
-
-  const { data: activeGroups = [], isLoading: groupsLoading } = useQuery({
-    queryKey: ["groups-list"],
-    queryFn: async () => {
-      const res = await getGroupsList();
-      return res.data || [];
-    },
-  });
-
-  const loading = overviewLoading || accountsLoading || topContentLoading || groupsLoading;
+  const {
+    overview,
+    groups: activeGroups,
+    topContent,
+    compareAccounts: accounts,
+    loading,
+    syncAll,
+    syncing,
+  } = useDashboard();
 
   const getGroupCount = (groupId) => {
     if (!activeGroups) return 0;
@@ -75,21 +41,14 @@ export default function Dashboard() {
 
   const handleSyncAll = async () => {
     try {
-      setSyncing(true);
       toast.loading("Syncing all active nodes with YouTube APIs...", {
         id: "sync",
       });
-      await syncAllChannels();
+      await syncAll();
       toast.success("All channels synced successfully!", { id: "sync" });
-      queryClient.invalidateQueries({ queryKey: ["dashboard-overview"] });
-      queryClient.invalidateQueries({ queryKey: ["compare-accounts"] });
-      queryClient.invalidateQueries({ queryKey: ["top-videos"] });
-      queryClient.invalidateQueries({ queryKey: ["groups-list"] });
     } catch (error) {
       console.error(error);
       toast.error("Batch sync request failed.", { id: "sync" });
-    } finally {
-      setSyncing(false);
     }
   };
 

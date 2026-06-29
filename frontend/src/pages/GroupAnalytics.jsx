@@ -2,8 +2,7 @@ import { useState, useMemo } from "react";
 import { useParams, Link } from "react-router-dom";
 import Sidebar from "../components/layout/Sidebar";
 import Navbar from "../components/layout/Navbar";
-import { getGroupCreators } from "../api/groupApi";
-import { updateAccountGroup } from "../api/accountApi";
+import { useParty, useAccounts } from "../hooks/useQueries";
 import {
   Users,
   Eye,
@@ -23,36 +22,22 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import toast, { Toaster } from "react-hot-toast";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 export default function GroupAnalytics() {
   const { groupName } = useParams();
-  const queryClient = useQueryClient();
+  const { data: creators = [], isLoading: loading } = useParty(groupName);
+  const { updateAccountGroup } = useAccounts();
 
   const [displayMode, setDisplayMode] = useState(() => {
     return localStorage.getItem(`group-display-${groupName}`) || "card";
-  });
-
-  const { data: creators = [], isLoading: loading, refetch: loadCreators } = useQuery({
-    queryKey: ["group-creators", groupName],
-    queryFn: async () => {
-      const res = await getGroupCreators(groupName);
-      return res.data || [];
-    },
   });
 
   const handleGroupChange = async (e, creatorId) => {
     const newGroup = e.target.value;
     try {
       toast.loading("Updating group assignment...", { id: `group-${creatorId}` });
-      const res = await updateAccountGroup(creatorId, newGroup);
-      if (res.success) {
-        toast.success("Group updated successfully!", { id: `group-${creatorId}` });
-        queryClient.invalidateQueries({ queryKey: ["group-creators", groupName] });
-        queryClient.invalidateQueries({ queryKey: ["dashboard-overview"] });
-        queryClient.invalidateQueries({ queryKey: ["compare-accounts"] });
-        queryClient.invalidateQueries({ queryKey: ["groups-list"] });
-      }
+      await updateAccountGroup({ id: creatorId, group: newGroup });
+      toast.success("Group updated successfully!", { id: `group-${creatorId}` });
     } catch (err) {
       console.error(err);
       toast.error("Failed to update group.", { id: `group-${creatorId}` });
