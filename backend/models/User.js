@@ -1,5 +1,33 @@
 import mongoose from "mongoose";
 
+const refreshTokenSchema = new mongoose.Schema(
+  {
+    token: {
+      type: String,
+      required: true,
+      index: true,
+    },
+    expiresAt: {
+      type: Date,
+      required: true,
+    },
+    ipAddress: String,
+    userAgent: String,
+    browser: String,
+    device: String,
+    os: String,
+    isRevoked: {
+      type: Boolean,
+      default: false,
+    },
+    replacedByToken: String,
+    familyId: String,
+  },
+  {
+    timestamps: true,
+  }
+);
+
 const userSchema = new mongoose.Schema(
   {
     name: {
@@ -16,7 +44,9 @@ const userSchema = new mongoose.Schema(
     },
     passwordHash: {
       type: String,
-      required: true,
+      required: function () {
+        return this.provider === "local";
+      },
     },
     avatar: {
       type: String,
@@ -42,19 +72,72 @@ const userSchema = new mongoose.Schema(
       type: [String],
       default: [],
     },
+    provider: {
+      type: String,
+      enum: ["local", "google"],
+      default: "local",
+    },
+    googleId: {
+      type: String,
+      sparse: true,
+    },
     isVerified: {
       type: Boolean,
-      default: false, // Turn off by default or verify via setup links
+      default: true, // Legacy field sync
     },
-    verificationToken: String,
+    isEmailVerified: {
+      type: Boolean,
+      default: true,
+    },
+    verificationToken: String, // Legacy token sync
     verificationTokenExpires: Date,
+    emailVerificationToken: String,
+    emailVerificationExpires: Date,
     passwordResetToken: String,
     passwordResetExpires: Date,
+    refreshTokens: [refreshTokenSchema],
+    bio: {
+      type: String,
+      default: "",
+    },
+    lastLogin: Date,
+    loginHistory: [
+      {
+        ip: String,
+        userAgent: String,
+        browser: String,
+        device: String,
+        os: String,
+        loggedInAt: { type: Date, default: Date.now },
+      }
+    ],
   },
   {
     timestamps: true,
   }
 );
+
+// Perfect sync hook for isVerified and isEmailVerified fields, and verification tokens
+userSchema.pre("save", function () {
+  if (this.isModified("isVerified")) {
+    this.isEmailVerified = this.isVerified;
+  } else if (this.isModified("isEmailVerified")) {
+    this.isVerified = this.isEmailVerified;
+  }
+  if (this.isModified("verificationToken")) {
+    this.emailVerificationToken = this.verificationToken;
+  } else if (this.isModified("emailVerificationToken")) {
+    this.verificationToken = this.emailVerificationToken;
+  }
+  if (this.isModified("verificationTokenExpires")) {
+    this.emailVerificationExpires = this.verificationTokenExpires;
+  } else if (this.isModified("emailVerificationExpires")) {
+    this.verificationTokenExpires = this.emailVerificationExpires;
+  }
+});
+
+userSchema.index({ emailVerificationToken: 1 });
+userSchema.index({ passwordResetToken: 1 });
 
 const User = mongoose.model("User", userSchema);
 

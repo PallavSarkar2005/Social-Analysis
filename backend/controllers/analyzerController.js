@@ -179,6 +179,8 @@ export const analyzeYoutubeUrl = async (req, res, next) => {
 
     const rawUrl = req.body?.url;
     const selectedGroup = req.body?.group || "Other";
+    const selectedState = req.body?.state || "Unknown State";
+    const selectedParty = req.body?.party || "Independent";
     const forceRefresh = req.body?.forceRefresh === true || req.body?.forceRefresh === "true";
     if (!rawUrl || typeof rawUrl !== "string") {
       console.error("STEP 3 Error: URL parsing failed due to empty/invalid url parameter");
@@ -270,16 +272,44 @@ export const analyzeYoutubeUrl = async (req, res, next) => {
           userId: req.user._id,
         });
 
+        const youtubeThumbnail = channel.snippet?.thumbnails?.high?.url || channel.snippet?.thumbnails?.medium?.url || "";
+        const updateFields = {
+          name: channel.snippet.title,
+          platform: "youtube",
+          accountId: channelId,
+          profileUrl: url,
+          userId: req.user._id,
+          group: selectedGroup,
+          state: selectedState,
+          party: selectedParty,
+          thumbnail: youtubeThumbnail,
+        };
+
+        if (req.body.profileImage) {
+          updateFields.profileImage = req.body.profileImage;
+          updateFields.imageSource = "upload";
+          updateFields.uploadedBy = req.user._id;
+          updateFields.uploadedAt = new Date();
+        }
+
         if (!account) {
-          console.log("STEP 4.4.a: Creating a new Account model record in MongoDB");
-          account = await Account.create({
-            name: channel.snippet.title,
-            platform: "youtube",
-            accountId: channelId,
-            profileUrl: url,
-            userId: req.user._id,
-            group: selectedGroup,
-          });
+          console.log("STEP 4.4.a: Creating a new Account record in MongoDB");
+          account = await Account.create(updateFields);
+        } else {
+          console.log("STEP 4.4.a: Updating existing Account record in MongoDB");
+          const fieldsToUpdate = { ...updateFields };
+          if (!req.body.profileImage) {
+            // Keep existing profile image if no new upload is provided
+            delete fieldsToUpdate.profileImage;
+            delete fieldsToUpdate.imageSource;
+            delete fieldsToUpdate.uploadedBy;
+            delete fieldsToUpdate.uploadedAt;
+          }
+          account = await Account.findOneAndUpdate(
+            { _id: account._id },
+            { $set: fieldsToUpdate },
+            { new: true }
+          );
         }
         console.log("STEP 4.4.b: MongoDB Account ID =", account._id);
 
@@ -352,6 +382,7 @@ export const analyzeYoutubeUrl = async (req, res, next) => {
           thumbnail:
             channel.snippet.thumbnails.high?.url ||
             channel.snippet.thumbnails.medium?.url,
+          profileImage: account.profileImage || "",
           subscribers: Number(channel.statistics.subscriberCount || 0),
           totalViews: Number(channel.statistics.viewCount || 0),
           videoCount: Number(channel.statistics.videoCount || 0),
@@ -417,16 +448,44 @@ export const analyzeYoutubeUrl = async (req, res, next) => {
           userId: req.user._id,
         });
 
+        const youtubeThumbnail = channel.snippet?.thumbnails?.high?.url || channel.snippet?.thumbnails?.medium?.url || "";
+        const updateFields = {
+          name: channel.snippet.title,
+          platform: "youtube",
+          accountId: channelId,
+          profileUrl: url,
+          userId: req.user._id,
+          group: selectedGroup,
+          state: selectedState,
+          party: selectedParty,
+          thumbnail: youtubeThumbnail,
+        };
+
+        if (req.body.profileImage) {
+          updateFields.profileImage = req.body.profileImage;
+          updateFields.imageSource = "upload";
+          updateFields.uploadedBy = req.user._id;
+          updateFields.uploadedAt = new Date();
+        }
+
         if (!account) {
-          console.log("STEP 4.4.a: Creating a new Account model record in MongoDB");
-          account = await Account.create({
-            name: channel.snippet.title,
-            platform: "youtube",
-            accountId: channelId,
-            profileUrl: url,
-            userId: req.user._id,
-            group: selectedGroup,
-          });
+          console.log("STEP 4.4.a: Creating a new Account record in MongoDB");
+          account = await Account.create(updateFields);
+        } else {
+          console.log("STEP 4.4.a: Updating existing Account record in MongoDB");
+          const fieldsToUpdate = { ...updateFields };
+          if (!req.body.profileImage) {
+            // Keep existing profile image if no new upload is provided
+            delete fieldsToUpdate.profileImage;
+            delete fieldsToUpdate.imageSource;
+            delete fieldsToUpdate.uploadedBy;
+            delete fieldsToUpdate.uploadedAt;
+          }
+          account = await Account.findOneAndUpdate(
+            { _id: account._id },
+            { $set: fieldsToUpdate },
+            { new: true }
+          );
         }
         console.log("STEP 4.4.b: MongoDB Account ID =", account._id);
 
@@ -499,6 +558,7 @@ export const analyzeYoutubeUrl = async (req, res, next) => {
           thumbnail:
             channel.snippet.thumbnails.high?.url ||
             channel.snippet.thumbnails.medium?.url,
+          profileImage: account.profileImage || "",
           subscribers: Number(channel.statistics.subscriberCount || 0),
           totalViews: Number(channel.statistics.viewCount || 0),
           videoCount: Number(channel.statistics.videoCount || 0),

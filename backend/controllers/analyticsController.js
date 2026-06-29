@@ -169,6 +169,8 @@ export const compareAccounts = async (req, res, next) => {
         avgViews,
         avgEngagement,
         videosTracked: videos.length,
+        state: account.state || "Unknown State",
+        party: account.party || "Independent",
       });
     }
 

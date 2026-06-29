@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import Sidebar from "../components/layout/Sidebar";
 import Navbar from "../components/layout/Navbar";
-import { getAccounts, createAccount, deleteAccount, updateAccountGroup } from "../api/accountApi";
+import { getAccounts, createAccount, deleteAccount, updateAccountGroup, updateAccountPartyState } from "../api/accountApi";
 import { syncYoutubeChannel, syncChannelContent } from "../api/youtubeApi";
 import { motion, AnimatePresence } from "framer-motion";
 import toast, { Toaster } from "react-hot-toast";
@@ -29,6 +29,8 @@ export default function Accounts() {
     platform: "youtube",
     accountId: "",
     profileUrl: "",
+    state: "",
+    party: "",
   });
 
   const loadAccounts = async () => {
@@ -65,8 +67,8 @@ export default function Accounts() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.name || !form.accountId) {
-      toast.error("Please fill out the Name and Account/Channel ID fields.");
+    if (!form.name || !form.accountId || !form.state || !form.party) {
+      toast.error("Please fill out all required fields (Name, Channel ID, State, and Party).");
       return;
     }
 
@@ -79,6 +81,8 @@ export default function Accounts() {
         platform: "youtube",
         accountId: "",
         profileUrl: "",
+        state: "",
+        party: "",
       });
       loadAccounts();
     } catch (error) {
@@ -131,7 +135,7 @@ export default function Accounts() {
           
           {/* Header */}
           <div className="border-b border-white/[0.06] pb-6">
-            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight bg-gradient-to-r from-white via-slate-200 to-slate-400 bg-clip-text text-transparent flex items-center gap-2">
+            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white flex items-center gap-2">
               <Layers size={28} className="text-indigo-400" />
               Node Registry Directory
             </h1>
@@ -149,29 +153,10 @@ export default function Accounts() {
                   <Plus size={16} className="text-indigo-400" />
                   Index Social Profile
                 </h3>
-                <p className="text-xs text-slate-400">Add X or YouTube nodes to begin indexing.</p>
+                <p className="text-xs text-slate-400">Add YouTube nodes to begin indexing.</p>
               </div>
 
               <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Platform</label>
-                  <div className="grid grid-cols-2 gap-2">
-                    {["youtube", "x"].map((plat) => (
-                      <button
-                        key={plat}
-                        type="button"
-                        onClick={() => setForm({ ...form, platform: plat })}
-                        className={`h-10 rounded-xl text-xs font-bold uppercase tracking-wider transition border ${
-                          form.platform === plat
-                            ? "bg-indigo-600 border-indigo-500 text-white"
-                            : "bg-white/[0.02] border-white/[0.08] text-slate-400 hover:text-white"
-                        }`}
-                      >
-                        {plat === "youtube" ? "YouTube" : "X (Twitter)"}
-                      </button>
-                    ))}
-                  </div>
-                </div>
 
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Display Name</label>
@@ -186,7 +171,7 @@ export default function Accounts() {
 
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                    {form.platform === "youtube" ? "YouTube Channel ID" : "X Username / Handle"}
+                    YouTube Channel ID
                   </label>
                   <input
                     type="text"
@@ -198,13 +183,26 @@ export default function Accounts() {
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Profile URL (Optional)</label>
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">State</label>
                   <input
                     type="text"
-                    placeholder="e.g. https://x.com/elonmusk"
-                    value={form.profileUrl}
-                    onChange={(e) => setForm({ ...form, profileUrl: e.target.value })}
+                    placeholder="e.g. Assam, Delhi, Gujarat"
+                    value={form.state}
+                    onChange={(e) => setForm({ ...form, state: e.target.value })}
                     className="w-full h-11 px-4 rounded-xl bg-white/[0.02] border border-white/[0.08] text-xs text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500/50"
+                    required
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Party</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. BJP, Congress, AAP"
+                    value={form.party}
+                    onChange={(e) => setForm({ ...form, party: e.target.value })}
+                    className="w-full h-11 px-4 rounded-xl bg-white/[0.02] border border-white/[0.08] text-xs text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500/50"
+                    required
                   />
                 </div>
 
@@ -244,7 +242,8 @@ export default function Accounts() {
                         <tr className="bg-white/[0.02] border-b border-white/[0.06] text-[10px] font-bold text-slate-400 uppercase tracking-widest">
                           <th className="p-4">Profile Node</th>
                           <th className="p-4">Platform</th>
-                          <th className="p-4">Connection ID</th>
+                          <th className="p-4">State</th>
+                          <th className="p-4">Party</th>
                           <th className="p-4">Group</th>
                           <th className="p-4 text-right">Actions</th>
                         </tr>
@@ -263,7 +262,46 @@ export default function Accounts() {
                                 {acc.platform}
                               </span>
                             </td>
-                            <td className="p-4 font-mono text-[10px] text-slate-400">{acc.accountId}</td>
+                            <td className="p-4">
+                              <input
+                                type="text"
+                                defaultValue={acc.state || "Unknown State"}
+                                onBlur={async (e) => {
+                                  const val = e.target.value.trim();
+                                  if (val && val !== acc.state) {
+                                    try {
+                                      await updateAccountPartyState(acc._id, undefined, val);
+                                      toast.success(`State updated for "${acc.name}"`);
+                                      loadAccounts();
+                                    } catch (err) {
+                                      console.error(err);
+                                      toast.error("Failed to update state.");
+                                    }
+                                  }
+                                }}
+                                className="bg-transparent border-b border-transparent hover:border-white/20 focus:border-indigo-500 focus:outline-none text-slate-300 w-24 px-1 py-0.5 text-xs transition"
+                              />
+                            </td>
+                            <td className="p-4">
+                              <input
+                                type="text"
+                                defaultValue={acc.party || "Independent"}
+                                onBlur={async (e) => {
+                                  const val = e.target.value.trim();
+                                  if (val && val !== acc.party) {
+                                    try {
+                                      await updateAccountPartyState(acc._id, val, undefined);
+                                      toast.success(`Party updated for "${acc.name}"`);
+                                      loadAccounts();
+                                    } catch (err) {
+                                      console.error(err);
+                                      toast.error("Failed to update party.");
+                                    }
+                                  }
+                                }}
+                                className="bg-transparent border-b border-transparent hover:border-white/20 focus:border-indigo-500 focus:outline-none text-slate-300 w-24 px-1 py-0.5 text-xs transition"
+                              />
+                            </td>
                             <td className="p-4">
                               <select
                                 value={acc.group || "Other"}

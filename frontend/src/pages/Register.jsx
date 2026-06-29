@@ -10,14 +10,71 @@ export default function Register() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const { register, isAuthenticated } = useAuth();
+  const { register, googleLogin, isAuthenticated } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
     if (isAuthenticated) {
       navigate("/dashboard");
     }
+
+    // Load Google Identity Services script
+    const script = document.createElement("script");
+    script.src = "https://accounts.google.com/gsi/client";
+    script.async = true;
+    script.defer = true;
+    document.body.appendChild(script);
+    script.onload = () => {
+      if (window.google) {
+        window.google.accounts.id.initialize({
+          client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID || "placeholder-client-id.apps.googleusercontent.com",
+          callback: handleGoogleLoginResponse,
+        });
+        window.google.accounts.id.renderButton(
+          document.getElementById("google-signup-btn"),
+          { theme: "dark", size: "large", width: "100%" }
+        );
+      }
+    };
+
+    return () => {
+      document.body.removeChild(script);
+    };
   }, [isAuthenticated, navigate]);
+
+  const handleGoogleLoginResponse = async (response) => {
+    try {
+      setLoading(true);
+      const res = await googleLogin(response.credential);
+      if (res.success) {
+        toast.success("Successfully registered via Google!");
+        navigate("/dashboard");
+      } else {
+        toast.error(res.message || "Google Authentication failed");
+      }
+    } catch (err) {
+      toast.error("An error occurred during Google sign-in.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const triggerDevGoogleLogin = async () => {
+    try {
+      setLoading(true);
+      const res = await googleLogin("dummy-developer-token");
+      if (res.success) {
+        toast.success("Logged in with Developer Google Identity!");
+        navigate("/dashboard");
+      } else {
+        toast.error(res.message);
+      }
+    } catch (e) {
+      toast.error("Developer bypass failed");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Password Complexity Validation Helpers
   const hasMinLength = password.length >= 8;
@@ -83,7 +140,7 @@ export default function Register() {
           <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-indigo-600/20 border border-indigo-500/30 text-indigo-400 mb-4 shadow-inner">
             <ShieldCheck size={26} />
           </div>
-          <h2 className="text-3xl font-extrabold tracking-tight bg-gradient-to-r from-white via-slate-200 to-slate-400 bg-clip-text text-transparent">
+          <h2 className="text-3xl font-extrabold tracking-tight text-white">
             Create an Account
           </h2>
           <p className="text-sm text-slate-400 mt-2">
@@ -206,6 +263,45 @@ export default function Register() {
             )}
           </button>
         </form>
+
+        <div className="mt-5 space-y-4">
+          <div className="flex items-center gap-3">
+            <div className="flex-1 h-px bg-white/[0.06]" />
+            <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">or register with</span>
+            <div className="flex-1 h-px bg-white/[0.06]" />
+          </div>
+
+          {/* Google GIS rendering anchor */}
+          <div id="google-signin-btn" className="w-full overflow-hidden rounded-xl" />
+          
+          {/* Simulated Google Button */}
+          <button
+            type="button"
+            onClick={triggerDevGoogleLogin}
+            disabled={loading}
+            className="w-full h-11 bg-white/[0.02] border border-white/[0.08] hover:bg-white/[0.06] hover:text-white text-slate-300 text-xs font-semibold rounded-xl transition flex items-center justify-center gap-2 active:scale-[0.99]"
+          >
+            <svg className="w-4 h-4" viewBox="0 0 24 24">
+              <path
+                fill="#4285F4"
+                d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v3.92h6.69c-.29 1.5-.114 2.78-1.4 3.63v3.02h2.2c1.3-1.2 2.05-3 2.05-5.5z"
+              />
+              <path
+                fill="#34A853"
+                d="M12 24c3.24 0 5.97-1.08 7.96-2.91l-3.89-3.02c-1.08.72-2.48 1.16-4.07 1.16-3.13 0-5.78-2.11-6.73-4.96H1.29v3.12C3.26 21.27 7.31 24 12 24z"
+              />
+              <path
+                fill="#FBBC05"
+                d="M5.27 14.27a7.18 7.18 0 010-4.54V6.61H1.29a11.94 11.94 0 000 10.78l3.98-3.12z"
+              />
+              <path
+                fill="#EA4335"
+                d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.22 0 12 0 7.31 0 3.26 2.73 1.29 6.61l3.98 3.12c.95-2.85 3.6-4.98 6.73-4.98z"
+              />
+            </svg>
+            Google Identity (Dev-Bypass)
+          </button>
+        </div>
 
         <div className="mt-6 pt-5 border-t border-white/[0.06] text-center">
           <p className="text-xs text-slate-400">

@@ -16,7 +16,7 @@ export default function ChannelSearch({ url, setUrl, onAnalyze, loading }) {
       <div>
         <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight">Analyze Social Nodes</h2>
         <p className="text-xs text-slate-400 mt-1">
-          Paste any YouTube video/channel or X (Twitter) profile URL below to index statistics and run AI diagnostics.
+          Paste any YouTube video or channel URL below to index statistics and run AI diagnostics.
         </p>
       </div>
 
@@ -26,7 +26,7 @@ export default function ChannelSearch({ url, setUrl, onAnalyze, loading }) {
             type="text"
             value={url}
             onChange={(e) => setUrl(e.target.value)}
-            placeholder="Paste YouTube channel/video or X profile link (e.g. https://x.com/nasa)..."
+            placeholder="Paste YouTube channel/video URL or handle (e.g. @narendramodi)..."
             className="w-full h-12 px-4 rounded-xl bg-white/[0.02] border border-white/[0.08] text-xs sm:text-sm text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/50 transition-all"
           />
         </div>

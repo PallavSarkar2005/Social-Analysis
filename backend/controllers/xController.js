@@ -271,10 +271,14 @@ export const analyzeXProfile = async (req, res, next) => {
         accountId: username,
         profileUrl: profile.profileUrl,
         userId: req.user._id,
+        thumbnail: profile.profileImage || "",
       });
     } else {
       account.name = profile.name;
       account.profileUrl = profile.profileUrl;
+      if (profile.profileImage) {
+        account.thumbnail = profile.profileImage;
+      }
       await account.save();
     }
 

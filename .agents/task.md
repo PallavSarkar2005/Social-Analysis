@@ -1,0 +1,24 @@
+- [x] Modify `User.js` database schema to default `isVerified` and `isEmailVerified` to `true`
+- [x] Create and run scratch migration script to update existing users to `isVerified: true` and `isEmailVerified: true`
+- [x] Update `authController.js` to bypass verification token generation and email dispatch during registration
+- [x] Remove `/verify-email` and `/resend-verification` routes from backend `authRoutes.js`
+- [x] Clean up email verification HTML templates in `emailTemplateService.js`
+- [x] Refactor `authMiddleware.js`:
+  - Prioritize `Authorization` header over cookies to fix synchronization issues
+  - Make verification check middleware pass-through (call `next()` immediately)
+- [x] Refactor frontend routing:
+  - Remove verification route imports and declarations in `App.jsx`
+  - Delete `VerifyEmail.jsx` and `VerifyEmailNotice.jsx` pages
+  - Remove verification checks and redirects in `ProtectedRoute.jsx`
+- [x] Remove verification details from `AuthContext.jsx`
+- [x] Add creator photo upload and synchronization:
+  - Modify `Account.js` database schema to add image metadata fields
+  - Install `multer` package for backend file uploading
+  - Create `mediaController.js` and `mediaRoutes.js` for handling JPG/PNG/WEBP files up to 5MB
+  - Configure `server.js` to serve `/uploads` statically and mount media routes
+  - Modify `analyzerController.js`, `xController.js`, and `competitorController.js` to store creator thumbnails/profile images and return them in listings
+  - Update `Analyzer.jsx` to resize the button, add profile photo input, and trigger uploads
+  - Update frontend views (`Dashboard.jsx`, `Compare.jsx`, `GroupAnalytics.jsx`, `Competitors.jsx`, `HistoryLogs.jsx`) to display synchronized profile images
+- [x] Verify API endpoints:
+  - Write standard endpoint testing suite `verifyAllApis.js`
+  - Execute testing suite to confirm API status

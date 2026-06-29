@@ -2,8 +2,12 @@ import dotenv from "dotenv";
 import { validateEnv } from "./config/env.js";
 import { exec } from "child_process";
 import { promisify } from "util";
+import path from "path";
+import { fileURLToPath } from "url";
 
 const execPromise = promisify(exec);
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 dotenv.config();
 validateEnv();
@@ -17,9 +21,12 @@ import connectDB from "./config/db.js";
 import cron from "node-cron";
 import { mongoSanitizeMiddleware } from "./middleware/mongoSanitize.js";
 import { xssSanitizer } from "./middleware/xssSanitizer.js";
+import { cookieParser } from "./middleware/cookieParser.js";
+import { csrfProtection } from "./middleware/csrfMiddleware.js";
 
 // Route imports
 import authRoutes from "./routes/authRoutes.js";
+import mediaRoutes from "./routes/mediaRoutes.js";
 import youtubeRoutes from "./routes/youtubeRoutes.js";
 import accountRoutes from "./routes/accountRoutes.js";
 import analyticsRoutes from "./routes/analyticsRoutes.js";
@@ -37,6 +44,7 @@ import exportRoutes from "./routes/exportRoutes.js";
 import settingsRoutes from "./routes/settingsRoutes.js";
 import searchRoutes from "./routes/searchRoutes.js";
 import groupRoutes from "./routes/groupRoutes.js";
+import userRoutes from "./routes/userRoutes.js";
 
 // Jobs & Schedulers
 import { syncAllYoutubeChannels } from "./jobs/youtubeSyncJob.js";
@@ -71,7 +79,7 @@ const corsOptions = {
   },
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
-  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept", "Origin"],
+  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept", "Origin", "X-XSRF-TOKEN", "X-CSRF-TOKEN"],
 };
 
 app.use(cors(corsOptions));
@@ -113,8 +121,15 @@ app.use(
   })
 );
 
+app.use(cookieParser);
+
+// Serve static uploads
+app.use("/uploads", express.static(path.join(__dirname, "storage/uploads")));
+
 // Payload size limit to prevent Denial of Service
 app.use(express.json({ limit: "10kb" }));
+
+app.use(csrfProtection);
 
 // Prevent NoSQL parameter injection attacks
 app.use(mongoSanitizeMiddleware);
@@ -153,6 +168,7 @@ app.use("/api", apiLimiter);
 
 // Specific routes
 app.use("/api/auth", strictLimiter, authRoutes);
+app.use("/api/media", strictLimiter, mediaRoutes);
 app.use("/api/analyzer", strictLimiter, analyzerRoutes);
 app.use("/api/compare", strictLimiter, compareRoutes);
 app.use("/api/ai", strictLimiter, aiRoutes);
@@ -164,6 +180,7 @@ app.use("/api/activity", strictLimiter, activityRoutes);
 app.use("/api/exports", strictLimiter, exportRoutes);
 app.use("/api/settings", strictLimiter, settingsRoutes);
 app.use("/api/search", strictLimiter, searchRoutes);
+app.use("/api/users", strictLimiter, userRoutes);
 
 app.use("/api/youtube", youtubeRoutes);
 app.use("/api/accounts", accountRoutes);

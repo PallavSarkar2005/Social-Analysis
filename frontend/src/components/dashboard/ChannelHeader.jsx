@@ -11,7 +11,7 @@ export default function ChannelHeader({ channel }) {
     >
       <div className="flex items-center gap-6">
         <img
-          src={channel.thumbnail}
+          src={channel.profileImage || channel.thumbnail}
           alt={channel.title}
           className="w-28 h-28 rounded-full border-4 border-white"
         />

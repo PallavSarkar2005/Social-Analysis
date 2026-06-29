@@ -26,6 +26,15 @@ const processQueue = (error) => {
   failedQueue = [];
 };
 
+// Helper to parse cookies on the client side
+const getCookie = (name) => {
+  if (typeof document === "undefined") return null;
+  const value = `; ${document.cookie}`;
+  const parts = value.split(`; ${name}=`);
+  if (parts.length === 2) return parts.pop().split(";").shift();
+  return null;
+};
+
 // Request Interceptor
 client.interceptors.request.use(
   (config) => {
@@ -34,6 +43,16 @@ client.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+
+    // Attach CSRF double-submit cookie token to modifying requests
+    const safeMethods = ["get", "head", "options"];
+    if (!safeMethods.includes(config.method?.toLowerCase())) {
+      const csrfToken = getCookie("XSRF-TOKEN");
+      if (csrfToken) {
+        config.headers["X-XSRF-TOKEN"] = csrfToken;
+      }
+    }
+
     return config;
   },
   (error) => {

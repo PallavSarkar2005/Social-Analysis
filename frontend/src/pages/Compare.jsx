@@ -174,7 +174,7 @@ export default function Compare() {
           {/* Header */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/[0.06] pb-6">
             <div>
-              <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight bg-gradient-to-r from-white via-slate-200 to-slate-400 bg-clip-text text-transparent flex items-center gap-2">
+              <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white flex items-center gap-2">
                 Creator Comparison
               </h1>
               <p className="text-xs sm:text-sm text-slate-400 font-medium mt-1">
@@ -276,9 +276,9 @@ export default function Compare() {
                           </th>
                           <th className="p-5 text-center text-sm font-extrabold text-white border-l border-white/[0.04] w-[36%] bg-indigo-500/[0.01]">
                             <div className="flex items-center justify-center gap-3">
-                              {data.creatorA.thumbnail && (
+                              {(data.creatorA.profileImage || data.creatorA.thumbnail) && (
                                 <img
-                                  src={data.creatorA.thumbnail}
+                                  src={data.creatorA.profileImage || data.creatorA.thumbnail}
                                   alt=""
                                   className="w-8 h-8 rounded-full border border-indigo-500/30 object-cover"
                                 />
@@ -288,9 +288,9 @@ export default function Compare() {
                           </th>
                           <th className="p-5 text-center text-sm font-extrabold text-white border-l border-white/[0.04] w-[36%] bg-purple-500/[0.01]">
                             <div className="flex items-center justify-center gap-3">
-                              {data.creatorB.thumbnail && (
+                              {(data.creatorB.profileImage || data.creatorB.thumbnail) && (
                                 <img
-                                  src={data.creatorB.thumbnail}
+                                  src={data.creatorB.profileImage || data.creatorB.thumbnail}
                                   alt=""
                                   className="w-8 h-8 rounded-full border border-purple-500/30 object-cover"
                                 />

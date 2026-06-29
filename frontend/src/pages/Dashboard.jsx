@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import Sidebar from "../components/layout/Sidebar";
 import Navbar from "../components/layout/Navbar";
@@ -9,6 +9,7 @@ import {
 } from "../api/analyticsApi";
 import { getGroupsList } from "../api/groupApi";
 import { syncAllChannels } from "../api/youtubeApi";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Users,
   Eye,
@@ -27,12 +28,42 @@ import { motion } from "framer-motion";
 import toast, { Toaster } from "react-hot-toast";
 
 export default function Dashboard() {
-  const [overview, setOverview] = useState(null);
-  const [accounts, setAccounts] = useState([]);
-  const [topContent, setTopContent] = useState([]);
-  const [activeGroups, setActiveGroups] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [syncing, setSyncing] = useState(false);
+
+  const { data: overview, isLoading: overviewLoading } = useQuery({
+    queryKey: ["dashboard-overview"],
+    queryFn: async () => {
+      const res = await getDashboardOverview();
+      return res.data;
+    },
+  });
+
+  const { data: accounts = [], isLoading: accountsLoading } = useQuery({
+    queryKey: ["compare-accounts"],
+    queryFn: async () => {
+      const res = await getCompareAccounts();
+      return res.data || [];
+    },
+  });
+
+  const { data: topContent = [], isLoading: topContentLoading } = useQuery({
+    queryKey: ["top-videos"],
+    queryFn: async () => {
+      const res = await getTopVideos();
+      return res.data || [];
+    },
+  });
+
+  const { data: activeGroups = [], isLoading: groupsLoading } = useQuery({
+    queryKey: ["groups-list"],
+    queryFn: async () => {
+      const res = await getGroupsList();
+      return res.data || [];
+    },
+  });
+
+  const loading = overviewLoading || accountsLoading || topContentLoading || groupsLoading;
 
   const getGroupCount = (groupId) => {
     if (!activeGroups) return 0;
@@ -42,32 +73,6 @@ export default function Dashboard() {
     return match ? match.count : 0;
   };
 
-  const loadData = async () => {
-    try {
-      setLoading(true);
-      const [overRes, compRes, videoRes, groupRes] = await Promise.all([
-        getDashboardOverview(),
-        getCompareAccounts(),
-        getTopVideos(),
-        getGroupsList().catch(() => ({ data: [] })),
-      ]);
-
-      setOverview(overRes.data);
-      setAccounts(compRes.data || []);
-      setTopContent(videoRes.data || []);
-      setActiveGroups(groupRes?.data || []);
-    } catch (error) {
-      console.error(error);
-      toast.error("Failed to sync backend metrics overview.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadData();
-  }, []);
-
   const handleSyncAll = async () => {
     try {
       setSyncing(true);
@@ -76,7 +81,10 @@ export default function Dashboard() {
       });
       await syncAllChannels();
       toast.success("All channels synced successfully!", { id: "sync" });
-      await loadData();
+      queryClient.invalidateQueries({ queryKey: ["dashboard-overview"] });
+      queryClient.invalidateQueries({ queryKey: ["compare-accounts"] });
+      queryClient.invalidateQueries({ queryKey: ["top-videos"] });
+      queryClient.invalidateQueries({ queryKey: ["groups-list"] });
     } catch (error) {
       console.error(error);
       toast.error("Batch sync request failed.", { id: "sync" });
@@ -444,7 +452,7 @@ export default function Dashboard() {
                             <th className="p-4">Profile Node</th>
                             <th className="p-4">Subscribers / Followers</th>
                             <th className="p-4">Total Views</th>
-                            <th className="p-4">Avg Engagement</th>
+                            <th className="p-4">Party</th>
                             <th className="p-4 text-right">Activity Status</th>
                           </tr>
                         </thead>
@@ -464,7 +472,7 @@ export default function Dashboard() {
                                 {Number(acc.totalViews).toLocaleString()}
                               </td>
                               <td className="p-4 text-indigo-400 font-bold">
-                                {acc.avgEngagement}%
+                                {acc.party || "Independent"}
                               </td>
                               <td className="p-4 text-right">
                                 <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[9px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">

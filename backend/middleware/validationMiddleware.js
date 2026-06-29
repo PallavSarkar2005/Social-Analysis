@@ -1,5 +1,18 @@
 import { body, param, query, validationResult } from "express-validator";
 
+const COMMON_PASSWORDS = [
+  "password", "123456", "12345678", "123456789", "12345", "1234567",
+  "qwerty", "qwertyuiop", "password123", "admin123", "welcome123",
+  "letmein123", "socialiq123", "socialiq", "password123!"
+];
+
+const checkCommonPassword = (value) => {
+  if (COMMON_PASSWORDS.includes(value.toLowerCase())) {
+    throw new Error("Password is too common and easily guessable. Please choose a more secure password.");
+  }
+  return true;
+};
+
 // Middleware to run validations and return formatted errors
 export const validateResult = (req, res, next) => {
   const errors = validationResult(req);
@@ -15,7 +28,7 @@ export const validateResult = (req, res, next) => {
   next();
 };
 
-// Registration validations - Enforcing strong password policy
+// Registration validations - Enforcing strong password policy & preventing common passwords
 export const validateRegister = [
   body("name")
     .trim()
@@ -43,7 +56,8 @@ export const validateRegister = [
     })
     .withMessage(
       "Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, one number, and one special character"
-    ),
+    )
+    .custom(checkCommonPassword),
   validateResult,
 ];
 
@@ -57,6 +71,83 @@ export const validateLogin = [
     .withMessage("Please enter a valid email address")
     .normalizeEmail(),
   body("password").notEmpty().withMessage("Password is required"),
+  validateResult,
+];
+
+// Forgot Password validation
+export const validateForgotPassword = [
+  body("email")
+    .trim()
+    .notEmpty()
+    .withMessage("Email is required")
+    .isEmail()
+    .withMessage("Please enter a valid email address")
+    .normalizeEmail(),
+  validateResult,
+];
+
+// Reset Password validation
+export const validateResetPassword = [
+  body("token")
+    .trim()
+    .notEmpty()
+    .withMessage("Verification token is required")
+    .isLength({ min: 10 })
+    .withMessage("Invalid token format"),
+  body("password")
+    .notEmpty()
+    .withMessage("Password is required")
+    .isStrongPassword({
+      minLength: 8,
+      minLowercase: 1,
+      minUppercase: 1,
+      minNumbers: 1,
+      minSymbols: 1,
+    })
+    .withMessage(
+      "Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, one number, and one special character"
+    )
+    .custom(checkCommonPassword),
+  validateResult,
+];
+
+// Verify Email validation
+export const validateVerifyEmail = [
+  body("token")
+    .trim()
+    .notEmpty()
+    .withMessage("Verification token is required")
+    .isLength({ min: 10 })
+    .withMessage("Invalid token format"),
+  validateResult,
+];
+
+// Google Sign-In validation
+export const validateGoogleSignIn = [
+  body("idToken")
+    .trim()
+    .notEmpty()
+    .withMessage("Google ID Token is required"),
+  validateResult,
+];
+
+// Change Password validation
+export const validateChangePassword = [
+  body("oldPassword").notEmpty().withMessage("Current password is required"),
+  body("newPassword")
+    .notEmpty()
+    .withMessage("New password is required")
+    .isStrongPassword({
+      minLength: 8,
+      minLowercase: 1,
+      minUppercase: 1,
+      minNumbers: 1,
+      minSymbols: 1,
+    })
+    .withMessage(
+      "Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, one number, and one special character"
+    )
+    .custom(checkCommonPassword),
   validateResult,
 ];
 
@@ -78,6 +169,14 @@ export const validateYoutubeUrl = [
       }
       return true;
     }),
+  body("state")
+    .optional()
+    .trim()
+    .escape(),
+  body("party")
+    .optional()
+    .trim()
+    .escape(),
   validateResult,
 ];
 
@@ -271,5 +370,27 @@ export const validateCreateAccount = [
     })
     .isURL()
     .withMessage("Please enter a valid URL"),
+  body("state")
+    .trim()
+    .notEmpty()
+    .withMessage("State is required")
+    .escape(),
+  body("party")
+    .trim()
+    .notEmpty()
+    .withMessage("Party is required")
+    .escape(),
+  validateResult,
+];
+
+// Resend verification validation
+export const validateResendVerification = [
+  body("email")
+    .trim()
+    .notEmpty()
+    .withMessage("Email is required")
+    .isEmail()
+    .withMessage("Please enter a valid email address")
+    .normalizeEmail(),
   validateResult,
 ];

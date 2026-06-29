@@ -2,7 +2,7 @@ import Account from "../models/Account.js";
 
 export const createAccount = async (req, res, next) => {
   try {
-    const { name, platform, accountId, profileUrl } = req.body;
+    const { name, platform, accountId, profileUrl, state, party } = req.body;
 
     // Check if account already tracked by this user
     const existing = await Account.findOne({ accountId, userId: req.user._id });
@@ -19,6 +19,8 @@ export const createAccount = async (req, res, next) => {
       accountId,
       profileUrl,
       userId: req.user._id,
+      state: state || "Unknown State",
+      party: party || "Independent",
     });
 
     res.status(201).json({
@@ -94,6 +96,38 @@ export const updateAccountGroup = async (req, res, next) => {
     res.status(200).json({
       success: true,
       message: "Group updated successfully",
+      data: account,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const updateAccountPartyState = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { party, state } = req.body;
+
+    const updates = {};
+    if (party !== undefined) updates.party = party;
+    if (state !== undefined) updates.state = state;
+
+    const account = await Account.findOneAndUpdate(
+      { _id: id, userId: req.user._id },
+      { $set: updates },
+      { new: true }
+    );
+
+    if (!account) {
+      return res.status(404).json({
+        success: false,
+        message: "Account not found or not authorized to update",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Account details updated successfully",
       data: account,
     });
   } catch (error) {

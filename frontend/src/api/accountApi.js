@@ -19,3 +19,8 @@ export const updateAccountGroup = async (id, groupName) => {
   const res = await client.patch(`/api/accounts/${id}/group`, { group: groupName });
   return res.data;
 };
+
+export const updateAccountPartyState = async (id, party, state) => {
+  const res = await client.patch(`/api/accounts/${id}/party-state`, { party, state });
+  return res.data;
+};

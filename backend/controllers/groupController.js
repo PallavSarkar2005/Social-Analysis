@@ -122,6 +122,8 @@ export const getGroupCreators = async (req, res, next) => {
         engagementRate,
         growth,
         lastSync,
+        state: account.state || "Unknown State",
+        party: account.party || "Independent",
       });
     }
 

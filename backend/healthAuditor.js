@@ -147,7 +147,7 @@ async function runAuditor() {
       `/api/analyzer/youtube (Fresh - ${item.label})`,
       "post",
       `${BASE_URL}/api/analyzer/youtube`,
-      { url: item.url, forceRefresh: true },
+      { url: item.url, forceRefresh: true, state: "Gujarat", party: "BJP" },
       authHeaders
     );
     console.log(`  Miss duration: ${r1.duration}ms, cached response: ${r1.data?.cached}`);
@@ -157,7 +157,7 @@ async function runAuditor() {
       `/api/analyzer/youtube (Cached - ${item.label})`,
       "post",
       `${BASE_URL}/api/analyzer/youtube`,
-      { url: item.url, forceRefresh: false },
+      { url: item.url, forceRefresh: false, state: "Gujarat", party: "BJP" },
       authHeaders
     );
     console.log(`  Hit duration: ${r2.duration}ms, cached response: ${r2.data?.cached}`);
@@ -178,7 +178,7 @@ async function runAuditor() {
     promises.push(
       axios.post(
         `${BASE_URL}/api/analyzer/youtube`,
-        { url: concurrencyTargetUrl, forceRefresh: false },
+        { url: concurrencyTargetUrl, forceRefresh: false, state: "Gujarat", party: "BJP" },
         { headers: authHeaders }
       ).catch(err => err.response)
     );
@@ -221,6 +221,8 @@ async function runAuditor() {
       platform: "youtube",
       accountId: "UCX6OQ3DkcsbYNE6H8uQQuVC",
       profileUrl: "https://youtube.com/channel/UCX6OQ3DkcsbYNE6H8uQQuVC",
+      state: "Delhi",
+      party: "Congress",
     },
     authHeaders,
     [201]

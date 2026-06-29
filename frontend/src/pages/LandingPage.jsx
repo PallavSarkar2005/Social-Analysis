@@ -335,9 +335,9 @@ export default function LandingPage() {
           </div>
 
           {/* Main H1 Title */}
-          <h1 className="text-4xl sm:text-6xl font-extrabold tracking-tight bg-gradient-to-r from-white via-slate-200 to-slate-400 bg-clip-text text-transparent leading-[1.1] sm:leading-[1.15]">
+          <h1 className="text-4xl sm:text-6xl font-extrabold tracking-tight text-white leading-[1.1] sm:leading-[1.15]">
             Track, Compare & Analyze <br className="hidden sm:inline" />
-            <span className="bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">Social Media Growth</span>
+            <span className="text-[#7C5CFC]">Social Media Growth</span>
           </h1>
 
           {/* Subheadline */}

@@ -23,6 +23,24 @@ const refreshTokenSchema = new mongoose.Schema(
     replacedByToken: {
       type: String, // For tracking token rotation
     },
+    familyId: {
+      type: String, // For tracking refresh token families (RTR)
+    },
+    ipAddress: {
+      type: String,
+    },
+    userAgent: {
+      type: String,
+    },
+    device: {
+      type: String,
+    },
+    os: {
+      type: String,
+    },
+    browser: {
+      type: String,
+    },
   },
   {
     timestamps: true,

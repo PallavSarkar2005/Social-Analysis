@@ -81,6 +81,7 @@ export const addCompetitor = async (req, res, next) => {
     let followers = 0;
     let views = 0;
     let profileUrl = "";
+    let thumbnail = "";
 
     if (platform === "youtube") {
       let query = urlOrHandle;
@@ -106,6 +107,7 @@ export const addCompetitor = async (req, res, next) => {
       followers = Number(channel.statistics.subscriberCount || 0);
       views = Number(channel.statistics.viewCount || 0);
       profileUrl = `https://youtube.com/channel/${accountId}`;
+      thumbnail = channel.snippet?.thumbnails?.high?.url || channel.snippet?.thumbnails?.medium?.url || "";
     } else if (platform === "x") {
       let username = urlOrHandle;
       if (urlOrHandle.includes("x.com/") || urlOrHandle.includes("twitter.com/")) {
@@ -127,6 +129,7 @@ export const addCompetitor = async (req, res, next) => {
       followers = parseMetricNumber(profile.followers);
       views = 0; // X profiles don't expose cumulative views easily
       profileUrl = profile.profileUrl;
+      thumbnail = profile.profileImage || "";
     } else {
       return res.status(400).json({
         success: false,
@@ -161,10 +164,14 @@ export const addCompetitor = async (req, res, next) => {
         platform,
         accountId,
         profileUrl,
+        thumbnail,
         isCompetitor: true,
       });
     } else {
       account.isCompetitor = true;
+      if (thumbnail) {
+        account.thumbnail = thumbnail;
+      }
       await account.save();
     }
 
@@ -274,6 +281,8 @@ export const listCompetitors = async (req, res, next) => {
         accountId: comp.accountId,
         platform: comp.platform,
         accountName: comp.accountName,
+        profileImage: account.profileImage || "",
+        thumbnail: account.thumbnail || "",
         trackedSince: comp.trackedSince,
         followers: latest.followers,
         views: latest.views,

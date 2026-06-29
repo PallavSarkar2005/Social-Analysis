@@ -3,7 +3,7 @@ import { useAuth } from "../context/AuthContext";
 import { RefreshCw } from "lucide-react";
 
 export default function ProtectedRoute() {
-  const { isAuthenticated, loading } = useAuth();
+  const { isAuthenticated, user, loading } = useAuth();
 
   if (loading) {
     return (

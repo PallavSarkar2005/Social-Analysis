@@ -40,7 +40,7 @@ describe("Social IQ Backend API & Security Verification Suite", () => {
 
       expect(res.status).toBe(201);
       expect(res.body.success).toBe(true);
-      expect(res.body.token).toBeDefined();
+      expect(res.body.data.token).toBeDefined();
     });
 
     it("should fail registration on duplicate email", async () => {
@@ -62,8 +62,8 @@ describe("Social IQ Backend API & Security Verification Suite", () => {
 
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
-      expect(res.body.token).toBeDefined();
-      token = res.body.token;
+      expect(res.body.data.token).toBeDefined();
+      token = res.body.data.token;
     });
 
     it("should reject access to protected routes with missing token", async () => {
@@ -102,6 +102,8 @@ describe("Social IQ Backend API & Security Verification Suite", () => {
           platform: "youtube",
           accountId: "UCX6OQ3DkcsbYNE6H8uQQuVA",
           profileUrl: "https://www.youtube.com/channel/UCX6OQ3DkcsbYNE6H8uQQuVA",
+          state: "Delhi",
+          party: "Independent",
         });
 
       expect(res.status).toBe(201);
@@ -147,7 +149,7 @@ describe("Social IQ Backend API & Security Verification Suite", () => {
       const res1 = await request(app)
         .post("/api/analyzer/youtube")
         .set("Authorization", `Bearer ${token}`)
-        .send({ url: targetUrl, forceRefresh: true });
+        .send({ url: targetUrl, forceRefresh: true, state: "Gujarat", party: "BJP" });
 
       expect(res1.status).toBe(200);
       expect(res1.body.success).toBe(true);
@@ -158,7 +160,7 @@ describe("Social IQ Backend API & Security Verification Suite", () => {
       const res2 = await request(app)
         .post("/api/analyzer/youtube")
         .set("Authorization", `Bearer ${token}`)
-        .send({ url: targetUrl, forceRefresh: false });
+        .send({ url: targetUrl, forceRefresh: false, state: "Gujarat", party: "BJP" });
 
       expect(res2.status).toBe(200);
       expect(res2.body.success).toBe(true);
@@ -193,6 +195,9 @@ describe("Social IQ Backend API & Security Verification Suite", () => {
           name: maliciousName,
           platform: "youtube",
           accountId: "UCX6OQ3DkcsbYNE6H8uQQuVB",
+          profileUrl: "https://www.youtube.com/channel/UCX6OQ3DkcsbYNE6H8uQQuVB",
+          state: "Delhi",
+          party: "Independent",
         });
 
       // Either sanitization strips it or fails gracefully

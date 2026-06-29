@@ -7,6 +7,8 @@ import { analyzeYoutubeUrl, analyzeXUrl } from "../api/analyzerApi";
 import { getVideoInsights } from "../api/aiApi";
 import { getChannelInsights } from "../api/aiChannelApi";
 import FollowerChart from "../components/charts/FollowerChart";
+import client from "../api/client";
+import toast from "react-hot-toast";
 
 // High-end micro-interaction animation variants
 const containerVariants = {
@@ -55,8 +57,39 @@ const getInfluenceText = (score) => {
 function Analyzer() {
   const [url, setUrl] = useState("");
   const [group, setGroup] = useState("Other");
+  const [state, setState] = useState("");
+  const [party, setParty] = useState("");
   const [result, setResult] = useState(null);
   const [searchParams] = useSearchParams();
+  const [photoFile, setPhotoFile] = useState(null);
+  const [photoPreview, setPhotoPreview] = useState(null);
+
+  const handlePhotoChange = (e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
+      if (!allowedTypes.includes(file.type)) {
+        toast.error("Please upload a JPG, PNG, or WEBP image.");
+        return;
+      }
+      const maxSizeBytes = 5 * 1024 * 1024;
+      if (file.size > maxSizeBytes) {
+        toast.error("File size must be less than 5 MB.");
+        return;
+      }
+      setPhotoFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setPhotoPreview(reader.result);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleClearPhoto = () => {
+    setPhotoFile(null);
+    setPhotoPreview(null);
+  };
 
   useEffect(() => {
     const urlParam = searchParams.get("url");
@@ -94,11 +127,32 @@ function Analyzer() {
         cleanTarget.startsWith("@") ||
         cleanTarget.startsWith("UC")
       ) {
-        response = await analyzeYoutubeUrl(cleanTarget, group, force);
-      } else if (cleanTarget.includes("x.com")) {
-        response = await analyzeXUrl(cleanTarget);
+        let profileImageUrl = "";
+        if (photoFile) {
+          toast.loading("Uploading profile photo...", { id: "photo-upload" });
+          const formData = new FormData();
+          formData.append("photo", photoFile);
+          const uploadRes = await client.post("/api/media/upload", formData, {
+            headers: { "Content-Type": "multipart/form-data" },
+          });
+          if (uploadRes.data && uploadRes.data.success) {
+            profileImageUrl = uploadRes.data.url;
+            toast.success("Profile photo uploaded!", { id: "photo-upload" });
+          } else {
+            throw new Error("Failed to upload profile photo");
+          }
+        }
+
+        response = await analyzeYoutubeUrl(
+          cleanTarget,
+          group,
+          force,
+          state || "Unknown State",
+          party || "Independent",
+          profileImageUrl
+        );
       } else {
-        throw new Error("Please insert a valid YouTube or X link.");
+        throw new Error("Please insert a valid YouTube channel/video link or handle.");
       }
 
       setResult(response);
@@ -172,7 +226,7 @@ function Analyzer() {
             <div className="w-full bg-[#121318]/50 backdrop-blur-md rounded-2xl border border-white/[0.06] p-6 sm:p-8 shadow-2xl shadow-black/40">
               <div className="w-full max-w-5xl mx-auto space-y-6">
                 <div className="text-center space-y-1.5">
-                  <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight bg-gradient-to-r from-white via-slate-200 to-slate-400 bg-clip-text text-transparent">
+                  <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white">
                     Analyze Platform Performance
                   </h1>
                   <p className="text-xs sm:text-sm text-slate-400 font-medium">
@@ -223,23 +277,99 @@ function Analyzer() {
                     </div>
                   </div>
 
-                  <button
-                    onClick={() => handleAnalyze()}
-                    disabled={loading}
-                    className="w-full h-12 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 disabled:from-slate-800 disabled:to-slate-800 disabled:text-slate-500 text-xs font-bold rounded-xl transition-all shadow-lg shadow-indigo-600/10 active:scale-[0.98] flex items-center justify-center gap-2 cursor-pointer"
-                  >
-                    {loading ? (
-                      <>
-                        <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 0112-7.32V4a10 10 0 00-10 10h2z" />
-                        </svg>
-                        Parsing...
-                      </>
-                    ) : (
-                      "Run Audit Analysis"
-                    )}
-                  </button>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* State Input */}
+                    <div className="space-y-1.5 text-left">
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                        State
+                      </label>
+                      <input
+                        type="text"
+                        value={state}
+                        onChange={(e) => setState(e.target.value)}
+                        placeholder="e.g. Assam, Delhi, Gujarat"
+                        className="w-full h-12 px-4 rounded-xl bg-white/[0.02] border border-white/[0.08] text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/50 transition-all font-sans"
+                        required
+                      />
+                    </div>
+
+                    {/* Party Input */}
+                    <div className="space-y-1.5 text-left">
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                        Party
+                      </label>
+                      <input
+                        type="text"
+                        value={party}
+                        onChange={(e) => setParty(e.target.value)}
+                        placeholder="e.g. BJP, Congress, AAP"
+                        className="w-full h-12 px-4 rounded-xl bg-white/[0.02] border border-white/[0.08] text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/50 transition-all font-sans"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  {/* Optional Profile Photo Upload */}
+                  <div className="space-y-1.5 text-left">
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                      Optional Profile Photo Upload (JPG, PNG, WEBP - Max 5MB)
+                    </label>
+                    <div className="flex flex-col sm:flex-row items-center gap-4 p-4 rounded-xl bg-[#171923] border border-white/[0.08]">
+                      <div className="flex-1 w-full">
+                        <input
+                          type="file"
+                          id="creator-photo-upload"
+                          accept="image/jpeg,image/png,image/webp"
+                          onChange={handlePhotoChange}
+                          className="hidden"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => document.getElementById("creator-photo-upload").click()}
+                          className="w-full h-10 px-4 rounded-lg bg-white/[0.04] border border-white/[0.08] hover:bg-white/[0.08] text-xs font-semibold text-slate-300 transition flex items-center justify-center gap-2 cursor-pointer"
+                        >
+                          Select Image File
+                        </button>
+                      </div>
+
+                      {photoPreview && (
+                        <div className="flex items-center gap-3 bg-white/[0.02] border border-white/[0.06] p-2 rounded-lg shrink-0 w-full sm:w-auto justify-between sm:justify-start">
+                          <img
+                            src={photoPreview}
+                            alt="Preview"
+                            className="w-10 h-10 rounded-full object-cover border border-white/[0.1]"
+                          />
+                          <button
+                            type="button"
+                            onClick={handleClearPhoto}
+                            className="text-[10px] text-red-400 hover:text-red-300 font-bold uppercase tracking-wider"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex justify-center mt-6">
+                    <button
+                      onClick={() => handleAnalyze()}
+                      disabled={loading}
+                      className="w-full max-w-xs h-10 px-6 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 disabled:from-slate-800 disabled:to-slate-800 disabled:text-slate-500 text-xs font-bold rounded-xl transition-all shadow-lg shadow-indigo-600/10 active:scale-[0.98] flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                      {loading ? (
+                        <>
+                          <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 0112-7.32V4a10 10 0 00-10 10h2z" />
+                          </svg>
+                          Parsing...
+                        </>
+                      ) : (
+                        "Run Audit Analysis"
+                      )}
+                    </button>
+                  </div>
                 </div>
 
                 {error && (
@@ -412,7 +542,7 @@ function Analyzer() {
                 {/* Channel Frame Header */}
                 <div className="bg-[#121318]/40 backdrop-blur-md rounded-2xl border border-white/[0.06] p-6 shadow-2xl flex flex-col sm:flex-row items-center gap-6">
                   <img
-                    src={result.data.thumbnail}
+                    src={result.data.profileImage || result.data.thumbnail}
                     alt={result.data.title}
                     className="w-24 h-24 sm:w-28 sm:h-28 rounded-full border-2 border-white/[0.08] shadow-md object-cover"
                   />
@@ -547,152 +677,7 @@ function Analyzer() {
               </motion.div>
             )}
 
-            {/* X / TWITTER PROFILE CONTAINER */}
-            {result?.type === "x" && (
-              <motion.div
-                key="x-result"
-                variants={containerVariants}
-                initial="hidden"
-                animate="visible"
-                exit="exit"
-                className="max-w-5xl mx-auto bg-[#121318]/40 backdrop-blur-md rounded-2xl border border-white/[0.06] shadow-2xl overflow-hidden"
-              >
-                {/* Profile Header Block */}
-                <div className="p-5 sm:p-8 border-b border-white/[0.06] bg-gradient-to-b from-white/[0.01] to-transparent">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                    <div className="flex items-center gap-4">
-                      <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center text-2xl sm:text-3xl font-black shadow-md shrink-0">
-                        {result.data.name?.charAt(0)}
-                      </div>
-                      <div className="min-w-0">
-                        <h2 className="text-lg sm:text-2xl font-bold tracking-tight text-white flex items-center gap-1.5 truncate">
-                          {result.data.name}
-                          <svg
-                            className="w-4 h-4 text-sky-400 shrink-0"
-                            fill="currentColor"
-                            viewBox="0 0 20 20"
-                          >
-                            <path
-                              fillRule="evenodd"
-                              d="M6.267 3.455a.75.75 0 00-.708-.523.75.75 0 00-.55.244l-3 3.5a.75.75 0 00.059 1.053l3.5 3a.75.75 0 001.054-1.068L4.83 7.5h7.92a2.75 2.75 0 012.75 2.75v1a.75.75 0 001.5 0v-1a4.25 4.25 0 00-4.25-4.25H4.83l1.787-2.085a.75.75 0 00-.35-1.21z"
-                              clipRule="evenodd"
-                            />
-                          </svg>
-                        </h2>
-                        <p className="text-xs sm:text-sm font-medium text-slate-400 flex items-center gap-2 truncate">
-                          @{result.data.username}
-                          {result.data.source && (
-                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-semibold border ${
-                              result.data.source === "Live Data"
-                                ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
-                                : result.data.source === "Cached Data"
-                                ? "bg-amber-500/10 text-amber-400 border-amber-500/20"
-                                : "bg-indigo-500/10 text-indigo-400 border-indigo-500/20"
-                            }`}>
-                              {result.data.source}
-                            </span>
-                          )}
-                        </p>
-                      </div>
-                    </div>
-
-                    <a
-                      href={result.data.profileUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex items-center justify-center h-10 px-4 text-xs font-semibold text-slate-200 bg-white/[0.04] border border-white/[0.08] hover:bg-white/[0.08] active:scale-[0.98] rounded-xl transition-all shadow-md sm:w-auto w-full"
-                    >
-                      View Native Profile
-                    </a>
-                  </div>
-
-                  {result.data.bio && (
-                    <div className="mt-6 bg-white/[0.01] border border-white/[0.04] rounded-xl p-4">
-                      <p className="text-xs sm:text-sm text-slate-300 leading-relaxed whitespace-pre-wrap">
-                        {result.data.bio}
-                      </p>
-                    </div>
-                  )}
-                </div>
-
-                {/* Core Network KPIs Grid */}
-                <div className="p-5 sm:p-8 bg-white/[0.01] border-b border-white/[0.06]">
-                  <div className="grid grid-cols-3 gap-4">
-                    {[
-                      { label: "Followers", val: result.data.followers },
-                      { label: "Following", val: result.data.following },
-                      { label: "Total Posts", val: result.data.posts },
-                    ].map((kpi, index) => (
-                      <div
-                        key={index}
-                        className="bg-white/[0.01] border border-white/[0.05] rounded-xl p-4 sm:p-5 shadow-sm"
-                      >
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                          {kpi.label}
-                        </p>
-                        <h3 className="text-base sm:text-2xl font-black text-white mt-1.5">
-                          {Number(kpi.val || 0).toLocaleString()}
-                        </h3>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Context Blocks: Score Box & History Chart Layout */}
-                <div className="p-5 sm:p-8 space-y-6">
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-6 items-start">
-                    <div className="md:col-span-1 bg-gradient-to-br from-indigo-600/30 via-purple-600/20 to-transparent border border-indigo-500/20 rounded-2xl p-5 shadow-lg">
-                      <h4 className="text-xs font-bold text-indigo-300 uppercase tracking-wider">
-                        Influence Score
-                      </h4>
-                      <div className="text-4xl sm:text-5xl font-black text-white mt-2 tracking-tight">
-                        {calculateInfluenceScore(result.data.followers, result.data.posts)}
-                      </div>
-                      <p className="mt-3 text-[11px] text-slate-300 leading-normal">
-                        {getInfluenceText(calculateInfluenceScore(result.data.followers, result.data.posts))}
-                      </p>
-                    </div>
-
-                    {/* Follower Expansion Node */}
-                    {result.data.history?.length > 0 && (
-                      <div className="md:col-span-3 bg-white/[0.01] rounded-2xl border border-white/[0.05] p-4 space-y-4">
-                        <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-                          Audience Expansion Timeline
-                        </h4>
-                        <div className="w-full">
-                          <FollowerChart data={result.data.history} />
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Growth Logs Data Grid View */}
-                  {result.data.history?.length > 0 && (
-                    <div className="border border-white/[0.06] rounded-xl overflow-hidden shadow-xl bg-slate-950/20">
-                      <div className="bg-white/[0.02] px-4 py-3 border-b border-white/[0.06] flex justify-between text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                        <span>Capture Point</span>
-                        <span>Followers</span>
-                      </div>
-                      <div className="divide-y divide-white/[0.04] max-h-48 overflow-y-auto custom-scrollbar">
-                        {result.data.history.map((item, index) => (
-                          <div
-                            key={index}
-                            className="flex justify-between items-center px-4 py-2.5 text-xs sm:text-sm hover:bg-white/[0.01] transition-colors"
-                          >
-                            <span className="text-slate-400 font-medium">
-                              {item.date}
-                            </span>
-                            <span className="text-white font-semibold">
-                              {Number(item.followers).toLocaleString()}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </motion.div>
-            )}
+            {/* X / TWITTER PROFILE CONTAINER (Disabled) */}
           </AnimatePresence>
         </main>
       </div>
