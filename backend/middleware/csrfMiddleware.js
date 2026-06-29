@@ -7,7 +7,9 @@ export const csrfProtection = (req, res, next) => {
   // Generate a CSRF token if one is not already present in the cookie
   if (!csrfToken) {
     csrfToken = crypto.randomBytes(32).toString("hex");
-    const isProd = process.env.NODE_ENV === "production";
+    const host = req.headers.host || "";
+    const isLocal = host.includes("localhost") || host.includes("127.0.0.1");
+    const isProd = process.env.NODE_ENV === "production" || !isLocal;
     res.cookie("XSRF-TOKEN", csrfToken, {
       secure: isProd,
       sameSite: isProd ? "none" : "lax",

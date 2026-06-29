@@ -18,6 +18,12 @@ const hashToken = (token) => {
   return crypto.createHash("sha256").update(token).digest("hex");
 };
 
+const checkIsProd = (req) => {
+  const host = req?.headers?.host || "";
+  const isLocal = host.includes("localhost") || host.includes("127.0.0.1");
+  return process.env.NODE_ENV === "production" || (host && !isLocal);
+};
+
 // GET /api/auth/csrf
 export const getCsrfToken = async (req, res, next) => {
   try {
@@ -141,7 +147,7 @@ const sendTokenResponse = async (user, statusCode, req, res) => {
   await user.save();
   console.log("[sendTokenResponse] User document saved.");
 
-  const isProd = process.env.NODE_ENV === "production";
+  const isProd = checkIsProd(req);
 
   console.log("[sendTokenResponse] Setting HTTP-only cookies...");
   // Set HTTP-only secure cookie configurations
@@ -448,7 +454,7 @@ export const refresh = async (req, res, next) => {
       expiresIn: "15m",
     });
 
-    const isProd = process.env.NODE_ENV === "production";
+    const isProd = checkIsProd(req);
     res.cookie("socialiq_access_token", newAccessToken, {
       httpOnly: true,
       secure: isProd,
@@ -495,7 +501,7 @@ export const logout = async (req, res, next) => {
       );
     }
 
-    const isProd = process.env.NODE_ENV === "production";
+    const isProd = checkIsProd(req);
     const cookieOptions = {
       httpOnly: true,
       secure: isProd,
@@ -527,7 +533,7 @@ export const logoutAll = async (req, res, next) => {
     req.user.refreshTokens = [];
     await req.user.save();
 
-    const isProd = process.env.NODE_ENV === "production";
+    const isProd = checkIsProd(req);
     const cookieOptions = {
       httpOnly: true,
       secure: isProd,
@@ -688,7 +694,7 @@ export const resendVerification = async (req, res, next) => {
     await user.save();
     console.log("[Resend Verification] User saved successfully.");
 
-    const isProd = process.env.NODE_ENV === "production";
+    const isProd = checkIsProd(req);
     const appUrl = isProd ? "https://social-analysis-smoky.vercel.app" : "http://localhost:5173";
     const verificationLink = `${appUrl}/verify-email?token=${verificationToken}`;
 
@@ -732,7 +738,7 @@ export const forgotPassword = async (req, res, next) => {
     user.passwordResetExpires = new Date(Date.now() + 1 * 60 * 60 * 1000); // 1 hour
     await user.save();
 
-    const isProd = process.env.NODE_ENV === "production";
+    const isProd = checkIsProd(req);
     const appUrl = isProd ? "https://social-analysis-smoky.vercel.app" : "http://localhost:5173";
     const resetLink = `${appUrl}/reset-password?token=${resetToken}`;
 
