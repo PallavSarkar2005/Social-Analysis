@@ -1,16 +1,15 @@
-import axios from "axios";
+import { youtubeGet } from "../utils/youtubeClient.js";
 
-export const getChannelStats = async (channelId) => {
-  const response = await axios.get(
+export const getChannelStats = async (channelId, forceRefresh = false) => {
+  const { data } = await youtubeGet(
+    "getChannelStats",
     "https://www.googleapis.com/youtube/v3/channels",
     {
-      params: {
-        part: "snippet,statistics",
-        id: channelId,
-        key: process.env.YOUTUBE_API_KEY,
-      },
-    }
+      part: "snippet,statistics",
+      id: channelId,
+    },
+    forceRefresh
   );
 
-  return response.data.items[0];
+  return data?.items?.[0];
 };

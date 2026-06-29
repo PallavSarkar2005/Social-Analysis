@@ -76,11 +76,13 @@ function Analyzer() {
 
   const [loadingInsights, setLoadingInsights] = useState(false);
 
-  const handleAnalyze = async (targetUrl = url) => {
+  const handleAnalyze = async (targetUrl = url, force = false) => {
     try {
       setLoading(true);
       setError("");
-      setResult(null);
+      if (!force) {
+        setResult(null);
+      }
       setInsights("");
       setChannelInsights("");
 
@@ -92,7 +94,7 @@ function Analyzer() {
         cleanTarget.startsWith("@") ||
         cleanTarget.startsWith("UC")
       ) {
-        response = await analyzeYoutubeUrl(cleanTarget, group);
+        response = await analyzeYoutubeUrl(cleanTarget, group, force);
       } else if (cleanTarget.includes("x.com")) {
         response = await analyzeXUrl(cleanTarget);
       } else {
@@ -278,13 +280,36 @@ function Analyzer() {
                         YouTube Video
                       </div>
                     </div>
-                    <div className="p-5 space-y-2">
-                      <h2 className="text-base font-bold text-white leading-snug line-clamp-2 tracking-tight">
-                        {result.data.title}
-                      </h2>
-                      <div className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
-                        {result.data.channel}
+                    <div className="p-5 space-y-4">
+                      <div>
+                        <h2 className="text-base font-bold text-white leading-snug line-clamp-2 tracking-tight flex items-center flex-wrap gap-2">
+                          {result.data.title}
+                          {result.cached !== undefined && (
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[9px] font-semibold border ${
+                              result.cached
+                                ? "bg-amber-500/10 text-amber-400 border-amber-500/20"
+                                : "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+                            }`}>
+                              {result.cached 
+                                ? (Math.round((Date.now() - result.cachedAt) / 60000) <= 0 
+                                  ? "Cached just now" 
+                                  : `Cached ${Math.round((Date.now() - result.cachedAt) / 60000)} min ago`)
+                                : "Live Data"
+                              }
+                            </span>
+                          )}
+                        </h2>
+                        <div className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 mt-2">
+                          {result.data.channel}
+                        </div>
                       </div>
+                      <button
+                        onClick={() => handleAnalyze(url, true)}
+                        disabled={loading}
+                        className="w-full h-10 inline-flex items-center justify-center text-xs font-semibold text-slate-200 bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-800 disabled:text-slate-500 active:scale-[0.98] rounded-xl transition-all shadow-md cursor-pointer"
+                      >
+                        {loading ? "Refreshing..." : "Refresh Data"}
+                      </button>
                     </div>
                   </div>
 
@@ -392,12 +417,37 @@ function Analyzer() {
                     className="w-24 h-24 sm:w-28 sm:h-28 rounded-full border-2 border-white/[0.08] shadow-md object-cover"
                   />
                   <div className="text-center sm:text-left space-y-1.5 flex-1 min-w-0">
-                    <h2 className="text-xl sm:text-3xl font-bold text-white tracking-tight">
-                      {result.data.title}
-                    </h2>
-                    <p className="text-xs sm:text-sm text-slate-400 leading-normal line-clamp-2">
-                      {result.data.description}
-                    </p>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                      <div>
+                        <h2 className="text-xl sm:text-3xl font-bold text-white tracking-tight flex flex-wrap items-center justify-center sm:justify-start gap-2">
+                          {result.data.title}
+                          {result.cached !== undefined && (
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-semibold border ${
+                              result.cached
+                                ? "bg-amber-500/10 text-amber-400 border-amber-500/20"
+                                : "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+                            }`}>
+                              {result.cached 
+                                ? (Math.round((Date.now() - result.cachedAt) / 60000) <= 0 
+                                  ? "Cached just now" 
+                                  : `Cached ${Math.round((Date.now() - result.cachedAt) / 60000)} min ago`)
+                                : "Live Data"
+                              }
+                            </span>
+                          )}
+                        </h2>
+                        <p className="text-xs sm:text-sm text-slate-400 leading-normal line-clamp-2 mt-1">
+                          {result.data.description}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => handleAnalyze(url, true)}
+                        disabled={loading}
+                        className="inline-flex items-center justify-center h-10 px-4 text-xs font-semibold text-slate-200 bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-800 disabled:text-slate-500 active:scale-[0.98] rounded-xl transition-all shadow-md shrink-0 w-full sm:w-auto cursor-pointer"
+                      >
+                        {loading ? "Refreshing..." : "Refresh Data"}
+                      </button>
+                    </div>
                   </div>
                 </div>
 

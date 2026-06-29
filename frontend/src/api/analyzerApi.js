@@ -1,7 +1,7 @@
 import client from "./client";
 
-export const analyzeYoutubeUrl = async (url, group = "Other") => {
-  const response = await client.post("/api/analyzer/youtube", { url, group });
+export const analyzeYoutubeUrl = async (url, group = "Other", forceRefresh = false) => {
+  const response = await client.post("/api/analyzer/youtube", { url, group, forceRefresh });
   return response.data;
 };
 

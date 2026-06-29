@@ -5,26 +5,44 @@ import axios from "axios";
 import { scrapeXProfile } from "../scrapers/xScraper.js";
 import { getChannelStats } from "../services/youtubeService.js";
 import { logActivity } from "../utils/activityLogger.js";
+import { youtubeGet } from "../utils/youtubeClient.js";
 
 // Helper to find YouTube Channel ID by handle/query
 const getChannelIdByQuery = async (query) => {
-  const response = await axios.get(
+  const cleanQuery = query.startsWith("@") ? query : `@${query}`;
+  try {
+    const { data } = await youtubeGet(
+      "getChannelIdByQuery",
+      "https://www.googleapis.com/youtube/v3/channels",
+      {
+        forHandle: cleanQuery,
+        part: "id",
+      }
+    );
+
+    if (data?.items?.length) {
+      return data.items[0].id;
+    }
+  } catch (err) {
+    console.warn("forHandle query failed, falling back to search:", err.message);
+  }
+
+  // Fallback to search query
+  const { data: searchData } = await youtubeGet(
+    "getChannelIdByQuerySearchFallback",
     "https://www.googleapis.com/youtube/v3/search",
     {
-      params: {
-        key: process.env.YOUTUBE_API_KEY,
-        q: query,
-        type: "channel",
-        part: "snippet",
-        maxResults: 1,
-      },
-    },
-  );
+      q: query,
+      type: "channel",
+      part: "snippet",
+      maxResults: 1,
+    }
+  ).catch(() => ({ data: null }));
 
-  if (!response.data.items.length) {
+  if (!searchData?.items?.length) {
     return null;
   }
-  return response.data.items[0].snippet.channelId;
+  return searchData.items[0].snippet.channelId;
 };
 
 // Parse numbers from strings (X scraper returns format like "1.2M", "50.4K", etc.)

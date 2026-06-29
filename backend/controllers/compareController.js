@@ -2,6 +2,7 @@ import { scrapeXProfile } from "../scrapers/xScraper.js";
 import axios from "axios";
 import { generateCreatorComparisonReport } from "../services/aiCompareService.js";
 import { getChannelByHandle, unescapeUrl } from "./analyzerController.js";
+import { youtubeGet } from "../utils/youtubeClient.js";
 
 const extractXUsername = (url) => {
   const match = url.match(/x\.com\/([^/?]+)/i);
@@ -10,28 +11,22 @@ const extractXUsername = (url) => {
 
 const getYoutubeStats = async (channelId) => {
   console.log(`\nLOG [getYoutubeStats] Fetching data for channelId: ${channelId}`);
-  const requestUrl = `https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics&id=${channelId}&key=YOUR_API_KEY`;
-  console.log("YouTube API Request URL:", requestUrl);
 
-  const response = await axios.get(
+  const { data } = await youtubeGet(
+    "getChannelStats",
     "https://www.googleapis.com/youtube/v3/channels",
     {
-      params: {
-        part: "snippet,statistics",
-        id: channelId,
-        key: process.env.YOUTUBE_API_KEY,
-      },
-    },
+      part: "snippet,statistics",
+      id: channelId,
+    }
   );
 
-  console.log("Full YouTube API Response:", JSON.stringify(response.data, null, 2));
-
-  if (!response.data || !response.data.items || !response.data.items.length) {
+  if (!data || !data.items || !data.items.length) {
     console.log("Error: Channel items empty in response");
     return null;
   }
 
-  const channel = response.data.items[0];
+  const channel = data.items[0];
   return {
     username: channel.snippet.title,
     name: channel.snippet.title,
@@ -223,32 +218,25 @@ const getChannelIdByHandleSafe = async (handleOrQuery) => {
   
   // 1. Try resolving using forHandle if it starts with @
   if (clean.startsWith("@")) {
-    const apiRequestUrl = `https://www.googleapis.com/youtube/v3/channels?part=id&forHandle=${encodeURIComponent(clean)}&key=YOUR_API_KEY`;
-    console.log("YouTube API Request (forHandle):", apiRequestUrl);
     try {
-      const response = await axios.get(
+      const { data } = await youtubeGet(
+        "getChannelIdByHandleSafe",
         "https://www.googleapis.com/youtube/v3/channels",
         {
-          params: {
-            part: "id",
-            forHandle: clean,
-            key: process.env.YOUTUBE_API_KEY,
-          },
-        },
+          part: "id",
+          forHandle: clean,
+        }
       );
       
-      console.log("Full YouTube API Response (forHandle):", JSON.stringify(response.data, null, 2));
+      console.log("Full YouTube API Response (forHandle):", JSON.stringify(data, null, 2));
 
-      if (response.data?.items?.[0]?.id) {
-        const resolvedId = response.data.items[0].id;
+      if (data?.items?.[0]?.id) {
+        const resolvedId = data.items[0].id;
         console.log("Resolved Channel ID (forHandle Success):", resolvedId);
         return resolvedId;
       }
     } catch (err) {
       console.error(`Error resolving forHandle ${clean}:`, err.message);
-      if (err.response) {
-        console.error("Full Error Response Data (forHandle):", JSON.stringify(err.response.data, null, 2));
-      }
     }
   }
 
@@ -284,54 +272,42 @@ const getChannelIdByHandleSafe = async (handleOrQuery) => {
 
 export const getCreatorAnalyticsData = async (channelId) => {
   console.log(`\nLOG [getCreatorAnalyticsData] Fetching channel metadata for channelId: ${channelId}`);
-  const channelsRequestUrl = `https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics&id=${channelId}&key=YOUR_API_KEY`;
-  console.log("YouTube API Request URL (Channels):", channelsRequestUrl);
 
   // Fetch channel metadata
-  const channelResponse = await axios.get(
+  const { data: channelResponseData } = await youtubeGet(
+    "getChannelStats",
     "https://www.googleapis.com/youtube/v3/channels",
     {
-      params: {
-        part: "snippet,statistics",
-        id: channelId,
-        key: process.env.YOUTUBE_API_KEY,
-      },
-    },
+      part: "snippet,statistics",
+      id: channelId,
+    }
   );
 
-  console.log("Full YouTube API Response (Channels):", JSON.stringify(channelResponse.data, null, 2));
-
-  if (!channelResponse.data || !channelResponse.data.items || !channelResponse.data.items.length) {
+  if (!channelResponseData || !channelResponseData.items || !channelResponseData.items.length) {
     console.log("Failure in getCreatorAnalyticsData: Channel metadata not found");
     throw new Error("Channel details not found");
   }
 
-  const channel = channelResponse.data.items[0];
+  const channel = channelResponseData.items[0];
   const statistics = channel.statistics;
   const snippet = channel.snippet;
 
   console.log(`\nLOG [getCreatorAnalyticsData] Fetching recent uploads for channelId: ${channelId}`);
-  const recentRequestUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&channelId=${channelId}&order=date&maxResults=10&type=video&key=YOUR_API_KEY`;
-  console.log("YouTube API Request URL (Recent Search):", recentRequestUrl);
 
   // Fetch recent videos (10 videos)
-  const searchResponse = await axios.get(
+  const { data: searchResponseData } = await youtubeGet(
+    "getChannelVideos",
     "https://www.googleapis.com/youtube/v3/search",
     {
-      params: {
-        key: process.env.YOUTUBE_API_KEY,
-        channelId,
-        part: "snippet",
-        order: "date",
-        maxResults: 10,
-        type: "video",
-      },
-    },
+      channelId,
+      part: "snippet",
+      order: "date",
+      maxResults: 10,
+      type: "video",
+    }
   );
 
-  console.log("Full YouTube API Response (Recent Search):", JSON.stringify(searchResponse.data, null, 2));
-
-  const searchItems = searchResponse.data?.items || [];
+  const searchItems = searchResponseData?.items || [];
   const videoIds = searchItems.map((item) => item.id?.videoId).filter(Boolean);
 
   let avgViews = 0;
@@ -343,24 +319,18 @@ export const getCreatorAnalyticsData = async (channelId) => {
 
   if (videoIds.length > 0) {
     console.log(`\nLOG [getCreatorAnalyticsData] Fetching statistics for recent video IDs: ${videoIds.join(",")}`);
-    const videosRequestUrl = `https://www.googleapis.com/youtube/v3/videos?part=statistics,snippet&id=${videoIds.join(",")}&key=YOUR_API_KEY`;
-    console.log("YouTube API Request URL (Videos):", videosRequestUrl);
 
     // Fetch detailed statistics for recent videos
-    const videosResponse = await axios.get(
+    const { data: videosResponseData } = await youtubeGet(
+      "getVideoStatsMultiple",
       "https://www.googleapis.com/youtube/v3/videos",
       {
-        params: {
-          part: "statistics,snippet",
-          id: videoIds.join(","),
-          key: process.env.YOUTUBE_API_KEY,
-        },
-      },
+        part: "statistics,snippet",
+        id: videoIds.join(","),
+      }
     );
 
-    console.log("Full YouTube API Response (Videos):", JSON.stringify(videosResponse.data, null, 2));
-
-    const videoItems = videosResponse.data?.items || [];
+    const videoItems = videosResponseData?.items || [];
     if (videoItems.length > 0) {
       const totalViews = videoItems.reduce((sum, item) => sum + Number(item.statistics?.viewCount || 0), 0);
       const totalLikes = videoItems.reduce((sum, item) => sum + Number(item.statistics?.likeCount || 0), 0);
@@ -439,8 +409,18 @@ export const compareYoutubeCreators = async (req, res, next) => {
       });
     }
 
-    if (!process.env.YOUTUBE_API_KEY) {
-      console.log("Error at line 490: YOUTUBE_API_KEY is not defined in backend process.env");
+    const configuredKeys = [];
+    if (process.env.YOUTUBE_API_KEY && process.env.YOUTUBE_API_KEY.trim() !== "") {
+      configuredKeys.push(process.env.YOUTUBE_API_KEY);
+    }
+    Object.keys(process.env).forEach((key) => {
+      if (key.startsWith("YOUTUBE_API_KEY_") && process.env[key] && process.env[key].trim() !== "") {
+        configuredKeys.push(process.env[key]);
+      }
+    });
+
+    if (configuredKeys.length === 0) {
+      console.log("Error: No YOUTUBE_API_KEY configured in backend process.env");
       return res.status(500).json({
         success: false,
         message: "Missing YouTube API key configuration in environment variables",

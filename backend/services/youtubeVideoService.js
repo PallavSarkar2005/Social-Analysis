@@ -1,33 +1,31 @@
-import axios from "axios";
+import { youtubeGet } from "../utils/youtubeClient.js";
 
-export const getChannelVideos = async (channelId) => {
-  const response = await axios.get(
+export const getChannelVideos = async (channelId, forceRefresh = false) => {
+  const { data } = await youtubeGet(
+    "getChannelVideos",
     "https://www.googleapis.com/youtube/v3/search",
     {
-      params: {
-        key: process.env.YOUTUBE_API_KEY,
-        channelId,
-        part: "snippet",
-        order: "date",
-        maxResults: 20,
-      },
-    }
+      channelId,
+      part: "snippet",
+      order: "date",
+      maxResults: 20,
+    },
+    forceRefresh
   );
 
-  return response.data.items;
+  return data?.items || [];
 };
 
-export const getVideoStats = async (videoId) => {
-  const response = await axios.get(
+export const getVideoStats = async (videoId, forceRefresh = false) => {
+  const { data } = await youtubeGet(
+    "getVideoStats",
     "https://www.googleapis.com/youtube/v3/videos",
     {
-      params: {
-        part: "statistics,snippet",
-        id: videoId,
-        key: process.env.YOUTUBE_API_KEY,
-      },
-    }
+      part: "statistics,snippet",
+      id: videoId,
+    },
+    forceRefresh
   );
 
-  return response.data.items[0];
+  return data?.items?.[0];
 };

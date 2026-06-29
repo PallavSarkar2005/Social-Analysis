@@ -1,7 +1,7 @@
 import dotenv from "dotenv";
 dotenv.config();
 
-const REQUIRED_ENV_VARS = ["MONGO_URI", "YOUTUBE_API_KEY", "GROQ_API_KEY", "JWT_SECRET"];
+const REQUIRED_ENV_VARS = ["MONGO_URI", "GROQ_API_KEY", "JWT_SECRET"];
 
 export const validateEnv = () => {
   const missing = [];
@@ -10,6 +10,13 @@ export const validateEnv = () => {
     if (!process.env[key]) {
       missing.push(key);
     }
+  }
+
+  const hasYoutubeKey = (process.env.YOUTUBE_API_KEY && process.env.YOUTUBE_API_KEY.trim() !== "") || 
+    Object.keys(process.env).some(k => k.startsWith("YOUTUBE_API_KEY_") && process.env[k] && process.env[k].trim() !== "");
+
+  if (!hasYoutubeKey) {
+    missing.push("YOUTUBE_API_KEY (or at least one YOUTUBE_API_KEY_*)");
   }
 
   if (missing.length > 0) {

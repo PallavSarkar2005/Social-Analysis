@@ -259,6 +259,16 @@ export const validateCreateAccount = [
     .trim()
     .notEmpty()
     .withMessage("Profile URL is required")
+    .customSanitizer((val) => {
+      if (typeof val !== "string") return val;
+      return val
+        .replace(/&#x2F;/g, "/")
+        .replace(/&amp;/g, "&")
+        .replace(/&lt;/g, "<")
+        .replace(/&gt;/g, ">")
+        .replace(/&quot;/g, '"')
+        .replace(/&#x27;/g, "'");
+    })
     .isURL()
     .withMessage("Please enter a valid URL"),
   validateResult,

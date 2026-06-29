@@ -126,6 +126,7 @@ app.use(xssSanitizer);
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 mins
   max: 150,
+  skip: () => process.env.NODE_ENV === "test",
   standardHeaders: true,
   legacyHeaders: false,
   message: {
@@ -137,6 +138,7 @@ const apiLimiter = rateLimit({
 const strictLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 mins
   max: 20,
+  skip: () => process.env.NODE_ENV === "test",
   skipSuccessfulRequests: true,
   standardHeaders: true,
   legacyHeaders: false,
@@ -233,7 +235,11 @@ const logRuntimeDiagnostics = async () => {
   console.log("===================================\n");
 };
 
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-  logRuntimeDiagnostics();
-});
+if (process.env.NODE_ENV !== "test" || process.env.START_SERVER === "true") {
+  app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+    logRuntimeDiagnostics();
+  });
+}
+
+export default app;

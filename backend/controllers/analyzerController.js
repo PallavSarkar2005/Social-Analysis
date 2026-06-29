@@ -1,6 +1,7 @@
 import axios from "axios";
 import Account from "../models/Account.js";
 import Snapshot from "../models/Snapshot.js";
+import { youtubeGet } from "../utils/youtubeClient.js";
 
 /*
 ========================================
@@ -84,39 +85,34 @@ export const extractVideoId = (url) => {
 Find Channel ID from @handle
 ========================================
 */
-export const getChannelByHandle = async (handle) => {
+export const getChannelByHandle = async (handle, forceRefresh = false) => {
   console.log("STEP 4.1.a: Resolving channel ID for handle =", handle);
-  const apiRequestUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=channel&maxResults=1&q=${encodeURIComponent(handle)}&key=YOUR_API_KEY`;
-  console.log("YouTube API Request URL (Search):", apiRequestUrl);
   
-  const response = await axios.get(
-    "https://www.googleapis.com/youtube/v3/search",
+  const { data, cached } = await youtubeGet(
+    "resolveHandle",
+    "https://www.googleapis.com/youtube/v3/channels",
     {
-      params: {
-        key: process.env.YOUTUBE_API_KEY,
-        q: handle,
-        type: "channel",
-        part: "snippet",
-        maxResults: 1,
-      },
+      forHandle: handle,
+      part: "id,snippet",
     },
+    forceRefresh
   );
 
-  console.log("Full YouTube API Response (Search):", JSON.stringify(response.data, null, 2));
-  console.log("STEP 4.1.c: YouTube search API raw response items count =", response.data?.items?.length);
+  console.log("Full YouTube API Response (forHandle):", JSON.stringify(data, null, 2));
+  console.log("STEP 4.1.c: YouTube channels API raw response items count =", data?.items?.length);
   
-  if (!response.data || !response.data.items) {
-    console.error("STEP 4.1.d Error: Search API response data or items missing");
+  if (!data || !data.items) {
+    console.error("STEP 4.1.d Error: Channels API response data or items missing");
     throw new Error("YouTube API returned empty items");
   }
 
-  if (!response.data.items.length) {
-    console.log("STEP 4.1.e: Search API returned 0 items");
+  if (!data.items.length) {
+    console.log("STEP 4.1.e: Channels API returned 0 items");
     return null;
   }
 
-  const channelId = response.data.items[0].snippet.channelId;
-  console.log("STEP 4.1.f: Resolved channel ID =", channelId);
+  const channelId = data.items[0].id;
+  console.log("STEP 4.1.f: Resolved channel ID =", channelId, "(cached:", cached, ")");
   return channelId;
 };
 
@@ -162,17 +158,28 @@ export const analyzeYoutubeUrl = async (req, res, next) => {
 
     // Env Validation Check
     console.log("STEP 2: Verifying YOUTUBE_API_KEY presence");
-    if (!process.env.YOUTUBE_API_KEY || process.env.YOUTUBE_API_KEY.trim() === "") {
+    const configuredKeys = [];
+    if (process.env.YOUTUBE_API_KEY && process.env.YOUTUBE_API_KEY.trim() !== "") {
+      configuredKeys.push(process.env.YOUTUBE_API_KEY);
+    }
+    Object.keys(process.env).forEach((key) => {
+      if (key.startsWith("YOUTUBE_API_KEY_") && process.env[key] && process.env[key].trim() !== "") {
+        configuredKeys.push(process.env[key]);
+      }
+    });
+
+    if (configuredKeys.length === 0) {
       console.error("STEP 2 Error: YOUTUBE_API_KEY is missing from environment variables");
       return res.status(500).json({
         success: false,
         message: "Missing YOUTUBE_API_KEY"
       });
     }
-    console.log("STEP 2.1: YOUTUBE_API_KEY is present (Length:", process.env.YOUTUBE_API_KEY.length, ")");
+    console.log("STEP 2.1: YOUTUBE_API_KEY is present (Total keys configured:", configuredKeys.length, ")");
 
     const rawUrl = req.body?.url;
     const selectedGroup = req.body?.group || "Other";
+    const forceRefresh = req.body?.forceRefresh === true || req.body?.forceRefresh === "true";
     if (!rawUrl || typeof rawUrl !== "string") {
       console.error("STEP 3 Error: URL parsing failed due to empty/invalid url parameter");
       return res.status(400).json({
@@ -213,7 +220,7 @@ export const analyzeYoutubeUrl = async (req, res, next) => {
       }
       console.log("STEP 4.1: Extracted handle name =", handle);
 
-      const channelId = await getChannelByHandle(handle);
+      const channelId = await getChannelByHandle(handle, forceRefresh);
       if (!channelId) {
         console.error("STEP 4.2 Error: Channel handle did not resolve to a channel ID");
         return res.status(404).json({
@@ -225,20 +232,19 @@ export const analyzeYoutubeUrl = async (req, res, next) => {
       console.log("STEP 4.2: Channel ID resolved successfully. Fetching channel statistics...");
       console.log("STEP 4.2.a: Calling YouTube channels API for channelId =", channelId);
       
-      const channelResponse = await axios.get(
+      const { data: channelData, cached: channelCached, cachedAt: channelCachedAt } = await youtubeGet(
+        "getChannelStats",
         "https://www.googleapis.com/youtube/v3/channels",
         {
-          params: {
-            part: "snippet,statistics",
-            id: channelId,
-            key: process.env.YOUTUBE_API_KEY,
-          },
+          part: "snippet,statistics,contentDetails",
+          id: channelId,
         },
+        forceRefresh
       );
 
-      console.log("STEP 4.3: YouTube channels API raw response metadata items count =", channelResponse.data?.items?.length);
+      console.log("STEP 4.3: YouTube channels API raw response metadata items count =", channelData?.items?.length);
       
-      if (!channelResponse.data || !channelResponse.data.items) {
+      if (!channelData || !channelData.items) {
         console.error("STEP 4.3 Error: YouTube API response schema missing data/items");
         return res.status(500).json({
           success: false,
@@ -246,7 +252,7 @@ export const analyzeYoutubeUrl = async (req, res, next) => {
         });
       }
 
-      if (!channelResponse.data.items.length) {
+      if (!channelData.items.length) {
         console.error("STEP 4.3 Error: Channel details not found in API response");
         return res.status(404).json({
           success: false,
@@ -254,7 +260,7 @@ export const analyzeYoutubeUrl = async (req, res, next) => {
         });
       }
 
-      const channel = channelResponse.data.items[0];
+      const channel = channelData.items[0];
 
       let account;
       try {
@@ -310,26 +316,34 @@ export const analyzeYoutubeUrl = async (req, res, next) => {
         });
       }
 
-      console.log("STEP 4.6: Fetching recent video uploads for channelId =", channelId);
-      const recentVideosResponse = await axios.get(
-        "https://www.googleapis.com/youtube/v3/search",
+      const uploadsPlaylistId = channelData.items[0]?.contentDetails?.relatedPlaylists?.uploads || `UU${channelId.substring(2)}`;
+      console.log("STEP 4.6: Fetching recent video uploads for playlist =", uploadsPlaylistId);
+      const { data: recentVideosData } = await youtubeGet(
+        "getChannelVideos",
+        "https://www.googleapis.com/youtube/v3/playlistItems",
         {
-          params: {
-            key: process.env.YOUTUBE_API_KEY,
-            channelId,
-            part: "snippet",
-            order: "date",
-            maxResults: 10,
-            type: "video",
-          },
+          playlistId: uploadsPlaylistId,
+          part: "snippet",
+          maxResults: 10,
         },
+        forceRefresh
       );
 
-      console.log("STEP 4.6.a: YouTube search API raw response videos count =", recentVideosResponse.data?.items?.length);
+      const recentVideosRaw = recentVideosData?.items || [];
+      const recentVideosItems = recentVideosRaw.map(item => ({
+        id: {
+          kind: "youtube#video",
+          videoId: item.snippet?.resourceId?.videoId
+        },
+        snippet: item.snippet
+      }));
+      console.log("STEP 4.6.a: YouTube playlistItems API raw response videos count =", recentVideosItems.length);
 
       const responsePayload = {
         success: true,
         type: "channel",
+        cached: channelCached,
+        cachedAt: channelCachedAt ? new Date(channelCachedAt).getTime() : Date.now(),
         data: {
           mongoId: account._id,
           channelId,
@@ -341,7 +355,7 @@ export const analyzeYoutubeUrl = async (req, res, next) => {
           subscribers: Number(channel.statistics.subscriberCount || 0),
           totalViews: Number(channel.statistics.viewCount || 0),
           videoCount: Number(channel.statistics.videoCount || 0),
-          recentVideos: recentVideosResponse.data?.items || [],
+          recentVideos: recentVideosItems,
           history: history.map((item) => ({
             date: new Date(item.capturedAt).toLocaleDateString(),
             followers: item.followers,
@@ -365,20 +379,19 @@ export const analyzeYoutubeUrl = async (req, res, next) => {
       console.log("STEP 4.1: Extracted channelId =", channelId);
 
       console.log("STEP 4.2: Fetching channel statistics from YouTube channels API...");
-      const channelResponse = await axios.get(
+      const { data: channelData, cached: channelCached, cachedAt: channelCachedAt } = await youtubeGet(
+        "getChannelStats",
         "https://www.googleapis.com/youtube/v3/channels",
         {
-          params: {
-            part: "snippet,statistics",
-            id: channelId,
-            key: process.env.YOUTUBE_API_KEY,
-          },
+          part: "snippet,statistics,contentDetails",
+          id: channelId,
         },
+        forceRefresh
       );
 
-      console.log("STEP 4.3: YouTube channels API raw response metadata items count =", channelResponse.data?.items?.length);
+      console.log("STEP 4.3: YouTube channels API raw response metadata items count =", channelData?.items?.length);
       
-      if (!channelResponse.data || !channelResponse.data.items) {
+      if (!channelData || !channelData.items) {
         console.error("STEP 4.3 Error: YouTube API response schema missing data/items");
         return res.status(500).json({
           success: false,
@@ -386,7 +399,7 @@ export const analyzeYoutubeUrl = async (req, res, next) => {
         });
       }
 
-      if (!channelResponse.data.items.length) {
+      if (!channelData.items.length) {
         console.error("STEP 4.3 Error: Channel details not found in API response");
         return res.status(404).json({
           success: false,
@@ -394,7 +407,7 @@ export const analyzeYoutubeUrl = async (req, res, next) => {
         });
       }
 
-      const channel = channelResponse.data.items[0];
+      const channel = channelData.items[0];
 
       let account;
       try {
@@ -450,26 +463,34 @@ export const analyzeYoutubeUrl = async (req, res, next) => {
         });
       }
 
-      console.log("STEP 4.6: Fetching recent video uploads for channelId =", channelId);
-      const recentVideosResponse = await axios.get(
-        "https://www.googleapis.com/youtube/v3/search",
+      const uploadsPlaylistId = channelData.items[0]?.contentDetails?.relatedPlaylists?.uploads || `UU${channelId.substring(2)}`;
+      console.log("STEP 4.6: Fetching recent video uploads for playlist =", uploadsPlaylistId);
+      const { data: recentVideosData } = await youtubeGet(
+        "getChannelVideos",
+        "https://www.googleapis.com/youtube/v3/playlistItems",
         {
-          params: {
-            key: process.env.YOUTUBE_API_KEY,
-            channelId,
-            part: "snippet",
-            order: "date",
-            maxResults: 10,
-            type: "video",
-          },
+          playlistId: uploadsPlaylistId,
+          part: "snippet",
+          maxResults: 10,
         },
+        forceRefresh
       );
 
-      console.log("STEP 4.6.a: YouTube search API raw response videos count =", recentVideosResponse.data?.items?.length);
+      const recentVideosRaw = recentVideosData?.items || [];
+      const recentVideosItems = recentVideosRaw.map(item => ({
+        id: {
+          kind: "youtube#video",
+          videoId: item.snippet?.resourceId?.videoId
+        },
+        snippet: item.snippet
+      }));
+      console.log("STEP 4.6.a: YouTube playlistItems API raw response videos count =", recentVideosItems.length);
 
       const responsePayload = {
         success: true,
         type: "channel",
+        cached: channelCached,
+        cachedAt: channelCachedAt ? new Date(channelCachedAt).getTime() : Date.now(),
         data: {
           mongoId: account._id,
           channelId,
@@ -481,7 +502,7 @@ export const analyzeYoutubeUrl = async (req, res, next) => {
           subscribers: Number(channel.statistics.subscriberCount || 0),
           totalViews: Number(channel.statistics.viewCount || 0),
           videoCount: Number(channel.statistics.videoCount || 0),
-          recentVideos: recentVideosResponse.data?.items || [],
+          recentVideos: recentVideosItems,
           history: history.map((item) => ({
             date: new Date(item.capturedAt).toLocaleDateString(),
             followers: item.followers,
@@ -507,21 +528,20 @@ export const analyzeYoutubeUrl = async (req, res, next) => {
       console.log("STEP 5: Calling YouTube video statistics API");
       console.log("STEP 5.1: Request parameters for videos API:", { part: "snippet,statistics", id: videoId });
       
-      const response = await axios.get(
+      const { data: videoData, cached: videoCached, cachedAt: videoCachedAt } = await youtubeGet(
+        "getVideoStats",
         "https://www.googleapis.com/youtube/v3/videos",
         {
-          params: {
-            part: "snippet,statistics",
-            id: videoId,
-            key: process.env.YOUTUBE_API_KEY,
-          },
+          part: "snippet,statistics",
+          id: videoId,
         },
+        forceRefresh
       );
 
       console.log("STEP 5.2: YouTube API raw response received");
-      console.log("STEP 5.3: Raw Response Data =", JSON.stringify(response.data, null, 2));
+      console.log("STEP 5.3: Raw Response Data =", JSON.stringify(videoData, null, 2));
 
-      if (!response.data || !response.data.items) {
+      if (!videoData || !videoData.items) {
         console.error("STEP 5.4 Error: YouTube API response schema missing data/items");
         return res.status(500).json({
           success: false,
@@ -529,7 +549,7 @@ export const analyzeYoutubeUrl = async (req, res, next) => {
         });
       }
 
-      if (!response.data.items.length) {
+      if (!videoData.items.length) {
         console.error("STEP 5.4 Error: Video ID not found on YouTube");
         return res.status(404).json({
           success: false,
@@ -537,7 +557,7 @@ export const analyzeYoutubeUrl = async (req, res, next) => {
         });
       }
 
-      const video = response.data.items[0];
+      const video = videoData.items[0];
       const views = Number(video.statistics?.viewCount || 0);
       const likes = Number(video.statistics?.likeCount || 0);
       const comments = Number(video.statistics?.commentCount || 0);
@@ -550,6 +570,8 @@ export const analyzeYoutubeUrl = async (req, res, next) => {
       const responsePayload = {
         success: true,
         type: "video",
+        cached: videoCached,
+        cachedAt: videoCachedAt ? new Date(videoCachedAt).getTime() : Date.now(),
         data: {
           videoId,
           title: video.snippet.title,
