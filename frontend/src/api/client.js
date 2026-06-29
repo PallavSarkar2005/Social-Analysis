@@ -35,6 +35,21 @@ const getCookie = (name) => {
   return null;
 };
 
+let csrfTokenInMemory = null;
+
+export const fetchCsrfToken = async () => {
+  try {
+    const response = await client.get("/api/auth/csrf");
+    if (response.data && response.data.csrfToken) {
+      csrfTokenInMemory = response.data.csrfToken;
+    }
+    return csrfTokenInMemory;
+  } catch (error) {
+    console.error("[API CSRF Fetch Error]", error);
+    return null;
+  }
+};
+
 // Request Interceptor
 client.interceptors.request.use(
   (config) => {
@@ -47,7 +62,7 @@ client.interceptors.request.use(
     // Attach CSRF double-submit cookie token to modifying requests
     const safeMethods = ["get", "head", "options"];
     if (!safeMethods.includes(config.method?.toLowerCase())) {
-      const csrfToken = getCookie("XSRF-TOKEN");
+      const csrfToken = csrfTokenInMemory || getCookie("XSRF-TOKEN");
       if (csrfToken) {
         config.headers["X-XSRF-TOKEN"] = csrfToken;
       }

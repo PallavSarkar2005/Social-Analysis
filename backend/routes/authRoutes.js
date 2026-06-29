@@ -15,6 +15,7 @@ import {
   googleDisconnect,
   logoutOtherDevices,
   changePassword,
+  getCsrfToken,
 } from "../controllers/authController.js";
 import { protect } from "../middleware/authMiddleware.js";
 import {
@@ -31,6 +32,7 @@ import {
 const router = express.Router();
 
 // Public auth endpoints
+router.get("/csrf", getCsrfToken);
 router.post("/register", validateRegister, register);
 router.post("/login", validateLogin, login);
 router.post("/logout", logout);

@@ -18,6 +18,18 @@ const hashToken = (token) => {
   return crypto.createHash("sha256").update(token).digest("hex");
 };
 
+// GET /api/auth/csrf
+export const getCsrfToken = async (req, res, next) => {
+  try {
+    res.json({
+      success: true,
+      csrfToken: req.csrfToken,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 // Simple User Agent parser
 const parseUserAgent = (userAgentString) => {
   if (!userAgentString) {
@@ -136,14 +148,14 @@ const sendTokenResponse = async (user, statusCode, req, res) => {
   res.cookie("socialiq_access_token", accessToken, {
     httpOnly: true,
     secure: isProd,
-    sameSite: "lax",
+    sameSite: isProd ? "none" : "lax",
     maxAge: 15 * 60 * 1000,
   });
 
   res.cookie("socialiq_refresh_token", refreshTokenVal, {
     httpOnly: true,
     secure: isProd,
-    sameSite: "lax",
+    sameSite: isProd ? "none" : "lax",
     maxAge: rememberMe ? 30 * 24 * 60 * 60 * 1000 : 7 * 24 * 60 * 60 * 1000,
   });
 
@@ -153,7 +165,7 @@ const sendTokenResponse = async (user, statusCode, req, res) => {
     csrfToken = crypto.randomBytes(32).toString("hex");
     res.cookie("XSRF-TOKEN", csrfToken, {
       secure: isProd,
-      sameSite: "lax",
+      sameSite: isProd ? "none" : "lax",
       httpOnly: false,
       path: "/",
     });
@@ -440,14 +452,14 @@ export const refresh = async (req, res, next) => {
     res.cookie("socialiq_access_token", newAccessToken, {
       httpOnly: true,
       secure: isProd,
-      sameSite: "lax",
+      sameSite: isProd ? "none" : "lax",
       maxAge: 15 * 60 * 1000,
     });
 
     res.cookie("socialiq_refresh_token", newRefreshTokenVal, {
       httpOnly: true,
       secure: isProd,
-      sameSite: "lax",
+      sameSite: isProd ? "none" : "lax",
       maxAge: daysToAdd * 24 * 60 * 60 * 1000,
     });
 
@@ -483,8 +495,20 @@ export const logout = async (req, res, next) => {
       );
     }
 
-    res.clearCookie("socialiq_access_token");
-    res.clearCookie("socialiq_refresh_token");
+    const isProd = process.env.NODE_ENV === "production";
+    const cookieOptions = {
+      httpOnly: true,
+      secure: isProd,
+      sameSite: isProd ? "none" : "lax",
+      path: "/",
+    };
+    res.clearCookie("socialiq_access_token", cookieOptions);
+    res.clearCookie("socialiq_refresh_token", cookieOptions);
+    res.clearCookie("XSRF-TOKEN", {
+      secure: isProd,
+      sameSite: isProd ? "none" : "lax",
+      path: "/",
+    });
 
     res.json({
       success: true,
@@ -503,8 +527,20 @@ export const logoutAll = async (req, res, next) => {
     req.user.refreshTokens = [];
     await req.user.save();
 
-    res.clearCookie("socialiq_access_token");
-    res.clearCookie("socialiq_refresh_token");
+    const isProd = process.env.NODE_ENV === "production";
+    const cookieOptions = {
+      httpOnly: true,
+      secure: isProd,
+      sameSite: isProd ? "none" : "lax",
+      path: "/",
+    };
+    res.clearCookie("socialiq_access_token", cookieOptions);
+    res.clearCookie("socialiq_refresh_token", cookieOptions);
+    res.clearCookie("XSRF-TOKEN", {
+      secure: isProd,
+      sameSite: isProd ? "none" : "lax",
+      path: "/",
+    });
 
     res.json({
       success: true,

@@ -82,6 +82,11 @@ const corsOptions = {
   allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept", "Origin", "X-XSRF-TOKEN", "X-CSRF-TOKEN"],
 };
 
+app.use(cookieParser);
+
+// Payload size limit to prevent Denial of Service
+app.use(express.json({ limit: "10kb" }));
+
 app.use(cors(corsOptions));
 
 // Configure Helmet with strict headers and CSP
@@ -121,15 +126,10 @@ app.use(
   })
 );
 
-app.use(cookieParser);
+app.use(csrfProtection);
 
 // Serve static uploads
 app.use("/uploads", express.static(path.join(__dirname, "storage/uploads")));
-
-// Payload size limit to prevent Denial of Service
-app.use(express.json({ limit: "10kb" }));
-
-app.use(csrfProtection);
 
 // Prevent NoSQL parameter injection attacks
 app.use(mongoSanitizeMiddleware);

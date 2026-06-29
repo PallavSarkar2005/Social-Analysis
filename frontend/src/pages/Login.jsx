@@ -10,7 +10,7 @@ export default function Login() {
   const [rememberMe, setRememberMe] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const { login, googleLogin, isAuthenticated } = useAuth();
+  const { login, googleLogin, isAuthenticated, loading: authLoading } = useAuth();
   const navigate = useNavigate();
 
   // Load saved email on mount if "Remember Me" was previously enabled
@@ -145,6 +145,7 @@ export default function Login() {
                 placeholder="you@example.com"
                 className="w-full h-11 pl-10 pr-4 bg-white/[0.02] border border-white/[0.08] rounded-xl focus:outline-none focus:border-indigo-500 text-sm transition"
                 required
+                disabled={authLoading}
               />
             </div>
           </div>
@@ -162,11 +163,13 @@ export default function Login() {
                 placeholder="••••••••"
                 className="w-full h-11 pl-10 pr-11 bg-white/[0.02] border border-white/[0.08] rounded-xl focus:outline-none focus:border-indigo-500 text-sm transition"
                 required
+                disabled={authLoading}
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition"
+                disabled={authLoading}
               >
                 {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
@@ -181,6 +184,7 @@ export default function Login() {
                 checked={rememberMe}
                 onChange={(e) => setRememberMe(e.target.checked)}
                 className="w-4 h-4 rounded border-white/10 bg-white/[0.02] text-indigo-600 focus:ring-0 focus:ring-offset-0 cursor-pointer accent-indigo-600"
+                disabled={authLoading}
               />
               Remember me
             </label>
@@ -194,11 +198,16 @@ export default function Login() {
 
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || authLoading}
             className="w-full h-11 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-sm font-semibold rounded-xl text-white transition flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/20 active:translate-y-[1px] cursor-pointer"
           >
             {loading ? (
               <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+            ) : authLoading ? (
+              <>
+                <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+                Initializing telemetry...
+              </>
             ) : (
               <>
                 <LogIn size={16} />
@@ -222,7 +231,7 @@ export default function Login() {
           <button
             type="button"
             onClick={triggerDevGoogleLogin}
-            disabled={loading}
+            disabled={loading || authLoading}
             className="w-full h-11 bg-white/[0.02] border border-white/[0.08] hover:bg-white/[0.06] hover:text-white text-slate-300 text-xs font-semibold rounded-xl transition flex items-center justify-center gap-2 active:scale-[0.99]"
           >
             <svg className="w-4 h-4" viewBox="0 0 24 24">

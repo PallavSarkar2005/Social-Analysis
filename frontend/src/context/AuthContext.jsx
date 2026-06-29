@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect } from "react";
-import client from "../api/client";
+import client, { fetchCsrfToken } from "../api/client";
 
 const AuthContext = createContext();
 
@@ -16,6 +16,9 @@ export const AuthProvider = ({ children }) => {
   // Initialize Auth state
   useEffect(() => {
     const initializeAuth = async () => {
+      // Initialize CSRF session first
+      await fetchCsrfToken();
+
       const storedToken = typeof window !== "undefined" ? localStorage.getItem("token") : null;
       if (storedToken) {
         setToken(storedToken);

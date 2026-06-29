@@ -10,11 +10,13 @@ export const csrfProtection = (req, res, next) => {
     const isProd = process.env.NODE_ENV === "production";
     res.cookie("XSRF-TOKEN", csrfToken, {
       secure: isProd,
-      sameSite: "lax",
+      sameSite: isProd ? "none" : "lax",
       httpOnly: false, // Must be readable by client-side JS
       path: "/",
     });
   }
+
+  req.csrfToken = csrfToken;
 
   // Bypass validation for safe HTTP methods or in testing environment
   if (process.env.NODE_ENV === "test") {
