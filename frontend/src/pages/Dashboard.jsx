@@ -19,6 +19,8 @@ import {
 } from "lucide-react";
 import { motion } from "framer-motion";
 import toast, { Toaster } from "react-hot-toast";
+import PartyLogo from "../components/common/PartyLogo";
+
 
 export default function Dashboard() {
   const {
@@ -288,12 +290,7 @@ export default function Dashboard() {
                               Bharatiya Janata Party (BJP) - Explore statistics, tracked ministers, and key speakers.
                             </p>
                           </div>
-                          {/* BJP Lotus SVG */}
-                          <svg viewBox="0 0 64 64" className="w-12 h-12 text-orange-500 fill-current drop-shadow-[0_0_10px_rgba(249,115,22,0.25)] shrink-0">
-                            <path d="M32 4c-5 7-11 10-8 17 1.5 3.5 5 4 8 2 3 2 6.5 1.5 8-2 3-7-3-10-8-17z"/>
-                            <path d="M26 23c2 2 4 2 6 0-1-1.5-5-1.5-6 0z" className="text-emerald-500" />
-                            <path d="M31 26h2v4h-2z" className="text-amber-800" />
-                          </svg>
+                          <PartyLogo party="BJP" size={56} className="shadow-lg border-white/[0.04] shrink-0" />
                         </div>
                         <span className="text-[10px] font-bold text-orange-400 flex items-center gap-1">
                           Explore Analytics <ArrowRight size={10} className="group-hover:translate-x-0.5 transition-transform" />
@@ -314,12 +311,7 @@ export default function Dashboard() {
                               Indian National Congress (INC) - Explore statistics, tracked leaders, and spokespersons.
                             </p>
                           </div>
-                          {/* Congress SVG */}
-                          <svg viewBox="0 0 64 64" className="w-12 h-12 text-cyan-400 fill-current drop-shadow-[0_0_10px_rgba(34,211,238,0.25)] shrink-0">
-                            <circle cx="32" cy="32" r="24" fill="none" stroke="currentColor" strokeWidth="2.5" />
-                            <path d="M25 25c2.5-1.5 5-1.5 7.5 0v14H25z" className="text-orange-500" />
-                            <path d="M32.5 25c2.5 1.5 2.5 12.5 0 14V25z" className="text-emerald-500" />
-                          </svg>
+                          <PartyLogo party="Congress" size={56} className="shadow-lg border-white/[0.04] shrink-0" />
                         </div>
                         <span className="text-[10px] font-bold text-cyan-400 flex items-center gap-1">
                           Explore Analytics <ArrowRight size={10} className="group-hover:translate-x-0.5 transition-transform" />
@@ -340,10 +332,7 @@ export default function Dashboard() {
                               Independent, other, or uncategorized tracked creators and channels.
                             </p>
                           </div>
-                          {/* Generic Shield SVG */}
-                          <svg viewBox="0 0 64 64" className="w-12 h-12 text-indigo-400 fill-current drop-shadow-[0_0_10px_rgba(99,102,241,0.25)] shrink-0">
-                            <path d="M32 6L10 16v24l22 18 22-18V16L32 6zm0 6.5l16 8v19l-16 13-16-13v-19l16-8z"/>
-                          </svg>
+                          <PartyLogo party="Other" size={56} className="shadow-lg border-white/[0.04] shrink-0" />
                         </div>
                         <span className="text-[10px] font-bold text-indigo-400 flex items-center gap-1">
                           Explore Analytics <ArrowRight size={10} className="group-hover:translate-x-0.5 transition-transform" />
@@ -367,10 +356,7 @@ export default function Dashboard() {
                                   Explore analytics for tracked members, ministers, and leaders of the {g._id.toUpperCase()} organization.
                                 </p>
                               </div>
-                              {/* Generic Political Node SVG */}
-                              <svg viewBox="0 0 64 64" className="w-12 h-12 text-indigo-400 fill-current drop-shadow-[0_0_10px_rgba(99,102,241,0.25)] shrink-0">
-                                <path d="M32 6L10 16v24l22 18 22-18V16L32 6zm0 6.5l16 8v19l-16 13-16-13v-19l16-8z"/>
-                              </svg>
+                              <PartyLogo party={g._id} size={56} className="shadow-lg border-white/[0.04] shrink-0" />
                             </div>
                             <span className="text-[10px] font-bold text-indigo-400 flex items-center gap-1">
                               Explore Analytics <ArrowRight size={10} className="group-hover:translate-x-0.5 transition-transform" />
@@ -430,8 +416,11 @@ export default function Dashboard() {
                               <td className="p-4 text-slate-300">
                                 {Number(acc.totalViews).toLocaleString()}
                               </td>
-                              <td className="p-4 text-indigo-400 font-bold">
-                                {acc.party || "Independent"}
+                              <td className="p-4">
+                                <div className="flex items-center gap-2">
+                                  <PartyLogo party={acc.party} size={22} className="shadow-sm" />
+                                  <span className="font-semibold text-slate-200">{acc.party || "Independent"}</span>
+                                </div>
                               </td>
                               <td className="p-4 text-right">
                                 <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[9px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">

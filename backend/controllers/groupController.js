@@ -155,7 +155,14 @@ export const getGroupCreators = async (req, res, next) => {
         platform: account.platform,
         accountId: account.accountId,
         profileUrl: account.profileUrl,
-        profileImage: account.profileImage || account.thumbnail || "",
+        // Full image priority chain — LeaderAvatar needs all fields for sequential fallback
+        profileImage: account.profileImage || account.uploadedImage || account.thumbnail || "",
+        uploadedImage: account.uploadedImage || "",
+        resolvedImage: account.resolvedImage || "",
+        thumbnail: account.thumbnail || "",
+        imageSource: account.imageSource || "youtube",
+        // Cache-buster: frontend appends ?v=imageUpdatedAt to uploaded image URLs
+        imageUpdatedAt: account.imageUpdatedAt ? new Date(account.imageUpdatedAt).getTime() : (account.updatedAt ? new Date(account.updatedAt).getTime() : Date.now()),
         subscribers,
         totalViews,
         totalVideos,
@@ -198,6 +205,77 @@ export const getGroupsList = async (req, res, next) => {
     res.status(200).json({
       success: true,
       data: groupCounts,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Heals XSS-mangled image URLs stored in MongoDB for the current user.
+ * The old XSS sanitizer encoded slashes as &#x2F; which broke stored upload paths.
+ * This endpoint finds and fixes those records in-place.
+ * Called automatically by the frontend on first group page load.
+ */
+export const healImageUrls = async (req, res, next) => {
+  try {
+    const unescapeUrl = (str) => {
+      if (!str || typeof str !== "string") return str;
+      return str
+        .replace(/&#x2F;/g, "/")
+        .replace(/&#x27;/g, "'")
+        .replace(/&amp;/g, "&")
+        .replace(/&lt;/g, "<")
+        .replace(/&gt;/g, ">")
+        .replace(/&quot;/g, '"');
+    };
+
+    // Find all accounts for this user that have mangled image URLs
+    const accounts = await Account.find({
+      userId: req.user._id,
+      $or: [
+        { uploadedImage: /&#x2F;/ },
+        { resolvedImage: /&#x2F;/ },
+        { profileImage: /&#x2F;/ },
+        { thumbnail: /&#x2F;/ },
+      ],
+    });
+
+    let healed = 0;
+    for (const account of accounts) {
+      const update = {};
+      if (account.uploadedImage) update.uploadedImage = unescapeUrl(account.uploadedImage);
+      if (account.resolvedImage) update.resolvedImage = unescapeUrl(account.resolvedImage);
+      if (account.profileImage) update.profileImage = unescapeUrl(account.profileImage);
+      if (account.thumbnail) update.thumbnail = unescapeUrl(account.thumbnail);
+      if (Object.keys(update).length > 0) {
+        await Account.updateOne({ _id: account._id }, { $set: update });
+        healed++;
+      }
+    }
+
+    // Also heal globally across all users for the same accountIds
+    const globalAccounts = await Account.find({
+      $or: [
+        { uploadedImage: /&#x2F;/ },
+        { resolvedImage: /&#x2F;/ },
+        { profileImage: /&#x2F;/ },
+      ],
+    });
+    for (const account of globalAccounts) {
+      const update = {};
+      if (account.uploadedImage) update.uploadedImage = unescapeUrl(account.uploadedImage);
+      if (account.resolvedImage) update.resolvedImage = unescapeUrl(account.resolvedImage);
+      if (account.profileImage) update.profileImage = unescapeUrl(account.profileImage);
+      if (Object.keys(update).length > 0) {
+        await Account.updateOne({ _id: account._id }, { $set: update });
+      }
+    }
+
+    res.status(200).json({
+      success: true,
+      message: `Healed ${healed} account records with corrupted image URLs.`,
+      healed,
     });
   } catch (error) {
     next(error);

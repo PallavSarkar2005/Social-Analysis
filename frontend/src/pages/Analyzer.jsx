@@ -9,6 +9,7 @@ import { getChannelInsights } from "../api/aiChannelApi";
 import FollowerChart from "../components/charts/FollowerChart";
 import client from "../api/client";
 import toast from "react-hot-toast";
+import LeaderAvatar from "../components/common/LeaderAvatar";
 
 // High-end micro-interaction animation variants
 const containerVariants = {
@@ -230,7 +231,7 @@ function Analyzer() {
               <div className="w-full max-w-5xl mx-auto space-y-6">
                 <div className="text-center space-y-1.5">
                   <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white">
-                    Analyze Platform Performance
+                    Analyse performance
                   </h1>
                   <p className="text-xs sm:text-sm text-slate-400 font-medium">
                     Paste content URLs to unlock instant telemetry matrix
@@ -249,7 +250,7 @@ function Analyzer() {
                         type="text"
                         value={url}
                         onChange={(e) => setUrl(e.target.value)}
-                        placeholder="Paste YouTube video/channel or X profile URL..."
+                        placeholder="Paste YouTube video/channel"
                         className="w-full h-12 px-4 rounded-xl bg-white/[0.02] border border-white/[0.08] text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/50 transition-all font-sans"
                         required
                       />
@@ -370,7 +371,7 @@ function Analyzer() {
                           Parsing...
                         </>
                       ) : (
-                        "Run Audit Analysis"
+                        "Run Analysis"
                       )}
                     </button>
                   </div>
@@ -420,14 +421,13 @@ function Analyzer() {
                         <h2 className="text-base font-bold text-white leading-snug line-clamp-2 tracking-tight flex items-center flex-wrap gap-2">
                           {result.data.title}
                           {result.cached !== undefined && (
-                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[9px] font-semibold border ${
-                              result.cached
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[9px] font-semibold border ${result.cached
                                 ? "bg-amber-500/10 text-amber-400 border-amber-500/20"
                                 : "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
-                            }`}>
-                              {result.cached 
-                                ? (Math.round((Date.now() - result.cachedAt) / 60000) <= 0 
-                                  ? "Cached just now" 
+                              }`}>
+                              {result.cached
+                                ? (Math.round((Date.now() - result.cachedAt) / 60000) <= 0
+                                  ? "Cached just now"
                                   : `Cached ${Math.round((Date.now() - result.cachedAt) / 60000)} min ago`)
                                 : "Live Data"
                               }
@@ -546,11 +546,10 @@ function Analyzer() {
               >
                 {/* Channel Frame Header */}
                 <div className="bg-[#121318]/40 backdrop-blur-md rounded-2xl border border-white/[0.06] p-6 shadow-2xl flex flex-col sm:flex-row items-center gap-6">
-                  <img
-                    src={result.data.profileImage || result.data.thumbnail}
-                    alt={result.data.title}
-                    className="w-24 h-24 sm:w-28 sm:h-28 rounded-full border-2 border-white/[0.08] shadow-md object-cover"
-                    loading="lazy"
+                  <LeaderAvatar
+                    creator={result.data}
+                    size="w-24 h-24 sm:w-28 sm:h-28"
+                    className="border-2 border-white/[0.08] shadow-md"
                   />
                   <div className="text-center sm:text-left space-y-1.5 flex-1 min-w-0">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -558,14 +557,13 @@ function Analyzer() {
                         <h2 className="text-xl sm:text-3xl font-bold text-white tracking-tight flex flex-wrap items-center justify-center sm:justify-start gap-2">
                           {result.data.title}
                           {result.cached !== undefined && (
-                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-semibold border ${
-                              result.cached
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-semibold border ${result.cached
                                 ? "bg-amber-500/10 text-amber-400 border-amber-500/20"
                                 : "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
-                            }`}>
-                              {result.cached 
-                                ? (Math.round((Date.now() - result.cachedAt) / 60000) <= 0 
-                                  ? "Cached just now" 
+                              }`}>
+                              {result.cached
+                                ? (Math.round((Date.now() - result.cachedAt) / 60000) <= 0
+                                  ? "Cached just now"
                                   : `Cached ${Math.round((Date.now() - result.cachedAt) / 60000)} min ago`)
                                 : "Live Data"
                               }

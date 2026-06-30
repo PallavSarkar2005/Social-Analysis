@@ -6,6 +6,8 @@ import { useAuth } from "../../context/AuthContext.jsx";
 import { getNotifications, markAsRead, markAllAsRead } from "../../api/notificationApi";
 import client from "../../api/client";
 import toast from "react-hot-toast";
+import PartyLogo from "../common/PartyLogo";
+
 
 export default function Navbar() {
   const { user, logout } = useAuth();
@@ -193,7 +195,10 @@ export default function Navbar() {
                         }}
                         className="w-full text-left p-2 rounded-xl text-xs hover:bg-white/[0.03] text-slate-200 transition flex items-center justify-between"
                       >
-                        <span className="font-medium">{acc.name}</span>
+                        <div className="flex items-center gap-2">
+                          <PartyLogo party={acc.party} size={18} />
+                          <span className="font-medium truncate max-w-[130px]">{acc.name}</span>
+                        </div>
                         <span className="text-[9px] bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 px-2 py-0.5 rounded-full capitalize">
                           {acc.platform}
                         </span>

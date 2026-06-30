@@ -13,6 +13,7 @@ import {
   LineChart, Line, XAxis, YAxis,
   Tooltip as ChartTooltip, ResponsiveContainer, CartesianGrid
 } from "recharts";
+import { PARTY_LOGOS } from "../config/partyThemes";
 
 // Utility to format large numbers
 const fmt = (n) => {
@@ -571,7 +572,13 @@ function CustomTooltip({ active, payload, activeTab, color }) {
         <div className="border-t border-white/[0.04] pt-1 text-[9px] text-slate-500 flex flex-col gap-0.5">
           <span>Likes: {fmt(data.likes)}</span>
           <span>Comments: {fmt(data.comments)}</span>
-          <span>Party: {data.party}</span>
+          <div className="flex items-center gap-1">
+            <span>Party:</span>
+            {PARTY_LOGOS[data.party] ? (
+              <img src={PARTY_LOGOS[data.party]} alt="" className="w-3.5 h-3.5 rounded-sm object-cover" />
+            ) : null}
+            <span>{data.party}</span>
+          </div>
           <span>State: {data.state}</span>
         </div>
       </div>

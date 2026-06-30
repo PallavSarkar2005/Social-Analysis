@@ -106,7 +106,17 @@ app.use(
         scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
         styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
         fontSrc: ["'self'", "https://fonts.gstatic.com"],
-        imgSrc: ["'self'", "data:", "https://api.dicebear.com", "https://*.ytimg.com"],
+        imgSrc: [
+          "'self'",
+          "data:",
+          "blob:",
+          "https://api.dicebear.com",
+          "https://*.ytimg.com",
+          "https://yt3.ggpht.com",
+          "https://upload.wikimedia.org",
+          "http://localhost:5000",
+          "https://social-analysis-smoky.vercel.app",
+        ],
         connectSrc: [
           "'self'",
           "https://social-analysis-smoky.vercel.app",
@@ -148,8 +158,8 @@ app.use(xssSanitizer);
 // Rate Limiters
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 mins
-  max: 150,
-  skip: () => process.env.NODE_ENV === "test",
+  max: 1000, // Increased global threshold
+  skip: () => process.env.NODE_ENV === "test" || process.env.NODE_ENV === "development",
   standardHeaders: true,
   legacyHeaders: false,
   message: {
@@ -160,9 +170,9 @@ const apiLimiter = rateLimit({
 
 const strictLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 mins
-  max: 20,
-  skip: () => process.env.NODE_ENV === "test",
-  skipSuccessfulRequests: true,
+  max: 250, // Increased strict route threshold to prevent search/chat blockage
+  skip: () => process.env.NODE_ENV === "test" || process.env.NODE_ENV === "development",
+  skipSuccessfulRequests: false,
   standardHeaders: true,
   legacyHeaders: false,
   message: {

@@ -15,7 +15,9 @@ export const getChannelHistory = async (req, res, next) => {
     const snapshots = await Snapshot.find({
       account: accountId,
       userId: req.user._id,
-    }).sort({ capturedAt: 1 });
+    })
+      .populate("account", "profileImage uploadedImage resolvedImage thumbnail imageSource imageUpdatedAt")
+      .sort({ capturedAt: 1 });
 
     const formatted = snapshots.map((snapshot) => ({
       id: snapshot._id,
@@ -31,7 +33,12 @@ export const getChannelHistory = async (req, res, next) => {
       party: snapshot.party || "Independent",
       state: snapshot.state || "Unknown State",
       name: snapshot.name || "",
-      profileImage: snapshot.profileImage || "",
+      profileImage: snapshot.profileImage || snapshot.account?.profileImage || "",
+      uploadedImage: snapshot.account?.uploadedImage || "",
+      resolvedImage: snapshot.account?.resolvedImage || "",
+      thumbnail: snapshot.account?.thumbnail || "",
+      imageSource: snapshot.account?.imageSource || "youtube",
+      imageUpdatedAt: snapshot.account?.imageUpdatedAt ? new Date(snapshot.account.imageUpdatedAt).getTime() : Date.now(),
     }));
 
     res.status(200).json({
@@ -54,7 +61,7 @@ export const getAllHistory = async (req, res, next) => {
 
     const total = await Snapshot.countDocuments({ userId: req.user._id });
     const snapshots = await Snapshot.find({ userId: req.user._id })
-      .populate("account", "name platform accountId party state profileImage")
+      .populate("account", "name platform accountId party state profileImage uploadedImage resolvedImage thumbnail imageSource imageUpdatedAt")
       .sort({ capturedAt: -1 })
       .skip(skip)
       .limit(limit);
@@ -73,6 +80,11 @@ export const getAllHistory = async (req, res, next) => {
       party: snapshot.party || snapshot.account?.party || "Independent",
       state: snapshot.state || snapshot.account?.state || "Unknown State",
       profileImage: snapshot.profileImage || snapshot.account?.profileImage || "",
+      uploadedImage: snapshot.account?.uploadedImage || "",
+      resolvedImage: snapshot.account?.resolvedImage || "",
+      thumbnail: snapshot.account?.thumbnail || "",
+      imageSource: snapshot.account?.imageSource || "youtube",
+      imageUpdatedAt: snapshot.account?.imageUpdatedAt ? new Date(snapshot.account.imageUpdatedAt).getTime() : Date.now(),
       date: new Date(snapshot.capturedAt).toLocaleString(),
       capturedAt: snapshot.capturedAt,
     }));

@@ -1,4 +1,5 @@
 import { motion } from "framer-motion";
+import LeaderAvatar from "../common/LeaderAvatar";
 
 export default function ChannelHeader({ channel }) {
   if (!channel) return null;
@@ -10,11 +11,10 @@ export default function ChannelHeader({ channel }) {
       className="bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-3xl p-8 shadow-xl"
     >
       <div className="flex items-center gap-6">
-        <img
-          src={channel.profileImage || channel.thumbnail}
-          alt={channel.title}
-          className="w-28 h-28 rounded-full border-4 border-white"
-          loading="lazy"
+        <LeaderAvatar
+          creator={channel}
+          size="w-28 h-28"
+          className="border-4 border-white shadow-lg"
         />
 
         <div>

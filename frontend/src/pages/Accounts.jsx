@@ -6,6 +6,8 @@ import { useDebounce } from "../hooks/useDebounce";
 import { syncYoutubeChannel, syncChannelContent } from "../api/youtubeApi";
 import { motion, AnimatePresence } from "framer-motion";
 import toast, { Toaster } from "react-hot-toast";
+import PartyLogo from "../components/common/PartyLogo";
+
 import { Users, Plus, Trash2, RefreshCw, Layers, ShieldCheck, Globe, Link2, Key, Search } from "lucide-react";
 
 const YoutubeIcon = (props) => (
@@ -290,23 +292,26 @@ export default function Accounts() {
                               />
                             </td>
                             <td className="p-4">
-                              <input
-                                type="text"
-                                defaultValue={acc.party || "Independent"}
-                                onBlur={async (e) => {
-                                  const val = e.target.value.trim();
-                                  if (val && val !== acc.party) {
-                                    try {
-                                      await apiUpdatePartyState({ id: acc._id, party: val });
-                                      toast.success(`Party updated for "${acc.name}"`);
-                                    } catch (err) {
-                                      console.error(err);
-                                      toast.error("Failed to update party.");
+                              <div className="flex items-center gap-2">
+                                <PartyLogo party={acc.party || "Independent"} size={22} />
+                                <input
+                                  type="text"
+                                  defaultValue={acc.party || "Independent"}
+                                  onBlur={async (e) => {
+                                    const val = e.target.value.trim();
+                                    if (val && val !== acc.party) {
+                                      try {
+                                        await apiUpdatePartyState({ id: acc._id, party: val });
+                                        toast.success(`Party updated for "${acc.name}"`);
+                                      } catch (err) {
+                                        console.error(err);
+                                        toast.error("Failed to update party.");
+                                      }
                                     }
-                                  }
-                                }}
-                                className="bg-transparent border-b border-transparent hover:border-white/20 focus:border-indigo-500 focus:outline-none text-slate-300 w-24 px-1 py-0.5 text-xs transition"
-                              />
+                                  }}
+                                  className="bg-transparent border-b border-transparent hover:border-white/20 focus:border-indigo-500 focus:outline-none text-slate-300 w-20 px-1 py-0.5 text-xs transition"
+                                />
+                              </div>
                             </td>
                             <td className="p-4">
                               <select

@@ -107,10 +107,22 @@ const accountSchema = new mongoose.Schema(
       type: String,
       default: "",
     },
+    uploadedImage: {
+      type: String,
+      default: "",
+    },
+    resolvedImage: {
+      type: String,
+      default: "",
+    },
     imageSource: {
       type: String,
-      enum: ["upload", "youtube", "x"],
+      enum: ["user", "official", "youtube", "default"],
       default: "youtube",
+    },
+    imageUpdatedAt: {
+      type: Date,
+      default: Date.now,
     },
     uploadedBy: {
       type: mongoose.Schema.Types.ObjectId,
@@ -118,6 +130,22 @@ const accountSchema = new mongoose.Schema(
     },
     uploadedAt: {
       type: Date,
+    },
+    analyzedAt: {
+      type: Date,
+    },
+    cacheExpiresAt: {
+      type: Date,
+    },
+    normalizedUrl: {
+      type: String,
+    },
+    channelId: {
+      type: String,
+    },
+    recentVideos: {
+      type: Array,
+      default: [],
     },
   },
   {
@@ -132,6 +160,9 @@ accountSchema.index({ group: 1 });
 accountSchema.index({ createdAt: -1 });
 accountSchema.index({ updatedAt: -1 });
 accountSchema.index({ createdBy: 1 });
+accountSchema.index({ normalizedUrl: 1 });
+accountSchema.index({ channelId: 1 });
+accountSchema.index({ cacheExpiresAt: 1 });
 
 const Account = mongoose.model("Account", accountSchema);
 
