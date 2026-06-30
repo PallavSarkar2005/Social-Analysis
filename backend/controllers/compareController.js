@@ -331,6 +331,7 @@ export const getCreatorAnalyticsData = async (channelId) => {
     );
 
     const videoItems = videosResponseData?.items || [];
+    let averageEngagement = 0;
     if (videoItems.length > 0) {
       const totalViews = videoItems.reduce((sum, item) => sum + Number(item.statistics?.viewCount || 0), 0);
       const totalLikes = videoItems.reduce((sum, item) => sum + Number(item.statistics?.likeCount || 0), 0);
@@ -340,6 +341,14 @@ export const getCreatorAnalyticsData = async (channelId) => {
       avgLikes = totalLikes / videoItems.length;
       avgComments = totalComments / videoItems.length;
       engagementRate = totalViews > 0 ? (((totalLikes + totalComments) / totalViews) * 100) : 0;
+
+      const individualEngSum = videoItems.reduce((sum, item) => {
+        const v = Number(item.statistics?.viewCount || 0);
+        const l = Number(item.statistics?.likeCount || 0);
+        const c = Number(item.statistics?.commentCount || 0);
+        return sum + (v > 0 ? (((l + c) / v) * 100) : 0);
+      }, 0);
+      averageEngagement = individualEngSum / videoItems.length;
 
       // Extract latest upload
       const sortedVideos = [...videoItems].sort(
@@ -385,6 +394,7 @@ export const getCreatorAnalyticsData = async (channelId) => {
     avgLikes: Math.round(avgLikes),
     avgComments: Math.round(avgComments),
     engagementRate: Number(engagementRate.toFixed(2)),
+    averageEngagement: Number(averageEngagement.toFixed(2)),
     uploadFrequency,
     latestUpload,
     publishedAt: snippet.publishedAt || null,

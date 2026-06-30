@@ -2,6 +2,8 @@ import axios from "axios";
 import Account from "../models/Account.js";
 import Snapshot from "../models/Snapshot.js";
 import { youtubeGet } from "../utils/youtubeClient.js";
+import { getCreatorAnalyticsData } from "./compareController.js";
+
 
 /*
 ========================================
@@ -267,6 +269,8 @@ export const analyzeYoutubeUrl = async (req, res, next) => {
       let account;
       try {
         console.log("STEP 4.4: Querying MongoDB for Account model with channelId =", channelId, "userId =", req.user._id);
+        const analytics = await getCreatorAnalyticsData(channelId);
+
         account = await Account.findOne({
           accountId: channelId,
           userId: req.user._id,
@@ -283,6 +287,10 @@ export const analyzeYoutubeUrl = async (req, res, next) => {
           state: selectedState,
           party: selectedParty,
           thumbnail: youtubeThumbnail,
+          subscribers: analytics.subscribers,
+          views: analytics.totalViews,
+          videos: analytics.totalVideos,
+          engagement: analytics.engagementRate,
         };
 
         if (req.body.profileImage) {
@@ -316,9 +324,19 @@ export const analyzeYoutubeUrl = async (req, res, next) => {
         console.log("STEP 4.4.c: Creating Snapshot record in MongoDB");
         await Snapshot.create({
           account: account._id,
-          followers: Number(channel.statistics.subscriberCount || 0),
-          views: Number(channel.statistics.viewCount || 0),
           userId: req.user._id,
+          followers: analytics.subscribers,
+          views: analytics.totalViews,
+          videos: analytics.totalVideos,
+          likes: Math.round(analytics.avgLikes * Math.min(analytics.totalVideos || 1, 10)),
+          comments: Math.round(analytics.avgComments * Math.min(analytics.totalVideos || 1, 10)),
+          engagementRate: analytics.engagementRate,
+          averageEngagement: analytics.averageEngagement,
+          party: selectedParty,
+          state: selectedState,
+          name: channel.snippet.title,
+          profileImage: account.profileImage || youtubeThumbnail,
+          capturedAt: new Date(),
         });
       } catch (dbErr) {
         console.error("STEP 4.4 Error: MongoDB insert/find operation failed:", dbErr.message);
@@ -443,6 +461,8 @@ export const analyzeYoutubeUrl = async (req, res, next) => {
       let account;
       try {
         console.log("STEP 4.4: Querying MongoDB for Account model with channelId =", channelId, "userId =", req.user._id);
+        const analytics = await getCreatorAnalyticsData(channelId);
+
         account = await Account.findOne({
           accountId: channelId,
           userId: req.user._id,
@@ -459,6 +479,10 @@ export const analyzeYoutubeUrl = async (req, res, next) => {
           state: selectedState,
           party: selectedParty,
           thumbnail: youtubeThumbnail,
+          subscribers: analytics.subscribers,
+          views: analytics.totalViews,
+          videos: analytics.totalVideos,
+          engagement: analytics.engagementRate,
         };
 
         if (req.body.profileImage) {
@@ -492,9 +516,19 @@ export const analyzeYoutubeUrl = async (req, res, next) => {
         console.log("STEP 4.4.c: Creating Snapshot record in MongoDB");
         await Snapshot.create({
           account: account._id,
-          followers: Number(channel.statistics.subscriberCount || 0),
-          views: Number(channel.statistics.viewCount || 0),
           userId: req.user._id,
+          followers: analytics.subscribers,
+          views: analytics.totalViews,
+          videos: analytics.totalVideos,
+          likes: Math.round(analytics.avgLikes * Math.min(analytics.totalVideos || 1, 10)),
+          comments: Math.round(analytics.avgComments * Math.min(analytics.totalVideos || 1, 10)),
+          engagementRate: analytics.engagementRate,
+          averageEngagement: analytics.averageEngagement,
+          party: selectedParty,
+          state: selectedState,
+          name: channel.snippet.title,
+          profileImage: account.profileImage || youtubeThumbnail,
+          capturedAt: new Date(),
         });
       } catch (dbErr) {
         console.error("STEP 4.4 Error: MongoDB insert/find operation failed:", dbErr.message);

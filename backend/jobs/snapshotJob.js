@@ -3,7 +3,7 @@ import Account from "../models/Account.js";
 import Snapshot from "../models/Snapshot.js";
 import axios from "axios";
 import { scrapeXProfile } from "../scrapers/xScraper.js";
-import { getChannelStats } from "../services/youtubeService.js";
+import { getCreatorAnalyticsData } from "../controllers/compareController.js";
 
 // Helper to scrape/fetch metrics and save a snapshot
 export const runSnapshotSync = async (frequencyLabel = "Scheduled") => {
@@ -17,12 +17,38 @@ export const runSnapshotSync = async (frequencyLabel = "Scheduled") => {
       try {
         let followers = 0;
         let views = 0;
+        let videos = 0;
+        let likes = 0;
+        let comments = 0;
+        let engagementRate = 0;
+        let averageEngagement = 0;
+        let profileImage = account.profileImage || account.thumbnail || "";
 
         if (account.platform === "youtube") {
-          const channel = await getChannelStats(account.accountId);
-          if (channel && channel.statistics) {
-            followers = Number(channel.statistics.subscriberCount || 0);
-            views = Number(channel.statistics.viewCount || 0);
+          const analytics = await getCreatorAnalyticsData(account.accountId);
+          if (analytics) {
+            followers = analytics.subscribers;
+            views = analytics.totalViews;
+            videos = analytics.totalVideos;
+            likes = Math.round(analytics.avgLikes * Math.min(analytics.totalVideos || 1, 10));
+            comments = Math.round(analytics.avgComments * Math.min(analytics.totalVideos || 1, 10));
+            engagementRate = analytics.engagementRate;
+            averageEngagement = analytics.averageEngagement;
+            profileImage = account.profileImage || analytics.thumbnail || "";
+
+            // Update Account stats
+            await Account.updateOne(
+              { _id: account._id },
+              {
+                $set: {
+                  subscribers: followers,
+                  views,
+                  videos,
+                  engagement: engagementRate,
+                  lastSynced: new Date(),
+                }
+              }
+            );
           }
         } else if (account.platform === "x") {
           const profile = await scrapeXProfile(account.accountId);
@@ -46,6 +72,15 @@ export const runSnapshotSync = async (frequencyLabel = "Scheduled") => {
             userId: account.userId,
             followers,
             views,
+            videos,
+            likes,
+            comments,
+            engagementRate,
+            averageEngagement,
+            party: account.party || "Independent",
+            state: account.state || "Unknown State",
+            name: account.name,
+            profileImage,
             capturedAt: new Date(),
           });
           console.log(`[Snapshot Job] Captured snapshot for ${account.name} (${account.platform})`);

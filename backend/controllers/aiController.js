@@ -140,7 +140,48 @@ export const chatAssistant = async (req, res, next) => {
       if (item.snap) snapMap[item.accountId] = item.snap;
     });
 
-    // 2. Perform dynamic party aggregations (BJP vs Congress vs others)
+    // 2. Fetch all historical snapshots from the last 30 days for rich time-series RAG
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const historicalSnaps = await Snapshot.find({
+      userId: req.user._id,
+      capturedAt: { $gte: thirtyDaysAgo }
+    }).sort({ capturedAt: 1 }).lean();
+
+    // Group snapshots by account ID
+    const accountSnapshots = {};
+    historicalSnaps.forEach(snap => {
+      const accId = snap.account.toString();
+      if (!accountSnapshots[accId]) {
+        accountSnapshots[accId] = [];
+      }
+      accountSnapshots[accId].push(snap);
+    });
+
+    let historyContext = "HISTORICAL 30-DAY GROWTH & ENGAGEMENT TELEMETRY:\n";
+    accounts.forEach(acc => {
+      const snaps = accountSnapshots[acc._id.toString()] || [];
+      if (snaps.length === 0) return;
+
+      const oldest = snaps[0];
+      const latest = snaps[snaps.length - 1];
+
+      const subGain = latest.followers - oldest.followers;
+      const viewGain = latest.views - oldest.views;
+      const subGrowthPct = oldest.followers > 0 ? ((subGain / oldest.followers) * 100).toFixed(2) : "0.00";
+      
+      const avgEngRate = (snaps.reduce((sum, s) => sum + (s.engagementRate || 0), 0) / snaps.length).toFixed(2);
+      const avgAvgEng = (snaps.reduce((sum, s) => sum + (s.averageEngagement || 0), 0) / snaps.length).toFixed(2);
+
+      historyContext += `- Leader: ${acc.name}\n`;
+      historyContext += `  Party: ${acc.party} | State: ${acc.state}\n`;
+      historyContext += `  30d Subscriber Growth: ${oldest.followers.toLocaleString()} -> ${latest.followers.toLocaleString()} (+${subGain.toLocaleString()} | ${subGrowthPct}%)\n`;
+      historyContext += `  30d Views Gain: +${viewGain.toLocaleString()} (${latest.views.toLocaleString()} total)\n`;
+      historyContext += `  Average Engagement Rate: ${avgEngRate}%\n`;
+      historyContext += `  Average N-Video Engagement: ${avgAvgEng}%\n`;
+      historyContext += `  Data Checkpoints: ${snaps.length} snapshots collected\n\n`;
+    });
+
+    // 3. Perform dynamic party aggregations (BJP vs Congress vs others)
     const partyStats = {};
     accounts.forEach(acc => {
       const party = acc.party || "Independent";
@@ -177,7 +218,7 @@ export const chatAssistant = async (req, res, next) => {
       partyContext += `  Tracked Accounts: ${stats.creators.map(c => `${c.name} (${c.subscribers.toLocaleString()} subs in ${c.state})`).join(", ")}\n\n`;
     });
 
-    // 3. Scan prompt for specific tracked creators
+    // 4. Scan prompt for specific tracked creators
     let creatorContext = "SPECIFIC CREATOR METRICS:\n";
     let foundCreator = false;
     accounts.forEach(acc => {
@@ -200,6 +241,7 @@ You MUST prioritize using the real-time database context provided below to answe
 If the database context lacks sufficient details for general historical political questions, you may use your external knowledge but explicitly mention that it is external.
 
 [GROUND-TRUTH DATABASE CONTEXT]
+${historyContext}
 ${partyContext}
 ${foundCreator ? creatorContext : "No specific tracked leader name resolved in the prompt."}
 [END CONTEXT]

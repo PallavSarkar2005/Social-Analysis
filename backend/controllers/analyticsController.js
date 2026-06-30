@@ -89,7 +89,7 @@ export const getChannelSummary = async (req, res, next) => {
     const avgLikes = videosTracked ? Math.round(totalLikes / videosTracked) : 0;
     const avgComments = videosTracked ? Math.round(totalComments / videosTracked) : 0;
 
-    const avgEngagement =
+    let avgEngagement =
       videosTracked > 0
         ? (
             videos.reduce(
@@ -101,6 +101,13 @@ export const getChannelSummary = async (req, res, next) => {
           ).toFixed(2)
         : 0;
 
+    if (Number(avgEngagement) === 0 && latestSnapshot?.engagementRate > 0) {
+      avgEngagement = Number(latestSnapshot.engagementRate.toFixed(2));
+    }
+    if (Number(avgEngagement) === 0 && account.engagement > 0) {
+      avgEngagement = Number(account.engagement.toFixed(2));
+    }
+
     res.json({
       success: true,
       data: {
@@ -109,7 +116,7 @@ export const getChannelSummary = async (req, res, next) => {
         avgViews,
         avgLikes,
         avgComments,
-        avgEngagement,
+        avgEngagement: Number(avgEngagement),
         videosTracked,
       },
     });
@@ -149,7 +156,7 @@ export const compareAccounts = async (req, res, next) => {
             )
           : 0;
 
-      const avgEngagement =
+      let avgEngagement =
         videos.length > 0
           ? (
               videos.reduce(
@@ -160,6 +167,14 @@ export const compareAccounts = async (req, res, next) => {
               ) / videos.length
             ).toFixed(2)
           : 0;
+
+      if (Number(avgEngagement) === 0 && latestSnapshot?.engagementRate > 0) {
+        avgEngagement = Number(latestSnapshot.engagementRate.toFixed(2));
+      }
+      if (Number(avgEngagement) === 0 && account.engagement > 0) {
+        avgEngagement = Number(account.engagement.toFixed(2));
+      }
+
 
       comparison.push({
         accountId: account._id,
@@ -589,7 +604,7 @@ export const getDashboardOverview = async (req, res, next) => {
         totalVideos,
         totalFollowers: todayFollowers + todaySubscribers, // combined dashboard followers
         totalViews: todayViews,
-        avgEngagement: todayEngagement || 2.4, // Return avg or default realistic engagement
+        avgEngagement: todayEngagement,
         growth: growthMetrics,
       },
     });
