@@ -65,12 +65,26 @@ export const getGroupCreators = async (req, res, next) => {
             const sumLikes = videos.reduce((sum, v) => sum + (v.likes || 0), 0);
             const sumComments = videos.reduce((sum, v) => sum + (v.comments || 0), 0);
 
-            avgViews = Math.round(sumViews / totalVideos);
-            avgLikes = Math.round(sumLikes / totalVideos);
+            avgViews    = Math.round(sumViews / totalVideos);
+            avgLikes    = Math.round(sumLikes / totalVideos);
             avgComments = Math.round(sumComments / totalVideos);
 
-            engagementRate = sumViews > 0 ? Number((((sumLikes + sumComments) / sumViews) * 100).toFixed(2)) : 0;
+            engagementRate = sumViews > 0
+              ? Number((((sumLikes + sumComments) / sumViews) * 100).toFixed(2))
+              : 0;
           }
+
+          // Fallback: if Content-based engagement is still 0, use the value
+          // stored directly on the latest snapshot (set by the analyzer job)
+          if (engagementRate === 0 && latestSnapshot.engagementRate > 0) {
+            engagementRate = Number(latestSnapshot.engagementRate.toFixed(2));
+          }
+
+          // Also fall back to the Account's own stored engagement field
+          if (engagementRate === 0 && account.engagement > 0) {
+            engagementRate = Number(account.engagement.toFixed(2));
+          }
+
         } else {
           // No cached snapshot exists. Fetch live metrics from YouTube API and seed the cache
           console.log(`No snapshot cache found for ${account.name}. Fetching live analytics...`);

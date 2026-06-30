@@ -79,7 +79,7 @@ function MetricCard({ label, value, sub, icon: Icon, color, theme }) {
     <motion.div
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
-      className={`relative bg-[#111318]/60 border ${theme.border} rounded-2xl p-4 space-y-2 overflow-hidden backdrop-blur-sm group transition-all hover:bg-[#13151e]/80`}
+      className={`relative bg-[#111318]/60 border ${theme.border} rounded-2xl p-5 space-y-2 overflow-hidden backdrop-blur-sm group transition-all hover:bg-[#13151e]/80`}
     >
       {/* Glow blob */}
       <div
@@ -87,11 +87,11 @@ function MetricCard({ label, value, sub, icon: Icon, color, theme }) {
         style={{ background: `radial-gradient(circle at 30% 50%, ${theme.glowColor}, transparent 70%)` }}
       />
       <div className="flex items-center justify-between">
-        <span className="text-[9px] font-bold text-slate-500 uppercase tracking-[0.12em]">{label}</span>
-        {Icon && <Icon size={13} className={color || theme.text} />}
+        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.12em]">{label}</span>
+        {Icon && <Icon size={14} className={color || theme.text} />}
       </div>
-      <p className={`text-2xl font-black tracking-tight ${color || theme.text}`}>{value}</p>
-      {sub != null && <p className="text-[10px] text-slate-500">{sub}</p>}
+      <p className={`text-3xl font-black tracking-tight leading-none ${color || theme.text}`}>{value}</p>
+      {sub != null && <p className="text-xs text-slate-500 mt-1">{sub}</p>}
     </motion.div>
   );
 }
@@ -137,16 +137,16 @@ function CreatorCard({ creator, theme, onGroupChange }) {
       {/* Top row */}
       <div className="flex items-start justify-between gap-3 relative">
         <div className="flex items-center gap-3">
-          <CreatorAvatar creator={creator} size={44} />
+          <CreatorAvatar creator={creator} size={48} />
           <div className="min-w-0">
-            <p className="text-sm font-bold text-white truncate">{creator.name}</p>
-            <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md ${theme.badge}`}>
+            <p className="text-base font-bold text-white truncate">{creator.name}</p>
+            <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${theme.badge}`}>
                 {creator.party || "Independent"}
               </span>
               {creator.state && (
-                <span className="text-[9px] text-slate-500 flex items-center gap-0.5">
-                  <MapPin size={8} />{creator.state}
+                <span className="text-[10px] text-slate-500 flex items-center gap-0.5">
+                  <MapPin size={9} />{creator.state}
                 </span>
               )}
             </div>
@@ -154,11 +154,11 @@ function CreatorCard({ creator, theme, onGroupChange }) {
         </div>
 
         {/* Growth badge */}
-        <div className={`flex-shrink-0 text-[10px] font-bold flex items-center gap-0.5 px-2 py-1 rounded-lg ${
+        <div className={`flex-shrink-0 text-xs font-bold flex items-center gap-0.5 px-2.5 py-1.5 rounded-lg ${
           creator.growth > 0 ? "bg-emerald-500/10 text-emerald-400" :
           creator.growth < 0 ? "bg-red-500/10 text-red-400" : "bg-white/[0.04] text-slate-400"
         }`}>
-          {creator.growth > 0 ? <TrendingUp size={9} /> : creator.growth < 0 ? <TrendingDown size={9} /> : null}
+          {creator.growth > 0 ? <TrendingUp size={10} /> : creator.growth < 0 ? <TrendingDown size={10} /> : null}
           {growthSign(creator.growth)}{creator.growth?.toFixed(1)}%
         </div>
       </div>
@@ -170,23 +170,28 @@ function CreatorCard({ creator, theme, onGroupChange }) {
           { label: "Total Views",  val: fmt(creator.totalViews) },
           { label: "Videos",       val: fmt(creator.totalVideos) },
         ].map(({ label, val }) => (
-          <div key={label} className="bg-white/[0.03] rounded-xl p-2.5 text-center">
-            <p className={`text-sm font-black ${theme.text}`}>{val}</p>
-            <p className="text-[9px] text-slate-500 mt-0.5">{label}</p>
+          <div key={label} className="bg-white/[0.03] rounded-xl p-3 text-center">
+            <p className={`text-base font-black ${theme.text}`}>{val}</p>
+            <p className="text-[10px] text-slate-500 mt-0.5">{label}</p>
           </div>
         ))}
       </div>
 
-      {/* Secondary row */}
-      <div className="grid grid-cols-2 gap-2 text-[10px]">
-        <div className="flex items-center justify-between bg-white/[0.02] rounded-lg px-2.5 py-2">
-          <span className="text-slate-500">Engagement</span>
-          <span className="font-bold text-white">{creator.engagementRate?.toFixed(1) || "0.0"}%</span>
+      {/* Secondary row — engagement always colored & visible */}
+      <div className="grid grid-cols-2 gap-2">
+        <div className="flex items-center justify-between bg-white/[0.03] rounded-xl px-3 py-2.5">
+          <span className="text-xs text-slate-400">Engagement</span>
+          <span
+            className="text-sm font-black"
+            style={{ color: creator.engagementRate > 0 ? theme.accent : '#94a3b8' }}
+          >
+            {creator.engagementRate > 0 ? creator.engagementRate.toFixed(2) : '—'}%
+          </span>
         </div>
-        <div className="flex items-center justify-between bg-white/[0.02] rounded-lg px-2.5 py-2">
-          <span className="text-slate-500">Weekly</span>
-          <span className={`font-bold ${growthColor(creator.weeklyGrowth)}`}>
-            {growthSign(creator.weeklyGrowth)}{creator.weeklyGrowth?.toFixed(1) || "0.0"}%
+        <div className="flex items-center justify-between bg-white/[0.03] rounded-xl px-3 py-2.5">
+          <span className="text-xs text-slate-400">Weekly ↑</span>
+          <span className={`text-sm font-black ${growthColor(creator.weeklyGrowth)}`}>
+            {growthSign(creator.weeklyGrowth)}{creator.weeklyGrowth?.toFixed(1) || '0.0'}%
           </span>
         </div>
       </div>
@@ -221,42 +226,47 @@ function CreatorRow({ creator, theme, index, onGroupChange }) {
       transition={{ delay: index * 0.03 }}
       className="border-b border-white/[0.04] hover:bg-white/[0.02] transition-colors group"
     >
-      <td className="py-3 px-4">
+      <td className="py-4 px-5">
         <div className="flex items-center gap-3">
-          <CreatorAvatar creator={creator} size={32} />
+          <CreatorAvatar creator={creator} size={38} />
           <div>
-            <p className="text-xs font-semibold text-white">{creator.name}</p>
-            <p className="text-[10px] text-slate-500 flex items-center gap-1">
-              <MapPin size={8} />{creator.state || "—"}
+            <p className="text-sm font-semibold text-white">{creator.name}</p>
+            <p className="text-xs text-slate-500 flex items-center gap-1 mt-0.5">
+              <MapPin size={9} />{creator.state || "—"}
             </p>
           </div>
         </div>
       </td>
-      <td className="py-3 px-4 text-right">
-        <span className={`text-xs font-bold ${theme.text}`}>{fmt(creator.subscribers)}</span>
+      <td className="py-4 px-5 text-right">
+        <span className={`text-sm font-bold ${theme.text}`}>{fmt(creator.subscribers)}</span>
       </td>
-      <td className="py-3 px-4 text-right">
-        <span className="text-xs text-slate-300">{fmt(creator.totalViews)}</span>
+      <td className="py-4 px-5 text-right">
+        <span className="text-sm text-slate-300">{fmt(creator.totalViews)}</span>
       </td>
-      <td className="py-3 px-4 text-right">
-        <span className="text-xs text-slate-300">{fmt(creator.totalVideos)}</span>
+      <td className="py-4 px-5 text-right">
+        <span className="text-sm text-slate-300">{fmt(creator.totalVideos)}</span>
       </td>
-      <td className="py-3 px-4 text-right">
-        <span className={`text-xs font-bold ${growthColor(creator.growth)}`}>
+      <td className="py-4 px-5 text-right">
+        <span className={`text-sm font-bold ${growthColor(creator.growth)}`}>
           {growthSign(creator.growth)}{creator.growth?.toFixed(1)}%
         </span>
       </td>
-      <td className="py-3 px-4 text-right">
-        <span className="text-xs text-slate-400">{creator.engagementRate?.toFixed(1)}%</span>
+      <td className="py-4 px-5 text-right">
+        <span
+          className="text-sm font-bold"
+          style={{ color: creator.engagementRate > 0 ? theme.accent : '#94a3b8' }}
+        >
+          {creator.engagementRate > 0 ? `${creator.engagementRate.toFixed(2)}%` : '—'}
+        </span>
       </td>
-      <td className="py-3 px-4 text-right">
-        <span className="text-[10px] text-slate-600">{relTime(creator.lastSync)}</span>
+      <td className="py-4 px-5 text-right">
+        <span className="text-xs text-slate-500">{relTime(creator.lastSync)}</span>
       </td>
-      <td className="py-3 px-4">
+      <td className="py-4 px-5">
         <select
           value={creator.group || "Other"}
           onChange={(e) => onGroupChange(e, creator._id)}
-          className="text-[9px] bg-transparent border border-white/[0.06] rounded-lg px-1.5 py-0.5 text-slate-400"
+          className="text-xs bg-transparent border border-white/[0.06] rounded-lg px-2 py-0.5 text-slate-400"
         >
           {["BJP", "Congress", "AAP", "BJD", "SP", "TMC", "Independent", "Other"].map((g) => (
             <option key={g} value={g}>{g}</option>
@@ -398,10 +408,10 @@ export default function GroupAnalytics() {
                   )}
                 </div>
                 <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white">
-                  {groupName.toUpperCase()} Analytics
+                  {theme.fullName} Analytics
                 </h1>
                 <p className="text-sm text-slate-400">
-                  Live performance data for all tracked {groupName} political creators.
+                  Live performance data for all tracked {theme.fullName} political creators.
                 </p>
               </div>
 
@@ -457,9 +467,9 @@ export default function GroupAnalytics() {
               >
                 {theme.watermark}
               </div>
-              <h2 className="text-xl font-bold text-white">No creators in {groupName} yet</h2>
+              <h2 className="text-xl font-bold text-white">No creators in {theme.fullName} yet</h2>
               <p className="text-sm text-slate-400 max-w-sm text-center">
-                Use the Analyzer to track a channel and assign it to the {groupName} group.
+                Use the Analyzer to track a channel and assign it to the {theme.fullName} group.
               </p>
               <Link
                 to="/analyzer"
