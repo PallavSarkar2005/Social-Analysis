@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import Sidebar from "../components/layout/Sidebar";
 import Navbar from "../components/layout/Navbar";
 import { useReports } from "../hooks/useQueries";
+import { useDebounce } from "../hooks/useDebounce";
 import { triggerDownload } from "../api/exportApi";
 import {
   FileText,
@@ -20,8 +21,9 @@ import toast, { Toaster } from "react-hot-toast";
 import { motion, AnimatePresence } from "framer-motion";
 
 export default function Reports() {
-  const { reports, loading, deleteReport } = useReports();
+  const { reports, loading, deleteReport, refetch: loadReports } = useReports();
   const [searchQuery, setSearchQuery] = useState("");
+  const debouncedSearchQuery = useDebounce(searchQuery, 300);
   const [activeTab, setActiveTab] = useState("all");
   const [selectedReport, setSelectedReport] = useState(null);
   const [exportingId, setExportingId] = useState("");
@@ -58,8 +60,8 @@ export default function Reports() {
   // Filtering
   const filteredReports = reports.filter((rep) => {
     const matchesSearch =
-      rep.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      rep.source.toLowerCase().includes(searchQuery.toLowerCase());
+      rep.title.toLowerCase().includes(debouncedSearchQuery.toLowerCase()) ||
+      rep.source.toLowerCase().includes(debouncedSearchQuery.toLowerCase());
     
     if (activeTab === "all") return matchesSearch;
     return rep.type === activeTab && matchesSearch;

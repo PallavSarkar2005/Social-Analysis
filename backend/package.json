@@ -32,6 +32,7 @@
     "openai": "^6.42.0",
     "pdfkit": "^0.19.1",
     "playwright": "^1.60.0",
+    "razorpay": "^2.9.2",
     "xlsx": "^0.18.5",
     "xss-clean": "^0.1.4"
   },

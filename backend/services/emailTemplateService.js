@@ -180,3 +180,19 @@ export const getAccountDeletedTemplate = (name) => {
   `;
   return emailWrapper("Account Deleted", content);
 };
+
+/**
+ * Verify Email Template
+ */
+export const getVerifyEmailTemplate = (name, link) => {
+  const content = `
+    <h1>Verify Your Email Address</h1>
+    <p>Hello ${name},</p>
+    <p>Thank you for registering with Social IQ. Click the button below to verify your email address and activate your workspace:</p>
+    <div class="btn-container">
+      <a href="${link}" class="btn" target="_blank">Verify Email</a>
+    </div>
+    <p>This verification link will expire in 24 hours. If you did not register for this account, please ignore this email.</p>
+  `;
+  return emailWrapper("Verify Your Email Address", content);
+};

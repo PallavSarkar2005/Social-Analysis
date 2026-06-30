@@ -19,6 +19,8 @@ const Register = lazy(() => import("./pages/Register"));
 const GroupAnalytics = lazy(() => import("./pages/GroupAnalytics"));
 const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));
+const Billing = lazy(() => import("./pages/Billing"));
+const Pricing = lazy(() => import("./pages/Pricing"));
 
 // Standard high-end loading fallback
 const SuspenseFallback = () => (
@@ -35,6 +37,7 @@ function App() {
         <Routes>
           {/* Public Routes */}
           <Route path="/" element={<LandingPage />} />
+          <Route path="/pricing" element={<Pricing />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
@@ -53,6 +56,7 @@ function App() {
             <Route path="/reports" element={<Reports />} />
             <Route path="/activity" element={<Activity />} />
             <Route path="/groups/:groupName" element={<GroupAnalytics />} />
+            <Route path="/billing" element={<Billing />} />
           </Route>
 
           {/* Fallback */}

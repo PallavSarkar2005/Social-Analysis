@@ -12,11 +12,13 @@ import {
   validateMongoId,
 } from "../middleware/validationMiddleware.js";
 
+import { checkPlanLimits } from "../middleware/billingMiddleware.js";
+
 const router = express.Router();
 
 router.use(protect);
 
-router.post("/", validateCreateAccount, createAccount);
+router.post("/", validateCreateAccount, checkPlanLimits("trackedCreators"), createAccount);
 router.get("/", getAccounts);
 router.delete("/:id", validateMongoId, deleteAccount);
 router.patch("/:id/group", validateMongoId, updateAccountGroup);

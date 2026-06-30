@@ -5,6 +5,7 @@ import User from "../models/User.js";
 import Account from "../models/Account.js";
 import ApiUsage from "../models/ApiUsage.js";
 import YoutubeCache from "../models/YoutubeCache.js";
+import Subscription from "../models/Subscription.js";
 
 describe("Social IQ Backend API & Security Verification Suite", () => {
   let token = "";
@@ -12,7 +13,7 @@ describe("Social IQ Backend API & Security Verification Suite", () => {
   const testUser = {
     name: "QA Automated Tester",
     email: `tester_${Date.now()}@test.com`,
-    password: "Password123!",
+    password: "SuperSecurePass_2026!",
   };
 
   beforeAll(async () => {
@@ -41,6 +42,17 @@ describe("Social IQ Backend API & Security Verification Suite", () => {
       expect(res.status).toBe(201);
       expect(res.body.success).toBe(true);
       expect(res.body.data.token).toBeDefined();
+
+      const user = await User.findOne({ email: testUser.email });
+      if (user) {
+        await Subscription.create({
+          userId: user._id,
+          plan: "professional",
+          status: "active",
+          currentPeriodStart: new Date(),
+          currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+        });
+      }
     });
 
     it("should fail registration on duplicate email", async () => {

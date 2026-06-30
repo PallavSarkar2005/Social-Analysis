@@ -21,6 +21,7 @@ export default function RecentVideosGrid({ videos }) {
                   src={video.snippet?.thumbnails?.high?.url || video.thumbnail}
                   alt={video.snippet?.title || video.title}
                   className="w-full h-full object-cover"
+                  loading="lazy"
                 />
               </div>
 

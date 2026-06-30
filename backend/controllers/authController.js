@@ -11,6 +11,7 @@ import {
   getForgotPasswordTemplate,
   getPasswordChangedTemplate,
   getAccountDeletedTemplate,
+  getVerifyEmailTemplate,
 } from "../services/emailTemplateService.js";
 
 // Helper to hash tokens for secure storage
@@ -389,6 +390,13 @@ export const refresh = async (req, res, next) => {
     // Locate the refresh token document inside user
     const tokenDoc = user.refreshTokens.find((t) => t.token === hashedRefreshToken);
 
+    if (!tokenDoc) {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid refresh token",
+      });
+    }
+
     // Reuse Detection: If token is already revoked, breach is assumed!
     if (tokenDoc.isRevoked) {
       // Immediate response: Revoke all active sessions for this user!
@@ -430,7 +438,9 @@ export const refresh = async (req, res, next) => {
 
     const newExpiresAt = new Date();
     // Maintain expiration from original request rememberMe status (approximate based on token age)
-    const originalMaxAgeDays = (tokenDoc.expiresAt - tokenDoc.createdAt) / (24 * 60 * 60 * 1000);
+    const originalMaxAgeDays = tokenDoc.createdAt && tokenDoc.expiresAt
+      ? (tokenDoc.expiresAt - tokenDoc.createdAt) / (24 * 60 * 60 * 1000)
+      : 7;
     const daysToAdd = originalMaxAgeDays > 10 ? 30 : 7;
     newExpiresAt.setDate(newExpiresAt.getDate() + daysToAdd);
 

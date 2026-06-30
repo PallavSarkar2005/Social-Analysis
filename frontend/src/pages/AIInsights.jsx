@@ -73,6 +73,14 @@ export default function AIInsights() {
     setLoading(true);
     setStreamingContent("");
 
+    const getCookie = (name) => {
+      if (typeof document === "undefined") return null;
+      const value = `; ${document.cookie}`;
+      const parts = value.split(`; ${name}=`);
+      if (parts.length === 2) return parts.pop().split(";").shift();
+      return null;
+    };
+
     try {
       const token = localStorage.getItem("token");
       const baseURL = import.meta.env.VITE_API_URL || "http://localhost:5000";
@@ -82,7 +90,9 @@ export default function AIInsights() {
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
+          "X-XSRF-TOKEN": getCookie("XSRF-TOKEN") || "",
         },
+        credentials: "include",
         body: JSON.stringify({
           message: textToSend,
           history: updatedHistory.map((h) => ({ role: h.role, content: h.content })),

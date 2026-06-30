@@ -19,6 +19,8 @@ import { getChannelHistory } from "../api/historyApi";
 import { syncAllChannels } from "../api/youtubeApi";
 import { getNotifications, markAsRead, markAllAsRead } from "../api/notificationApi";
 import { getReports, deleteReport as apiDeleteReport } from "../api/reportApi";
+import { getCompetitors, addCompetitor, deleteCompetitor } from "../api/competitorApi";
+import { getBillingStatus, cancelSubscription as apiCancelSubscription, getInvoices } from "../api/billingApi";
 
 // 1. Dashboard Hook
 export const useDashboard = () => {
@@ -338,3 +340,66 @@ export const useReports = () => {
     refetch: reportsQuery.refetch,
   };
 };
+
+// 10. Competitors Hook
+export const useCompetitors = () => {
+  const queryClient = useQueryClient();
+
+  const competitorsQuery = useQuery({
+    queryKey: ["competitors"],
+    queryFn: async () => {
+      const res = await getCompetitors();
+      return res.data || [];
+    },
+  });
+
+  const addMutation = useMutation({
+    mutationFn: addCompetitor,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["competitors"] });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: deleteCompetitor,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["competitors"] });
+    },
+  });
+
+  return {
+    competitors: competitorsQuery.data || [],
+    loading: competitorsQuery.isLoading,
+    addCompetitor: addMutation.mutateAsync,
+    adding: addMutation.isPending,
+    deleteCompetitor: deleteMutation.mutateAsync,
+    deleting: deleteMutation.isPending,
+    refetch: competitorsQuery.refetch,
+  };
+};
+
+// 12. Billing Hooks
+export const useBillingStatus = () => {
+  return useQuery({
+    queryKey: ["billing", "status"],
+    queryFn: getBillingStatus,
+  });
+};
+
+export const useInvoices = () => {
+  return useQuery({
+    queryKey: ["billing", "invoices"],
+    queryFn: getInvoices,
+  });
+};
+
+export const useCancelSubscription = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: apiCancelSubscription,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["billing", "status"] });
+    },
+  });
+};
+

@@ -250,3 +250,72 @@ export const getActiveSessions = async (req, res, next) => {
     next(error);
   }
 };
+
+// @desc    Revoke an individual session
+// @route   DELETE /api/users/sessions/:id
+// @access  Private
+export const revokeSession = async (req, res, next) => {
+  try {
+    const sessionId = req.params.id;
+    const user = await User.findById(req.user._id);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    const currentRefreshToken = req.cookies.socialiq_refresh_token;
+    const hashedCurrentToken = currentRefreshToken ? hashToken(currentRefreshToken) : null;
+    const sessionToRevoke = user.refreshTokens.id(sessionId);
+
+    if (!sessionToRevoke) {
+      return res.status(404).json({
+        success: false,
+        message: "Session not found",
+      });
+    }
+
+    const isCurrent = sessionToRevoke.token === hashedCurrentToken;
+
+    // Filter out the session
+    user.refreshTokens = user.refreshTokens.filter(
+      (t) => t._id.toString() !== sessionId
+    );
+    await user.save();
+
+    await logSecurityEvent({
+      userId: user._id,
+      action: "session_revoked",
+      details: `Revoked session ${sessionId}. Current session: ${isCurrent}`,
+    });
+
+    if (isCurrent) {
+      const host = req?.headers?.host || "";
+      const isLocal = host.includes("localhost") || host.includes("127.0.0.1");
+      const isProd = process.env.NODE_ENV === "production" || (host && !isLocal);
+      
+      const cookieOptions = {
+        httpOnly: true,
+        secure: isProd,
+        sameSite: isProd ? "none" : "lax",
+        path: "/",
+      };
+      res.clearCookie("socialiq_access_token", cookieOptions);
+      res.clearCookie("socialiq_refresh_token", cookieOptions);
+      res.clearCookie("XSRF-TOKEN", {
+        secure: isProd,
+        sameSite: isProd ? "none" : "lax",
+        path: "/",
+      });
+    }
+
+    res.json({
+      success: true,
+      message: isCurrent ? "Current session revoked. Logging out..." : "Session successfully revoked",
+      data: { isCurrent },
+    });
+  } catch (error) {
+    next(error);
+  }
+};

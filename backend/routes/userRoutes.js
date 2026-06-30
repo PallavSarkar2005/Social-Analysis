@@ -4,6 +4,7 @@ import {
   changeEmail,
   deleteAccount,
   getActiveSessions,
+  revokeSession,
 } from "../controllers/userController.js";
 import { protect } from "../middleware/authMiddleware.js";
 
@@ -17,5 +18,6 @@ router.patch("/email", changeEmail);
 router.put("/email", changeEmail);
 router.delete("/account", deleteAccount);
 router.get("/sessions", getActiveSessions);
+router.delete("/sessions/:id", revokeSession);
 
 export default router;

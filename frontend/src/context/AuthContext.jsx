@@ -28,11 +28,15 @@ export const AuthProvider = ({ children }) => {
         const res = await client.get("/api/auth/me");
         if (res.data && res.data.success) {
           setUser(res.data.data);
+          if (typeof window !== "undefined") {
+            localStorage.setItem("socialiq_user", JSON.stringify(res.data.data));
+          }
           const currentToken = typeof window !== "undefined" ? localStorage.getItem("token") : null;
           setToken(currentToken);
         } else {
           if (typeof window !== "undefined") {
             localStorage.removeItem("token");
+            localStorage.removeItem("socialiq_user");
           }
           setUser(null);
           setToken(null);
@@ -41,6 +45,7 @@ export const AuthProvider = ({ children }) => {
         console.log("No active session or session expired.");
         if (typeof window !== "undefined") {
           localStorage.removeItem("token");
+          localStorage.removeItem("socialiq_user");
         }
         setUser(null);
         setToken(null);
@@ -55,6 +60,7 @@ export const AuthProvider = ({ children }) => {
     const handleAuthLogout = () => {
       if (typeof window !== "undefined") {
         localStorage.removeItem("token");
+        localStorage.removeItem("socialiq_user");
       }
       setUser(null);
       setToken(null);
@@ -74,6 +80,7 @@ export const AuthProvider = ({ children }) => {
         const { token: userToken, ...userData } = res.data.data;
         if (typeof window !== "undefined") {
           localStorage.setItem("token", userToken);
+          localStorage.setItem("socialiq_user", JSON.stringify(userData));
         }
         setUser(userData);
         setToken(userToken);
@@ -93,6 +100,7 @@ export const AuthProvider = ({ children }) => {
         const { token: userToken, ...userData } = res.data.data;
         if (typeof window !== "undefined") {
           localStorage.setItem("token", userToken);
+          localStorage.setItem("socialiq_user", JSON.stringify(userData));
         }
         setUser(userData);
         setToken(userToken);
@@ -112,6 +120,7 @@ export const AuthProvider = ({ children }) => {
         const { token: userToken, ...userData } = res.data.data;
         if (typeof window !== "undefined") {
           localStorage.setItem("token", userToken);
+          localStorage.setItem("socialiq_user", JSON.stringify(userData));
         }
         setUser(userData);
         setToken(userToken);
@@ -160,6 +169,7 @@ export const AuthProvider = ({ children }) => {
     }
     if (typeof window !== "undefined") {
       localStorage.removeItem("token");
+      localStorage.removeItem("socialiq_user");
     }
     setUser(null);
     setToken(null);
@@ -168,7 +178,11 @@ export const AuthProvider = ({ children }) => {
   const updateUser = (newData) => {
     setUser((prev) => {
       if (!prev) return null;
-      return { ...prev, ...newData };
+      const updated = { ...prev, ...newData };
+      if (typeof window !== "undefined") {
+        localStorage.setItem("socialiq_user", JSON.stringify(updated));
+      }
+      return updated;
     });
   };
 

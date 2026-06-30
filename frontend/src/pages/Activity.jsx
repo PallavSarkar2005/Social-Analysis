@@ -39,23 +39,28 @@ export default function Activity() {
 
   // Filter logs
   const filteredLogs = logs.filter((log) => {
+    if (!log) return false;
+    const action = log.action || "";
+    const details = log.details || "";
+    const ip = log.ipAddress || "";
     return (
-      log.action.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      log.details.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (log.ipAddress && log.ipAddress.includes(searchQuery))
+      action.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      details.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      ip.includes(searchQuery)
     );
   });
 
   const getActionColor = (action) => {
-    if (action.includes("login")) return "text-emerald-400 bg-emerald-500/10 border-emerald-500/20";
-    if (action.includes("creation")) return "text-blue-400 bg-blue-500/10 border-blue-500/20";
-    if (action.includes("delete") || action.includes("removed")) return "text-rose-400 bg-rose-500/10 border-rose-500/20";
-    if (action.includes("export")) return "text-amber-400 bg-amber-500/10 border-amber-500/20";
+    const act = action || "";
+    if (act.includes("login")) return "text-emerald-400 bg-emerald-500/10 border-emerald-500/20";
+    if (act.includes("creation")) return "text-blue-400 bg-blue-500/10 border-blue-500/20";
+    if (act.includes("delete") || act.includes("removed")) return "text-rose-400 bg-rose-500/10 border-rose-500/20";
+    if (act.includes("export")) return "text-amber-400 bg-amber-500/10 border-amber-500/20";
     return "text-indigo-400 bg-indigo-500/10 border-indigo-500/20";
   };
 
   const getFriendlyAction = (action) => {
-    return action.replace(/_/g, " ").toUpperCase();
+    return (action || "").replace(/_/g, " ").toUpperCase();
   };
 
   return (

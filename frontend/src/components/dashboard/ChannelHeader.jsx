@@ -14,6 +14,7 @@ export default function ChannelHeader({ channel }) {
           src={channel.profileImage || channel.thumbnail}
           alt={channel.title}
           className="w-28 h-28 rounded-full border-4 border-white"
+          loading="lazy"
         />
 
         <div>

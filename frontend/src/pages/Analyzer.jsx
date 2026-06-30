@@ -197,7 +197,7 @@ function Analyzer() {
         subscribers: result.data.subscribers,
         totalViews: result.data.totalViews,
         videoCount: result.data.videoCount,
-        recentTitles: result.data.recentVideos.map((v) => v.snippet.title),
+        recentTitles: (result.data.recentVideos || []).map((v) => v.snippet.title),
       });
       setChannelInsights(response.insights);
     } catch (error) {
@@ -341,6 +341,7 @@ function Analyzer() {
                             src={photoPreview}
                             alt="Preview"
                             className="w-10 h-10 rounded-full object-cover border border-white/[0.1]"
+                            loading="lazy"
                           />
                           <button
                             type="button"
@@ -408,6 +409,7 @@ function Analyzer() {
                         src={result.data.thumbnail}
                         alt={result.data.title}
                         className="w-full h-full object-cover"
+                        loading="lazy"
                       />
                       <div className="absolute top-3 left-3 bg-red-500/10 border border-red-500/30 backdrop-blur-md text-red-400 text-[10px] font-bold px-2.5 py-1 rounded-md tracking-wider uppercase">
                         YouTube Video
@@ -548,6 +550,7 @@ function Analyzer() {
                     src={result.data.profileImage || result.data.thumbnail}
                     alt={result.data.title}
                     className="w-24 h-24 sm:w-28 sm:h-28 rounded-full border-2 border-white/[0.08] shadow-md object-cover"
+                    loading="lazy"
                   />
                   <div className="text-center sm:text-left space-y-1.5 flex-1 min-w-0">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -621,6 +624,7 @@ function Analyzer() {
                             src={video.snippet.thumbnails.high?.url}
                             alt={video.snippet.title}
                             className="w-full h-full object-cover"
+                            loading="lazy"
                           />
                         </div>
                         <div className="p-4 space-y-3">

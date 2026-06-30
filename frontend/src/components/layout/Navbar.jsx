@@ -392,7 +392,7 @@ export default function Navbar() {
               {/* Avatar */}
               <div className="relative h-8 w-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-xs font-black shadow-md shadow-indigo-600/30 overflow-hidden">
                 {isAvatarUrl ? (
-                  <img src={user.avatar} alt="avatar" className="h-full w-full object-cover" />
+                  <img src={user.avatar} alt="avatar" className="h-full w-full object-cover" loading="lazy" />
                 ) : (
                   userName.charAt(0).toUpperCase()
                 )}

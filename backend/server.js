@@ -45,6 +45,7 @@ import settingsRoutes from "./routes/settingsRoutes.js";
 import searchRoutes from "./routes/searchRoutes.js";
 import groupRoutes from "./routes/groupRoutes.js";
 import userRoutes from "./routes/userRoutes.js";
+import billingRoutes from "./routes/billingRoutes.js";
 
 // Jobs & Schedulers
 import { syncAllYoutubeChannels } from "./jobs/youtubeSyncJob.js";
@@ -85,7 +86,14 @@ const corsOptions = {
 app.use(cookieParser);
 
 // Payload size limit to prevent Denial of Service
-app.use(express.json({ limit: "10kb" }));
+app.use(
+  express.json({
+    limit: "10kb",
+    verify: (req, res, buf) => {
+      req.rawBody = buf;
+    },
+  })
+);
 
 app.use(cors(corsOptions));
 
@@ -181,6 +189,7 @@ app.use("/api/exports", strictLimiter, exportRoutes);
 app.use("/api/settings", strictLimiter, settingsRoutes);
 app.use("/api/search", strictLimiter, searchRoutes);
 app.use("/api/users", strictLimiter, userRoutes);
+app.use("/api/billing", billingRoutes);
 
 app.use("/api/youtube", youtubeRoutes);
 app.use("/api/accounts", accountRoutes);

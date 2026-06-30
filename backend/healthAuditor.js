@@ -5,6 +5,7 @@ import User from "./models/User.js";
 import Account from "./models/Account.js";
 import ApiUsage from "./models/ApiUsage.js";
 import YoutubeCache from "./models/YoutubeCache.js";
+import Subscription from "./models/Subscription.js";
 
 dotenv.config();
 
@@ -29,24 +30,57 @@ async function runAuditor() {
   
   let token = "";
   const testEmail = `live_tester_${Date.now()}@test.com`;
-  const testPassword = "Password123!";
+  const testPassword = "K9#zL1&qP!vM8";
+
+  let csrfToken = "";
+  let cookieHeader = "";
+  const cookiesMap = {};
+
+  const updateTokens = (resHeaders) => {
+    if (!resHeaders) return;
+    const setCookie = resHeaders["set-cookie"];
+    if (setCookie) {
+      setCookie.forEach(cookieStr => {
+        const parts = cookieStr.split(";")[0].split("=");
+        if (parts.length >= 2) {
+          const name = parts[0].trim();
+          const val = parts[1].trim();
+          cookiesMap[name] = val;
+          if (name === "XSRF-TOKEN") {
+            csrfToken = val;
+          }
+        }
+      });
+      cookieHeader = Object.entries(cookiesMap).map(([name, val]) => `${name}=${val}`).join("; ");
+    }
+  };
 
   // Helper function to measure response time and validate expected status codes
   const measureRequest = async (name, method, url, data = null, headers = {}, expectedStatus = [200, 201]) => {
     const start = Date.now();
     try {
+      const mergedHeaders = { ...headers };
+      if (csrfToken) {
+        mergedHeaders["x-xsrf-token"] = csrfToken;
+      }
+      if (cookieHeader) {
+        mergedHeaders["Cookie"] = cookieHeader;
+      }
       let response;
       if (method.toLowerCase() === "get") {
-        response = await axios.get(url, { headers });
+        response = await axios.get(url, { headers: mergedHeaders });
       } else if (method.toLowerCase() === "post") {
-        response = await axios.post(url, data, { headers });
+        response = await axios.post(url, data, { headers: mergedHeaders });
       } else if (method.toLowerCase() === "put") {
-        response = await axios.put(url, data, { headers });
+        response = await axios.put(url, data, { headers: mergedHeaders });
       } else if (method.toLowerCase() === "delete") {
-        response = await axios.delete(url, { headers });
+        response = await axios.delete(url, { headers: mergedHeaders });
       } else if (method.toLowerCase() === "patch") {
-        response = await axios.patch(url, data, { headers });
+        response = await axios.patch(url, data, { headers: mergedHeaders });
       }
+      
+      updateTokens(response.headers);
+      
       const duration = Date.now() - start;
       const passed = expectedStatus.includes(response.status);
       reportItems.push({
@@ -68,6 +102,9 @@ async function runAuditor() {
       }
       return { success: passed, status: response.status, data: response.data, duration };
     } catch (error) {
+      if (error.response) {
+        updateTokens(error.response.headers);
+      }
       const duration = Date.now() - start;
       const status = error.response?.status || 500;
       const msg = error.response?.data?.message || error.message;
@@ -97,6 +134,18 @@ async function runAuditor() {
     }
   };
 
+  // Initialize CSRF session
+  console.log("Initializing CSRF session for auditor...");
+  try {
+    const initRes = await axios.get(`${BASE_URL}/api/auth/me`);
+    updateTokens(initRes.headers);
+  } catch (err) {
+    if (err.response) {
+      updateTokens(err.response.headers);
+    }
+  }
+  console.log("CSRF Token initialized:", csrfToken);
+
   // 1. PHASE 2: Register & Login (Auth Flows)
   console.log("--- PHASE 2: Registering Live Test User ---");
   const registerRes = await measureRequest(
@@ -108,6 +157,20 @@ async function runAuditor() {
 
   if (registerRes.success) {
     console.log("  🟢 Registration passed.");
+    // Create an active professional subscription for this user in MongoDB so limits are bypassed
+    try {
+      const userId = registerRes.data.data._id;
+      await Subscription.create({
+        userId,
+        plan: "professional",
+        status: "active",
+        currentPeriodStart: new Date(),
+        currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      });
+      console.log("  ✓ Upgraded test user in MongoDB to Professional plan to bypass billing limits.");
+    } catch (dbErr) {
+      console.warn("  ⚠ Failed to seed Professional subscription for test user:", dbErr.message);
+    }
   } else {
     console.error("  🔴 Registration failed.");
   }

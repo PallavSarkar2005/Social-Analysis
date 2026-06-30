@@ -25,7 +25,7 @@ import toast, { Toaster } from "react-hot-toast";
 
 export default function GroupAnalytics() {
   const { groupName } = useParams();
-  const { data: creators = [], isLoading: loading } = useParty(groupName);
+  const { data: creators = [], isLoading: loading, refetch: loadCreators } = useParty(groupName);
   const { updateAccountGroup } = useAccounts();
 
   const [displayMode, setDisplayMode] = useState(() => {
@@ -88,11 +88,11 @@ export default function GroupAnalytics() {
       stateDist[st] = (stateDist[st] || 0) + 1;
     });
 
-    let topPerformer = creators[0];
-    let fastestGrowing = creators[0];
-    let mostViewed = creators[0];
-    let newestAdded = creators[0];
-    let lastSynced = new Date(creators[0].lastSync || 0);
+    let topPerformer = creators[0] || {};
+    let fastestGrowing = creators[0] || {};
+    let mostViewed = creators[0] || {};
+    let newestAdded = creators[0] || {};
+    let lastSynced = new Date((creators[0] && creators[0].lastSync) || 0);
 
     creators.forEach(c => {
       if ((c.subscribers || 0) > (topPerformer.subscribers || 0)) topPerformer = c;
@@ -381,6 +381,7 @@ export default function GroupAnalytics() {
                                       src={creator.profileImage || creator.thumbnail}
                                       alt=""
                                       className="w-full h-full object-cover"
+                                      loading="lazy"
                                     />
                                   ) : (
                                     <Award size={20} className="text-slate-500" />

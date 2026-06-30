@@ -2,10 +2,11 @@ import { useEffect, useState } from "react";
 import Sidebar from "../components/layout/Sidebar";
 import Navbar from "../components/layout/Navbar";
 import { useAccounts } from "../hooks/useQueries";
+import { useDebounce } from "../hooks/useDebounce";
 import { syncYoutubeChannel, syncChannelContent } from "../api/youtubeApi";
 import { motion, AnimatePresence } from "framer-motion";
 import toast, { Toaster } from "react-hot-toast";
-import { Users, Plus, Trash2, RefreshCw, Layers, ShieldCheck, Globe, Link2, Key } from "lucide-react";
+import { Users, Plus, Trash2, RefreshCw, Layers, ShieldCheck, Globe, Link2, Key, Search } from "lucide-react";
 
 const YoutubeIcon = (props) => (
   <svg
@@ -31,6 +32,8 @@ export default function Accounts() {
   } = useAccounts();
 
   const [syncingId, setSyncingId] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const debouncedSearchQuery = useDebounce(searchQuery, 300);
 
   const [form, setForm] = useState({
     name: "",
@@ -106,6 +109,15 @@ export default function Accounts() {
       setSyncingId("");
     }
   };
+
+  const filteredAccounts = accounts.filter((acc) => {
+    return (
+      acc.name.toLowerCase().includes(debouncedSearchQuery.toLowerCase()) ||
+      (acc.state || "").toLowerCase().includes(debouncedSearchQuery.toLowerCase()) ||
+      (acc.party || "").toLowerCase().includes(debouncedSearchQuery.toLowerCase()) ||
+      (acc.group || "").toLowerCase().includes(debouncedSearchQuery.toLowerCase())
+    );
+  });
 
   return (
     <div className="flex min-h-screen bg-[#090a0f] text-slate-100 antialiased font-sans selection:bg-indigo-500/30 selection:text-indigo-200">
@@ -212,13 +224,25 @@ export default function Accounts() {
                 </span>
               </div>
 
+              {/* Search Input */}
+              <div className="relative">
+                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500" size={14} />
+                <input
+                  type="text"
+                  placeholder="Filter connections by name, state, party..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full h-10 pl-10 pr-4 bg-white/[0.02] border border-white/[0.08] rounded-xl text-xs text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500/50 transition"
+                />
+              </div>
+
               {loading ? (
                 <div className="space-y-3 animate-pulse">
                   {[...Array(3)].map((_, i) => (
                     <div key={i} className="h-14 bg-[#121318]/30 rounded-xl" />
                   ))}
                 </div>
-              ) : accounts.length > 0 ? (
+              ) : filteredAccounts.length > 0 ? (
                 <div className="border border-white/[0.06] rounded-xl overflow-hidden shadow-xl bg-slate-950/20">
                   <div className="overflow-x-auto">
                     <table className="w-full text-left border-collapse">
@@ -233,7 +257,7 @@ export default function Accounts() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-white/[0.04]">
-                        {accounts.map((acc) => (
+                        {filteredAccounts.map((acc) => (
                           <tr key={acc._id} className="hover:bg-white/[0.01] transition-colors text-xs">
                             <td className="p-4 font-bold text-slate-200">{acc.name}</td>
                             <td className="p-4">
@@ -329,9 +353,13 @@ export default function Accounts() {
                 </div>
               ) : (
                 <div className="text-center py-16 bg-white/[0.01] border border-white/[0.04] border-dashed rounded-xl space-y-3">
-                  <p className="text-xs text-slate-400">No active social nodes indexed.</p>
+                  <p className="text-xs text-slate-400">
+                    {accounts.length > 0 ? "No matching social nodes found." : "No active social nodes indexed."}
+                  </p>
                   <p className="text-[11px] text-slate-500 max-w-xs mx-auto">
-                    Fill out the form on the left to index channels and enable social telemetry collection.
+                    {accounts.length > 0 
+                      ? "Try adjusting your search filters or text."
+                      : "Fill out the form on the left to index channels and enable social telemetry collection."}
                   </p>
                 </div>
               )}

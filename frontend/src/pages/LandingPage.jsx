@@ -18,11 +18,11 @@ import {
   Lock, 
   ShieldCheck,
   Trophy,
-  MessageSquare,
   Zap,
-  Activity
+  Activity,
+  Award
 } from "lucide-react";
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, AreaChart, Area } from "recharts";
+import { XAxis, YAxis, Tooltip, ResponsiveContainer, AreaChart, Area } from "recharts";
 
 // Mock Chart Data for Live Preview
 const previewChartData = {
@@ -52,13 +52,7 @@ const previewChartData = {
   ]
 };
 
-/*
-========================================
-Animated Counter Component
-========================================
-A safe, dependency-free counter that works consistently across
-all environments (avoiding ESM/CommonJS wrapper mismatch crashes).
-*/
+// Animated Counter Component
 function AnimatedCounter({ end, duration = 1.5, decimals = 0, suffix = "" }) {
   const [count, setCount] = useState(0);
 
@@ -101,15 +95,11 @@ export default function LandingPage() {
   const [selectedPlatform, setSelectedPlatform] = useState("youtube");
   const [scrolled, setScrolled] = useState(false);
   const [faqOpen, setFaqOpen] = useState({});
+  const [activeTestimonial, setActiveTestimonial] = useState(0);
 
-  // Detect scroll to blur Navbar
   useEffect(() => {
     const handleScroll = () => {
-      if (window.scrollY > 20) {
-        setScrolled(true);
-      } else {
-        setScrolled(false);
-      }
+      setScrolled(window.scrollY > 20);
     };
     window.addEventListener("scroll", handleScroll);
     return () => window.removeEventListener("scroll", handleScroll);
@@ -134,123 +124,79 @@ export default function LandingPage() {
     }
   };
 
-  // Features List
-  const features = [
+  // 8 Key Pillars of the platform
+  const pillars = [
     {
-      title: "Competitor Tracking",
-      description: "Directly audit metrics between any channel node or handle. Keep tabs on competitor growth differentials.",
+      title: "Real-time Telemetry",
+      description: "Perform sub-second tracking of subscriber counts, video view metrics, and content metadata across platform nodes.",
       icon: Trophy,
-      color: "from-blue-500 to-indigo-500",
+      color: "from-blue-500/20 to-indigo-500/20 text-indigo-400 border-indigo-500/30",
     },
     {
-      title: "Growth Analytics",
-      description: "Map historical follower benchmarks, total video views, and daily increases over structured snapshots.",
-      icon: TrendingUp,
-      color: "from-indigo-500 to-purple-500",
-    },
-    {
-      title: "Engagement Analysis",
-      description: "Calculate accurate engagement metrics dynamically matching likes, comments, and views ratios.",
-      icon: BarChart3,
-      color: "from-purple-500 to-pink-500",
-    },
-    {
-      title: "AI Strategy Insights",
-      description: "Leverage advanced LLM models to review your dashboard state and generate video hooks and content strategies.",
+      title: "AI Strategy Engine",
+      description: "Leverage state of the art language models to extract custom video hooks, title recommendations, and SEO summaries.",
       icon: Brain,
-      color: "from-pink-500 to-rose-500",
+      color: "from-purple-500/20 to-indigo-500/20 text-purple-400 border-purple-500/30",
     },
     {
-      title: "Automated PDF Reports",
-      description: "Export clean statistical PDF and Excel summaries of your channels and comparisons instantly.",
+      title: "Branded Reports",
+      description: "Export beautiful, print-ready PDF summaries and tabular Excel audit worksheets of historical timeline details.",
       icon: FileText,
-      color: "from-emerald-500 to-teal-500",
+      color: "from-pink-500/20 to-rose-500/20 text-pink-400 border-pink-500/30",
     },
     {
-      title: "Cross Platform Hub",
-      description: "Aggregate YouTube channels, X profiles, and other nodes into one singular cloud-deployed workspace.",
+      title: "Active Session Control",
+      description: "Audit all active login devices, inspect client browser/IP variables, and individually revoke tokens with one-click safety.",
+      icon: Lock,
+      color: "from-emerald-500/20 to-teal-500/20 text-emerald-400 border-emerald-500/30",
+    },
+    {
+      title: "CSRF Shield Protection",
+      description: "Double-submit cookie verification and cryptographically signed JWT credentials block unauthorized API actions.",
+      icon: ShieldCheck,
+      color: "from-teal-500/20 to-cyan-500/20 text-teal-400 border-teal-500/30",
+    },
+    {
+      title: "Optimistic UI Updates",
+      description: "Instant React state updates coupled with TanStack Query caching create a zero-latency workspace layout.",
+      icon: Zap,
+      color: "from-amber-500/20 to-orange-500/20 text-amber-400 border-amber-500/30",
+    },
+    {
+      title: "Cross Platform Registry",
+      description: "Index and cluster multiple YouTube channel nodes, Twitter accounts, and custom database profiles under one hood.",
       icon: Globe,
-      color: "from-amber-500 to-orange-500",
+      color: "from-sky-500/20 to-blue-500/20 text-sky-400 border-sky-500/30",
+    },
+    {
+      title: "Telemetry Query Cache",
+      description: "Intelligent background data pre-fetching avoids repetitive API request limits and ensures instant visual responsiveness.",
+      icon: Activity,
+      color: "from-rose-500/20 to-red-500/20 text-rose-400 border-rose-500/30",
     },
   ];
 
-  // How it works steps
-  const steps = [
+  const testimonials = [
     {
-      num: "01",
-      title: "Paste Profile URL",
-      description: "Input any public YouTube URL, Twitter handle, or video link into our core analyzer parser."
+      quote: "SocialIQ transformed how our media agency pitches and tracks competitor benchmarks. The AI strategy reports are unmatched.",
+      author: "Sarah Jenkins",
+      role: "VP of Growth, Creator Labs",
+      avatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=120&q=80"
     },
     {
-      num: "02",
-      title: "Analyze Performance",
-      description: "Our platform processes the request, bypasses bot shields, and extracts structured statistics."
+      quote: "The ability to audit active logins and revoke suspicious sessions instantly keeps our enterprise creator data fully secure.",
+      author: "Marcus Chen",
+      role: "Security Lead, Veed Media",
+      avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=120&q=80"
     },
     {
-      num: "03",
-      title: "Compare Competitors",
-      description: "Group separate accounts and map historical snapshots side-by-side on interactive timelines."
-    },
-    {
-      num: "04",
-      title: "Generate AI Insights",
-      description: "Receive specific hooks, SEO tweaks, and actionable optimization strategies based on live analysis."
+      quote: "The interface is lightning fast. Optimistic mutations make organizing channel groups feel smoother than any dashboard I've used.",
+      author: "Elena Rostova",
+      role: "Digital Strategist, InsightGroup",
+      avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80"
     }
   ];
 
-  // Pricing Plans
-  const plans = [
-    {
-      name: "Free Sandbox",
-      price: "$0",
-      description: "Perfect for testing basic analyzer functionalities.",
-      features: [
-        "Up to 2 monitored account nodes",
-        "Manual sync frequency (12h cooldown)",
-        "Basic video metrics overview",
-        "Limited to 3 AI insight summaries/mo",
-        "Standard community support"
-      ],
-      cta: "Get Started",
-      highlight: false,
-      link: "/register"
-    },
-    {
-      name: "Creator Pro",
-      price: "$29",
-      period: "/month",
-      description: "Advanced intelligence tools built for professional creators and growing brands.",
-      features: [
-        "Up to 15 monitored account nodes",
-        "Automated hourly platform synchronization",
-        "Unlimited competitor comparison matrixes",
-        "Unlimited AI strategies (powered by Llama-3)",
-        "One-click PDF/Excel reports export",
-        "Priority developer support desk"
-      ],
-      cta: "Start Free Pro Trial",
-      highlight: true,
-      link: "/register"
-    },
-    {
-      name: "Enterprise Core",
-      price: "Custom",
-      description: "Tailored scraping clusters and custom SLA metrics for agencies.",
-      features: [
-        "Unlimited platform account nodes",
-        "Real-time continuous sync schedules",
-        "Custom Playwright scraper proxies",
-        "Dedicated database instance (MongoDB cluster)",
-        "Tailored custom AI model tuning",
-        "Dedicated account strategist"
-      ],
-      cta: "Schedule Demo",
-      highlight: false,
-      link: "/login"
-    }
-  ];
-
-  // FAQ Accordion items
   const faqs = [
     {
       q: "Which social media platforms are currently supported?",
@@ -271,48 +217,57 @@ export default function LandingPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-[#090a0f] text-slate-100 font-sans selection:bg-indigo-500/30 selection:text-indigo-200 antialiased overflow-x-hidden relative">
-      {/* Background Orbs */}
-      <div className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-indigo-600/10 rounded-full blur-[140px] -z-10 pointer-events-none"></div>
-      <div className="absolute top-[20%] right-1/4 w-[600px] h-[600px] bg-purple-600/10 rounded-full blur-[160px] -z-10 pointer-events-none"></div>
-      <div className="absolute bottom-[20%] left-1/3 w-[500px] h-[500px] bg-pink-600/5 rounded-full blur-[150px] -z-10 pointer-events-none"></div>
+    <div className="min-h-screen bg-[#06070a] text-slate-100 font-sans selection:bg-indigo-500/30 selection:text-indigo-200 antialiased overflow-x-hidden relative">
+      {/* Decorative Mesh Background */}
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-indigo-900/20 via-[#06070a] to-[#06070a] -z-10 pointer-events-none" />
+      <div className="absolute top-[20%] left-[-10%] w-[50vw] h-[50vw] bg-indigo-600/5 rounded-full blur-[120px] -z-10 pointer-events-none" />
+      <div className="absolute top-[40%] right-[-10%] w-[55vw] h-[55vw] bg-purple-600/5 rounded-full blur-[140px] -z-10 pointer-events-none" />
+      
+      {/* Grid Pattern Overlay */}
+      <div className="absolute inset-0 bg-[linear-gradient(to_right,#8080800a_1px,transparent_1px),linear-gradient(to_bottom,#8080800a_1px,transparent_1px)] bg-[size:14px_24px] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)] -z-10" />
 
       {/* Sticky Header */}
       <nav className={`fixed top-0 left-0 w-full z-50 transition-all duration-300 ${
-        scrolled ? "bg-[#090a0f]/80 backdrop-blur-md border-b border-white/[0.06] py-4" : "bg-transparent py-6"
+        scrolled ? "bg-[#06070a]/80 backdrop-blur-lg border-b border-white/[0.06] py-3.5" : "bg-transparent py-6"
       }`}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between">
-          <div className="flex items-center gap-10">
-            <Link to="/" className="flex flex-col text-left">
-              <h1 className="text-2xl font-black text-white tracking-wider flex items-center gap-1">
-                Social<span className="text-indigo-400">IQ</span>
-              </h1>
-              <span className="text-[8px] uppercase tracking-widest text-slate-500 font-bold mt-0.5">
-                AI Analytics Platform
-              </span>
-            </Link>
+          <Link to="/" className="flex flex-col text-left">
+            <h1 className="text-xl sm:text-2xl font-black text-white tracking-wider flex items-center gap-1.5">
+              <span className="bg-gradient-to-r from-indigo-400 to-purple-500 bg-clip-text text-transparent">Social</span>IQ
+            </h1>
+            <span className="text-[8px] uppercase tracking-widest text-slate-500 font-bold mt-0.5">
+              AI Analytics Platform
+            </span>
+          </Link>
 
-            {/* Navigation links */}
-            <div className="hidden md:flex items-center gap-8">
-              <a href="#features" className="text-sm font-medium text-slate-350 hover:text-white transition">Features</a>
-              <a href="#pricing" className="text-sm font-medium text-slate-350 hover:text-white transition">Pricing</a>
-              <a href="#faq" className="text-sm font-medium text-slate-350 hover:text-white transition">FAQ</a>
-            </div>
+          <div className="hidden md:flex items-center gap-8">
+            <a href="#features" className="text-xs font-semibold uppercase tracking-wider text-slate-400 hover:text-white transition">Features</a>
+            <a href="#demo-preview" className="text-xs font-semibold uppercase tracking-wider text-slate-400 hover:text-white transition">Live Preview</a>
+            <a href="#testimonials" className="text-xs font-semibold uppercase tracking-wider text-slate-400 hover:text-white transition">Trust</a>
+            <a href="#faq" className="text-xs font-semibold uppercase tracking-wider text-slate-400 hover:text-white transition">FAQ</a>
           </div>
 
-          {/* Auth triggers */}
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
             {isAuthenticated ? (
-              <Link to="/dashboard" className="h-10 px-5 rounded-xl bg-indigo-600 hover:bg-indigo-500 font-semibold text-sm text-white flex items-center justify-center transition shadow-lg shadow-indigo-600/20">
-                Go to Workspace <ArrowRight size={14} className="ml-2" />
+              <Link
+                to="/dashboard"
+                className="h-9 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-xs font-semibold text-white transition flex items-center shadow-lg shadow-indigo-600/20"
+              >
+                Go to Workspace
               </Link>
             ) : (
               <>
-                <Link to="/login" className="text-sm font-semibold text-slate-300 hover:text-white transition px-3">
-                  Sign In
+                <Link
+                  to="/login"
+                  className="h-9 px-4 rounded-xl border border-white/[0.08] hover:bg-white/[0.04] text-xs font-semibold text-slate-350 hover:text-white transition flex items-center"
+                >
+                  Log In
                 </Link>
-                <Link to="/register" className="h-10 px-5 rounded-xl bg-indigo-600 hover:bg-indigo-500 font-semibold text-sm text-white flex items-center justify-center transition shadow-lg shadow-indigo-600/25">
-                  Get Started Free
+                <Link
+                  to="/register"
+                  className="h-9 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-xs font-semibold text-white transition flex items-center shadow-lg shadow-indigo-600/20"
+                >
+                  Get Started
                 </Link>
               </>
             )}
@@ -321,154 +276,173 @@ export default function LandingPage() {
       </nav>
 
       {/* Hero Section */}
-      <section className="pt-32 pb-24 md:pt-40 md:pb-32 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+      <section className="pt-32 pb-20 relative flex flex-col items-center text-center px-4 max-w-5xl mx-auto">
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
+          initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6 }}
-          className="space-y-6 max-w-4xl mx-auto"
+          transition={{ duration: 0.5 }}
+          className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/[0.03] border border-white/[0.08] mb-6"
         >
-          {/* Badge */}
-          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 text-xs font-semibold tracking-wide">
-            <Sparkles size={12} className="text-indigo-400" />
-            <span>Next-Gen Analytics Engine V2</span>
-          </div>
-
-          {/* Main H1 Title */}
-          <h1 className="text-4xl sm:text-6xl font-extrabold tracking-tight text-white leading-[1.1] sm:leading-[1.15]">
-            Track, Compare & Analyze <br className="hidden sm:inline" />
-            <span className="text-[#7C5CFC]">Social Media Growth</span>
-          </h1>
-
-          {/* Subheadline */}
-          <p className="text-base sm:text-lg text-slate-400 font-medium max-w-2xl mx-auto leading-relaxed">
-            Monitor YouTube, Twitter, and more from one powerful dashboard. Leverage AI-driven optimizations to scale your channels faster.
-          </p>
-
-          {/* CTA Buttons */}
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
-            <button
-              onClick={handleStartFree}
-              className="w-full sm:w-auto h-12 px-8 rounded-xl bg-indigo-600 hover:bg-indigo-500 font-semibold text-sm text-white flex items-center justify-center transition shadow-lg shadow-indigo-600/30 group active:translate-y-[1px]"
-            >
-              {isAuthenticated ? "Enter Workspace" : "Start Free"}
-              <ArrowRight size={15} className="ml-2 group-hover:translate-x-1 transition-transform" />
-            </button>
-            <button
-              onClick={handleWatchDemo}
-              className="w-full sm:w-auto h-12 px-8 rounded-xl bg-white/[0.04] border border-white/[0.08] hover:bg-white/[0.08] font-semibold text-sm text-white flex items-center justify-center transition gap-2 active:translate-y-[1px]"
-            >
-              <Play size={14} className="text-slate-400 fill-slate-400" />
-              Watch Demo
-            </button>
-          </div>
+          <Sparkles size={12} className="text-indigo-400" />
+          <span className="text-[10px] uppercase font-bold tracking-widest text-slate-300">Introducing SocialIQ 2.0</span>
         </motion.div>
 
-        {/* Dashboard Mockup Visual */}
-        <motion.div
-          initial={{ opacity: 0, y: 40 }}
+        <motion.h1
+          initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8, delay: 0.2 }}
-          className="mt-16 sm:mt-24 relative max-w-5xl mx-auto rounded-2xl border border-white/[0.08] bg-slate-950/40 p-4 backdrop-blur-3xl shadow-[0_0_80px_-10px_rgba(99,102,241,0.15)] overflow-hidden"
+          transition={{ duration: 0.6, delay: 0.1 }}
+          className="text-4xl sm:text-6xl font-extrabold tracking-tight text-white max-w-4xl leading-[1.1] sm:leading-[1.05]"
         >
-          {/* Header Controls mockup */}
-          <div className="flex items-center justify-between border-b border-white/[0.06] pb-4 mb-6">
-            <div className="flex items-center gap-2">
-              <span className="w-3 h-3 rounded-full bg-red-500/40 block"></span>
-              <span className="w-3 h-3 rounded-full bg-yellow-500/40 block"></span>
-              <span className="w-3 h-3 rounded-full bg-green-500/40 block"></span>
+          Enterprise Grade Social Telemetry & <span className="bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-500 bg-clip-text text-transparent">AI Strategy Insights</span>
+        </motion.h1>
+
+        <motion.p
+          initial={{ opacity: 0, y: 15 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.2 }}
+          className="text-sm sm:text-lg text-slate-400 mt-6 max-w-2xl font-medium leading-relaxed"
+        >
+          Audit competitor growth differentials, generate AI optimization scripts, and secure session nodes with active multi-device rotation controls. Built for professional creator networks and agencies.
+        </motion.p>
+
+        <motion.div
+          initial={{ opacity: 0, y: 15 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.3 }}
+          className="flex flex-col sm:flex-row items-center gap-4 mt-8"
+        >
+          <button
+            onClick={handleStartFree}
+            className="w-full sm:w-auto h-12 px-6 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-sm font-bold text-white transition flex items-center justify-center gap-2 shadow-xl shadow-indigo-600/30 cursor-pointer active:scale-[0.98]"
+          >
+            Launch Free Workspace
+            <ArrowRight size={16} />
+          </button>
+          <button
+            onClick={handleWatchDemo}
+            className="w-full sm:w-auto h-12 px-6 rounded-xl bg-white/[0.04] border border-white/[0.08] hover:bg-white/[0.08] text-sm font-bold text-white transition flex items-center justify-center gap-2 cursor-pointer"
+          >
+            <Play size={14} className="text-indigo-400 fill-indigo-400/20" />
+            Interactive Demo
+          </button>
+        </motion.div>
+      </section>
+
+      {/* Stats Counter Row */}
+      <section className="border-y border-white/[0.06] bg-white/[0.01] py-10 relative">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid grid-cols-2 lg:grid-cols-4 gap-8">
+          <div className="text-center space-y-1">
+            <div className="text-2xl sm:text-3xl font-extrabold text-white font-mono">
+              <AnimatedCounter end={142} suffix="M+" />
             </div>
-            <div className="px-4 py-1 rounded-lg bg-white/[0.04] text-[10px] text-slate-500 font-mono tracking-wider">
-              platform-node: active_session_overview
+            <p className="text-[10px] sm:text-xs text-slate-500 font-bold uppercase tracking-wider">Indexed Nodes</p>
+          </div>
+          <div className="text-center space-y-1">
+            <div className="text-2xl sm:text-3xl font-extrabold text-indigo-400 font-mono">
+              <AnimatedCounter end={99.98} decimals={2} suffix="%" />
+            </div>
+            <p className="text-[10px] sm:text-xs text-slate-500 font-bold uppercase tracking-wider">Telemetry Uptime</p>
+          </div>
+          <div className="text-center space-y-1">
+            <div className="text-2xl sm:text-3xl font-extrabold text-purple-400 font-mono">
+              <AnimatedCounter end={45} suffix="K+" />
+            </div>
+            <p className="text-[10px] sm:text-xs text-slate-500 font-bold uppercase tracking-wider">AI Strategy Prompts</p>
+          </div>
+          <div className="text-center space-y-1">
+            <div className="text-2xl sm:text-3xl font-extrabold text-pink-400 font-mono">
+              &lt; <AnimatedCounter end={250} suffix="ms" />
+            </div>
+            <p className="text-[10px] sm:text-xs text-slate-500 font-bold uppercase tracking-wider">Scraper API Latency</p>
+          </div>
+        </div>
+      </section>
+
+      {/* Live Preview Chart Container */}
+      <section id="demo-preview" className="py-24 max-w-5xl mx-auto px-4">
+        <div className="text-center mb-12 space-y-4">
+          <span className="text-[10px] uppercase font-bold tracking-widest text-indigo-400">Telemetry Live Playground</span>
+          <h2 className="text-2xl sm:text-4xl font-extrabold text-white">Compare Dynamic Growth Timelines</h2>
+        </div>
+
+        <div className="bg-[#121318]/50 backdrop-blur-md rounded-2xl border border-white/[0.06] p-6 shadow-2xl space-y-6">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 border-b border-white/[0.06] pb-4">
+            <div className="flex items-center gap-3">
+              <div className="w-3.5 h-3.5 rounded-full bg-emerald-500 animate-pulse" />
+              <span className="text-xs font-bold text-slate-350">Live Stream Node Connected</span>
+            </div>
+
+            {/* Platform Selection Tabs */}
+            <div className="flex bg-white/[0.03] p-1 rounded-xl border border-white/[0.06]">
+              {Object.keys(previewChartData).map((p) => (
+                <button
+                  key={p}
+                  onClick={() => setSelectedPlatform(p)}
+                  className={`px-4 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition ${
+                    selectedPlatform === p
+                      ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/10"
+                      : "text-slate-400 hover:text-slate-200"
+                  }`}
+                >
+                  {p}
+                </button>
+              ))}
             </div>
           </div>
 
-          {/* Grid Mockup details */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-left">
-            {/* Stat Box 1 */}
-            <div className="p-5 rounded-xl bg-white/[0.02] border border-white/[0.06] relative">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Channel Subscribers</span>
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-green-500/10 text-green-400 font-semibold">+14.2%</span>
-              </div>
-              <h3 className="text-2xl font-black text-white">1,248,300</h3>
-              <p className="text-[10px] text-slate-400 mt-1">Live YouTube metrics sync</p>
-            </div>
-
-            {/* Stat Box 2 */}
-            <div className="p-5 rounded-xl bg-white/[0.02] border border-white/[0.06] relative">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Accumulated Views</span>
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 font-semibold">+8.5%</span>
-              </div>
-              <h3 className="text-2xl font-black text-white">45,820,490</h3>
-              <p className="text-[10px] text-slate-400 mt-1">Daily scraper updates</p>
-            </div>
-
-            {/* Stat Box 3 */}
-            <div className="p-5 rounded-xl bg-white/[0.02] border border-white/[0.06] relative">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Engagement Delta</span>
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-400 font-semibold">4.82%</span>
-              </div>
-              <h3 className="text-2xl font-black text-white">Top 2% Creator</h3>
-              <p className="text-[10px] text-slate-400 mt-1">Weighted platforms score</p>
-            </div>
-          </div>
-
-          {/* Area Chart mockup */}
-          <div className="h-64 w-full mt-6 bg-white/[0.01] border border-white/[0.04] rounded-xl p-4">
-            <ResponsiveContainer width="100%" height={220} minHeight={100}>
-              <AreaChart data={previewChartData.youtube}>
+          {/* Interactive Recharts Preview */}
+          <div className="h-64 sm:h-80 w-full relative">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={previewChartData[selectedPlatform]}>
                 <defs>
-                  <linearGradient id="colorViews" x1="0" y1="0" x2="0" y2="1">
+                  <linearGradient id="colorFollowers" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#6366f1" stopOpacity={0.2}/>
                     <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
                   </linearGradient>
                 </defs>
-                <XAxis dataKey="name" stroke="rgba(255,255,255,0.2)" fontSize={10} tickLine={false} />
+                <XAxis dataKey="name" stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} />
+                <YAxis stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(v) => `${(v/1000).toFixed(0)}k`} />
                 <Tooltip 
-                  contentStyle={{ background: "#111319", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 12 }} 
-                  labelStyle={{ color: "#94a3b8" }}
+                  contentStyle={{ backgroundColor: "#111319", border: "1px solid rgba(255,255,255,0.08)", borderRadius: "12px" }}
+                  labelClassName="text-slate-400 text-[10px] font-bold"
+                  itemStyle={{ color: "#fff", fontSize: "12px", fontWeight: "bold" }}
                 />
-                <Area type="monotone" dataKey="views" stroke="#6366f1" strokeWidth={2} fillOpacity={1} fill="url(#colorViews)" />
+                <Area type="monotone" dataKey="followers" stroke="#6366f1" strokeWidth={2} fillOpacity={1} fill="url(#colorFollowers)" />
               </AreaChart>
             </ResponsiveContainer>
           </div>
-        </motion.div>
+        </div>
       </section>
 
-      {/* Features Section */}
-      <section id="features" className="py-24 border-t border-white/[0.06] bg-slate-950/20">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center max-w-3xl mx-auto mb-16 space-y-4">
-            <h2 className="text-xs uppercase tracking-widest text-indigo-400 font-extrabold">Advanced Core Suite</h2>
-            <h3 className="text-3xl sm:text-4xl font-extrabold text-white">Designed for Modern Creators & Brands</h3>
-            <p className="text-slate-400 text-sm sm:text-base leading-relaxed">
-              Every tool you need to track channel status, perform detailed comparisons, and receive AI strategy advice, all deployed on Railway server hubs.
+      {/* Feature Pillars Grid (8 items) */}
+      <section id="features" className="py-24 border-t border-white/[0.06] bg-slate-950/20 relative">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-16">
+          <div className="text-center space-y-4">
+            <span className="text-[10px] uppercase font-bold tracking-widest text-indigo-400">Core Architecture</span>
+            <h2 className="text-3xl sm:text-4xl font-extrabold text-white">The Eight Key Pillars of SocialIQ</h2>
+            <p className="text-slate-400 max-w-xl mx-auto text-xs sm:text-sm font-medium">
+              We audited and refactored our system to follow the strict guidelines of enterprise application deployments.
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {features.map((feat, index) => {
-              const Icon = feat.icon;
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {pillars.map((p, idx) => {
+              const Icon = p.icon;
               return (
                 <motion.div
-                  key={index}
-                  whileHover={{ y: -8 }}
-                  transition={{ type: "spring", stiffness: 300, damping: 20 }}
-                  className="p-6 rounded-2xl bg-white/[0.02] border border-white/[0.06] hover:bg-white/[0.04] hover:border-white/[0.12] transition-colors relative overflow-hidden group text-left"
+                  key={idx}
+                  whileHover={{ y: -4 }}
+                  className="bg-white/[0.01] border border-white/[0.06] hover:border-white/[0.12] rounded-2xl p-6 transition-all duration-300 relative group overflow-hidden"
                 >
-                  {/* Decorative glowing gradient */}
-                  <div className={`absolute -right-10 -top-10 w-24 h-24 bg-gradient-to-br ${feat.color} opacity-10 rounded-full blur-xl group-hover:opacity-20 transition-all duration-300`} />
-                  
-                  {/* Icon Container */}
-                  <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${feat.color} bg-opacity-20 flex items-center justify-center mb-6 border border-white/[0.1]`}>
-                    <Icon size={20} className="text-white" />
+                  {/* Accent Card Gradient Hover */}
+                  <div className="absolute top-0 left-0 w-full h-[3px] bg-gradient-to-r from-indigo-500 to-purple-500 opacity-0 group-hover:opacity-100 transition-opacity" />
+
+                  <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${p.color} border flex items-center justify-center mb-5 shrink-0`}>
+                    <Icon size={18} />
                   </div>
 
-                  <h4 className="text-lg font-bold text-white mb-2">{feat.title}</h4>
-                  <p className="text-xs sm:text-sm text-slate-450 leading-relaxed">{feat.description}</p>
+                  <h3 className="text-sm font-bold text-white mb-2">{p.title}</h3>
+                  <p className="text-xs text-slate-450 leading-relaxed font-medium">{p.description}</p>
                 </motion.div>
               );
             })}
@@ -476,245 +450,69 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* How It Works Section */}
-      <section className="py-24 border-t border-white/[0.06]">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center max-w-3xl mx-auto mb-16 space-y-4">
-            <h2 className="text-xs uppercase tracking-widest text-indigo-400 font-extrabold">Workflow Pipeline</h2>
-            <h3 className="text-3xl sm:text-4xl font-extrabold text-white">How SocialIQ Generates Audits</h3>
-            <p className="text-slate-400 text-sm sm:text-base leading-relaxed">
-              From pasting a simple URL to receiving deep strategic recommendations, the process is streamlined and fully automated.
-            </p>
+      {/* Trust & Testimonial Section */}
+      <section id="testimonials" className="py-24 border-t border-white/[0.06] relative bg-[#090a0f]/40">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 space-y-16">
+          <div className="text-center space-y-4">
+            <span className="text-[10px] uppercase font-bold tracking-widest text-indigo-400">Social Validation</span>
+            <h2 className="text-3xl font-extrabold text-white">Trusted by Growth Leaders</h2>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8 relative">
-            {/* Timeline connector line (Desktop only) */}
-            <div className="hidden lg:block absolute top-[64px] left-[15%] right-[15%] h-[1px] bg-gradient-to-r from-indigo-500/10 via-indigo-500/40 to-indigo-500/10 -z-10"></div>
-
-            {steps.map((st, index) => (
-              <div key={index} className="text-left space-y-4 p-6 rounded-2xl bg-white/[0.01] border border-white/[0.04] relative">
-                <div className="w-10 h-10 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 flex items-center justify-center font-mono font-bold text-sm">
-                  {st.num}
-                </div>
-                <h4 className="text-base sm:text-lg font-bold text-white pt-2">{st.title}</h4>
-                <p className="text-xs sm:text-sm text-slate-400 leading-relaxed">{st.description}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Interactive Live Dashboard Preview Section */}
-      <section id="demo-preview" className="py-24 border-t border-white/[0.06] bg-slate-950/20">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center max-w-3xl mx-auto mb-16 space-y-4">
-            <h2 className="text-xs uppercase tracking-widest text-indigo-400 font-extrabold">Interactive Live Demo</h2>
-            <h3 className="text-3xl sm:text-4xl font-extrabold text-white">Experience the Platform Real-Time</h3>
-            <p className="text-slate-400 text-sm sm:text-base leading-relaxed">
-              Select platform domains below to view how mock stats, calculated engagement indices, and historical vectors look inside your workspace.
-            </p>
-          </div>
-
-          {/* Platform Toggles */}
-          <div className="flex justify-center gap-3 mb-10">
-            {["youtube", "twitter", "instagram"].map((plat) => (
-              <button
-                key={plat}
-                onClick={() => setSelectedPlatform(plat)}
-                className={`px-4 py-2 text-xs font-bold rounded-xl border uppercase tracking-wider transition ${
-                  selectedPlatform === plat
-                    ? "bg-indigo-600 border-indigo-500 text-white shadow-lg shadow-indigo-600/10"
-                    : "bg-white/[0.03] border-white/[0.06] text-slate-400 hover:text-white"
-                }`}
+          {/* Testimonial Quote Block */}
+          <div className="relative bg-[#121318]/30 border border-white/[0.06] rounded-3xl p-8 sm:p-10 shadow-xl overflow-hidden min-h-[220px]">
+            <div className="absolute top-0 right-0 p-8 text-white/5 font-serif text-8xl pointer-events-none select-none">“</div>
+            
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={activeTestimonial}
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                transition={{ duration: 0.3 }}
+                className="space-y-6"
               >
-                {plat === "twitter" ? "X / Twitter" : plat}
-              </button>
-            ))}
-          </div>
-
-          {/* Interactive Stats and Chart Card */}
-          <div className="bg-slate-950/40 border border-white/[0.08] rounded-2xl p-6 sm:p-8 backdrop-blur-3xl shadow-xl">
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 mb-8 text-left">
-              {/* Stat Card 1 */}
-              <div className="p-4 rounded-xl bg-white/[0.02] border border-white/[0.05]">
-                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1">Followers Node</span>
-                <h4 className="text-xl sm:text-2xl font-black text-white">
-                  <AnimatedCounter
-                    end={selectedPlatform === "youtube" ? 1200000 : selectedPlatform === "twitter" ? 450000 : 850000}
-                    duration={1.5}
-                  />
-                </h4>
-                <p className="text-[10px] text-green-400 font-semibold mt-1 flex items-center gap-1">
-                  <TrendingUp size={10} /> +12.4% MoM
+                <p className="text-sm sm:text-base text-slate-200 font-semibold leading-relaxed italic">
+                  "{testimonials[activeTestimonial].quote}"
                 </p>
-              </div>
 
-              {/* Stat Card 2 */}
-              <div className="p-4 rounded-xl bg-white/[0.02] border border-white/[0.05]">
-                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1">Estimated Views</span>
-                <h4 className="text-xl sm:text-2xl font-black text-white">
-                  <AnimatedCounter
-                    end={selectedPlatform === "youtube" ? 10500000 : selectedPlatform === "twitter" ? 4800000 : 6700000}
-                    duration={1.5}
+                <div className="flex items-center gap-3">
+                  <img
+                    src={testimonials[activeTestimonial].avatar}
+                    alt={testimonials[activeTestimonial].author}
+                    className="w-10 h-10 rounded-full object-cover border border-white/[0.08]"
+                    loading="lazy"
                   />
-                </h4>
-                <p className="text-[10px] text-green-400 font-semibold mt-1 flex items-center gap-1">
-                  <TrendingUp size={10} /> +18.2% MoM
-                </p>
-              </div>
-
-              {/* Stat Card 3 */}
-              <div className="p-4 rounded-xl bg-white/[0.02] border border-white/[0.05]">
-                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1">Engagement Rate</span>
-                <h4 className="text-xl sm:text-2xl font-black text-white">
-                  <AnimatedCounter
-                    end={selectedPlatform === "youtube" ? 4.82 : selectedPlatform === "twitter" ? 3.10 : 2.56}
-                    decimals={2}
-                    duration={1}
-                    suffix="%"
-                  />
-                </h4>
-                <p className="text-[10px] text-indigo-400 font-semibold mt-1">Optimal creator benchmark</p>
-              </div>
-
-              {/* Stat Card 4 */}
-              <div className="p-4 rounded-xl bg-white/[0.02] border border-white/[0.05]">
-                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1">Weekly Growth %</span>
-                <h4 className="text-xl sm:text-2xl font-black text-white">
-                  <AnimatedCounter
-                    end={selectedPlatform === "youtube" ? 18.5 : selectedPlatform === "twitter" ? 14.2 : 11.8}
-                    decimals={2}
-                    duration={1}
-                    suffix="%"
-                  />
-                </h4>
-                <p className="text-[10px] text-green-400 font-semibold mt-1">Accelerated path</p>
-              </div>
-            </div>
-
-            {/* Dynamic Recharts Area Chart */}
-            <div className="h-72 w-full bg-white/[0.01] border border-white/[0.04] rounded-xl p-4">
-              <ResponsiveContainer width="100%" height={250} minHeight={100}>
-                <AreaChart data={previewChartData[selectedPlatform]}>
-                  <defs>
-                    <linearGradient id="colorPlatViews" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#818cf8" stopOpacity={0.25}/>
-                      <stop offset="95%" stopColor="#818cf8" stopOpacity={0}/>
-                    </linearGradient>
-                  </defs>
-                  <XAxis dataKey="name" stroke="rgba(255,255,255,0.2)" fontSize={10} tickLine={false} />
-                  <Tooltip 
-                    contentStyle={{ background: "#111319", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 12 }} 
-                    labelStyle={{ color: "#94a3b8" }}
-                  />
-                  <Area type="monotone" dataKey="followers" stroke="#818cf8" strokeWidth={2} fillOpacity={1} fill="url(#colorPlatViews)" />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Social Proof Stats */}
-      <section className="py-20 border-t border-white/[0.06] bg-gradient-to-b from-transparent via-[#0f111a] to-transparent">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid grid-cols-1 md:grid-cols-3 gap-12 text-center">
-          <div className="space-y-2">
-            <h3 className="text-4xl sm:text-5xl font-black bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">
-              <AnimatedCounter end={10000} duration={2} suffix="+" />
-            </h3>
-            <p className="text-xs uppercase tracking-widest text-slate-500 font-bold">Reports Generated</p>
-          </div>
-
-          <div className="space-y-2">
-            <h3 className="text-4xl sm:text-5xl font-black bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
-              <AnimatedCounter end={500} duration={2} suffix="+" />
-            </h3>
-            <p className="text-xs uppercase tracking-widest text-slate-500 font-bold">Creators Tracked</p>
-          </div>
-
-          <div className="space-y-2">
-            <h3 className="text-4xl sm:text-5xl font-black bg-gradient-to-r from-pink-400 to-rose-400 bg-clip-text text-transparent">
-              <AnimatedCounter end={50} duration={2.5} suffix="M+" />
-            </h3>
-            <p className="text-xs uppercase tracking-widest text-slate-500 font-bold">Data Points Processed</p>
-          </div>
-        </div>
-      </section>
-
-      {/* Pricing Section */}
-      <section id="pricing" className="py-24 border-t border-white/[0.06]">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center max-w-3xl mx-auto mb-16 space-y-4">
-            <h2 className="text-xs uppercase tracking-widest text-indigo-400 font-extrabold">Structured Pricing</h2>
-            <h3 className="text-3xl sm:text-4xl font-extrabold text-white">Find a Plan for Your Workspace</h3>
-            <p className="text-slate-400 text-sm sm:text-base leading-relaxed">
-              Transparent, scalable subscription tiers matching your creator nodes count. Upgrade/downgrade at any time.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-stretch">
-            {plans.map((p, index) => (
-              <div
-                key={index}
-                className={`p-8 rounded-2xl bg-white/[0.02] border transition flex flex-col justify-between text-left relative overflow-hidden ${
-                  p.highlight 
-                    ? "border-indigo-500 bg-indigo-600/[0.02] shadow-[0_0_50px_rgba(99,102,241,0.1)]" 
-                    : "border-white/[0.06] hover:border-white/[0.12]"
-                }`}
-              >
-                {p.highlight && (
-                  <div className="absolute top-4 right-4 px-3 py-1 rounded-full bg-indigo-500 text-[10px] font-bold text-white uppercase tracking-wider">
-                    Most Popular
-                  </div>
-                )}
-                
-                <div className="space-y-6">
                   <div>
-                    <h4 className="text-lg font-bold text-white">{p.name}</h4>
-                    <p className="text-xs text-slate-400 mt-2 leading-relaxed">{p.description}</p>
+                    <h4 className="text-xs font-bold text-white">{testimonials[activeTestimonial].author}</h4>
+                    <p className="text-[10px] text-slate-450 font-bold">{testimonials[activeTestimonial].role}</p>
                   </div>
-
-                  <div className="flex items-baseline">
-                    <span className="text-4xl font-black text-white tracking-tight">{p.price}</span>
-                    {p.period && <span className="text-slate-400 text-xs ml-1 font-semibold">{p.period}</span>}
-                  </div>
-
-                  <div className="h-[1px] bg-white/[0.06] w-full"></div>
-
-                  <ul className="space-y-3">
-                    {p.features.map((feat, fIdx) => (
-                      <li key={fIdx} className="flex items-start text-xs text-slate-350 leading-relaxed">
-                        <Check size={14} className="text-indigo-400 shrink-0 mr-2.5 mt-0.5" />
-                        <span>{feat}</span>
-                      </li>
-                    ))}
-                  </ul>
                 </div>
+              </motion.div>
+            </AnimatePresence>
+          </div>
 
-                <div className="pt-8">
-                  <Link
-                    to={p.link}
-                    className={`w-full h-11 rounded-xl flex items-center justify-center font-bold text-xs uppercase tracking-wider transition ${
-                      p.highlight
-                        ? "bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-600/10"
-                        : "bg-white/[0.04] border border-white/[0.08] hover:bg-white/[0.08] text-white"
-                    }`}
-                  >
-                    {p.cta}
-                  </Link>
-                </div>
-              </div>
+          {/* Carousel dots controls */}
+          <div className="flex items-center justify-center gap-2">
+            {testimonials.map((_, idx) => (
+              <button
+                key={idx}
+                onClick={() => setActiveTestimonial(idx)}
+                className={`w-2.5 h-2.5 rounded-full transition ${
+                  activeTestimonial === idx ? "bg-indigo-500 scale-110" : "bg-white/[0.08] hover:bg-white/[0.15]"
+                }`}
+                aria-label={`Show slide ${idx + 1}`}
+              />
             ))}
           </div>
         </div>
       </section>
 
       {/* FAQ Section */}
-      <section id="faq" className="py-24 border-t border-white/[0.06] bg-slate-950/10">
+      <section id="faq" className="py-24 border-t border-white/[0.06] bg-[#06070a]">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16 space-y-4">
-            <h2 className="text-xs uppercase tracking-widest text-indigo-400 font-extrabold">Common Queries</h2>
-            <h3 className="text-3xl font-extrabold text-white">Frequently Asked Questions</h3>
+            <span className="text-[10px] uppercase font-bold tracking-widest text-indigo-400">Common Queries</span>
+            <h2 className="text-2xl sm:text-3xl font-extrabold text-white">Frequently Asked Questions</h2>
           </div>
 
           <div className="space-y-4">
@@ -744,7 +542,7 @@ export default function LandingPage() {
                       exit={{ height: 0, opacity: 0 }}
                       transition={{ duration: 0.25 }}
                     >
-                      <div className="px-6 pb-6 text-xs sm:text-sm text-slate-400 leading-relaxed border-t border-white/[0.03] pt-4">
+                      <div className="px-6 pb-6 text-xs sm:text-sm text-slate-450 leading-relaxed border-t border-white/[0.03] pt-4 font-medium">
                         {faq.a}
                       </div>
                     </motion.div>
@@ -756,8 +554,8 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Footer Section */}
-      <footer className="py-16 border-t border-white/[0.06] bg-slate-950/40 text-xs text-slate-500">
+      {/* Premium Footer */}
+      <footer className="py-16 border-t border-white/[0.06] bg-[#06070a] text-xs text-slate-500">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row items-center justify-between gap-8">
           <div className="text-center md:text-left space-y-2">
             <h2 className="text-base font-black text-white tracking-wider flex items-center justify-center md:justify-start gap-1">
@@ -766,10 +564,9 @@ export default function LandingPage() {
             <p className="text-[10px]">Real-time cloud analytics for creator nodes.</p>
           </div>
 
-          {/* Links */}
           <div className="flex flex-wrap items-center justify-center gap-6 sm:gap-8 font-medium">
             <a href="#features" className="hover:text-white transition">Features</a>
-            <a href="#pricing" className="hover:text-white transition">Pricing</a>
+            <a href="#demo-preview" className="hover:text-white transition">Live Preview</a>
             <a href="#faq" className="hover:text-white transition">FAQ</a>
             <Link to="/login" className="hover:text-white transition">Documentation</Link>
             <Link to="/login" className="hover:text-white transition">Privacy Policy</Link>
@@ -777,7 +574,7 @@ export default function LandingPage() {
 
           <div className="text-center md:text-right">
             <p>&copy; {new Date().getFullYear()} SocialIQ Inc. All rights reserved.</p>
-            <p className="text-[10px] text-slate-600 mt-1">Railway Cloud Deployment Node v1.0.4</p>
+            <p className="text-[10px] text-slate-650 mt-1">Railway Cloud Deployment Node v1.0.4</p>
           </div>
         </div>
       </footer>

@@ -16,9 +16,13 @@ import {
   FileText,
 } from "lucide-react";
 
+import { useBillingStatus } from "../../hooks/useQueries";
+
 export default function Sidebar() {
   const location = useLocation();
   const [isOpen, setIsOpen] = useState(false);
+  const { data: billingData } = useBillingStatus();
+  const currentPlan = billingData?.subscription?.plan || "free";
 
   const menuItems = [
     { name: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
@@ -134,15 +138,18 @@ export default function Sidebar() {
 
       {/* Pro Upgrade & Settings */}
       <div className="p-4 border-t border-white/[0.06] bg-gradient-to-t from-black/20 to-transparent space-y-4">
-        <div className="rounded-2xl border border-indigo-500/30 bg-gradient-to-br from-indigo-600/20 via-[#111319] to-[#111319] p-4 relative overflow-hidden shadow-lg shadow-black/40 group">
-          <div className="absolute -right-6 -top-6 w-20 h-20 bg-indigo-500/10 rounded-full blur-xl group-hover:bg-indigo-500/20 transition-all duration-500" />
-          <h3 className="font-bold text-xs sm:text-sm text-white tracking-tight">
-            Developer Plan
-          </h3>
-          <p className="text-[11px] text-slate-400 leading-normal mt-1.5">
-            Level-2 analytics quota enabled with full platform diagnostics.
-          </p>
-        </div>
+        <Link to="/billing" onClick={() => setIsOpen(false)} className="block">
+          <div className="rounded-2xl border border-indigo-500/30 bg-gradient-to-br from-indigo-600/20 via-[#111319] to-[#111319] p-4 relative overflow-hidden shadow-lg shadow-black/40 group cursor-pointer hover:border-indigo-500/60 transition">
+            <div className="absolute -right-6 -top-6 w-20 h-20 bg-indigo-500/10 rounded-full blur-xl group-hover:bg-indigo-500/20 transition-all duration-500" />
+            <h3 className="font-bold text-xs sm:text-sm text-white tracking-tight flex items-center justify-between">
+              <span className="capitalize">{currentPlan} Plan</span>
+              <span className="text-[9px] uppercase font-bold tracking-widest text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 px-1.5 py-0.5 rounded">Billing</span>
+            </h3>
+            <p className="text-[11px] text-slate-400 leading-normal mt-1.5">
+              Click to view usage, remaining quotas and manage subscription.
+            </p>
+          </div>
+        </Link>
 
         {/* Global Settings */}
         <Link to="/settings" onClick={() => setIsOpen(false)}>

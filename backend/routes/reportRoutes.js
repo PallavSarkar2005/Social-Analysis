@@ -9,11 +9,13 @@ import { protect } from "../middleware/authMiddleware.js";
 import { param } from "express-validator";
 import { validateResult, validateSaveReport } from "../middleware/validationMiddleware.js";
 
+import { checkPlanLimits } from "../middleware/billingMiddleware.js";
+
 const router = express.Router();
 
 router.use(protect);
 
-router.post("/", validateSaveReport, saveReport);
+router.post("/", validateSaveReport, checkPlanLimits("reports"), saveReport);
 router.get("/", getReports);
 
 router.get(

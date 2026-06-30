@@ -261,6 +261,7 @@ export default function Compare() {
                                   src={data.creatorA.profileImage || data.creatorA.thumbnail}
                                   alt=""
                                   className="w-8 h-8 rounded-full border border-indigo-500/30 object-cover"
+                                  loading="lazy"
                                 />
                               )}
                               <span>{data.creatorA.name}</span>
@@ -273,6 +274,7 @@ export default function Compare() {
                                   src={data.creatorB.profileImage || data.creatorB.thumbnail}
                                   alt=""
                                   className="w-8 h-8 rounded-full border border-purple-500/30 object-cover"
+                                  loading="lazy"
                                 />
                               )}
                               <span>{data.creatorB.name}</span>

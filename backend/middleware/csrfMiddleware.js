@@ -30,6 +30,11 @@ export const csrfProtection = (req, res, next) => {
     return next();
   }
 
+  // Bypass CSRF for Razorpay webhooks
+  if (req.originalUrl === "/api/billing/webhook" || req.path === "/api/billing/webhook") {
+    return next();
+  }
+
   // Validate CSRF token for state-changing requests
   const headerToken = req.headers["x-xsrf-token"] || req.headers["x-csrf-token"];
 

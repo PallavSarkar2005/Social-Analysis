@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import Sidebar from "../components/layout/Sidebar";
 import Navbar from "../components/layout/Navbar";
-import { getCompetitors, addCompetitor, deleteCompetitor } from "../api/competitorApi";
+import { useCompetitors } from "../hooks/useQueries";
+import { useDebounce } from "../hooks/useDebounce";
 import {
   Trophy,
   Plus,
@@ -12,6 +13,7 @@ import {
   Percent,
   RefreshCw,
   Sparkles,
+  Search,
 } from "lucide-react";
 
 const YoutubeIcon = (props) => (
@@ -40,29 +42,20 @@ import { motion, AnimatePresence } from "framer-motion";
 import toast, { Toaster } from "react-hot-toast";
 
 export default function Competitors() {
-  const [competitors, setCompetitors] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
+  const {
+    competitors,
+    loading,
+    addCompetitor,
+    adding: submitting,
+    deleteCompetitor,
+    refetch: loadCompetitors,
+  } = useCompetitors();
+
   const [platform, setPlatform] = useState("youtube");
   const [urlOrHandle, setUrlOrHandle] = useState("");
   const [activeChartTab, setActiveChartTab] = useState("followers");
-
-  const loadCompetitors = async () => {
-    try {
-      setLoading(true);
-      const res = await getCompetitors();
-      setCompetitors(res.data || []);
-    } catch (err) {
-      console.error(err);
-      toast.error("Failed to load competitor data.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadCompetitors();
-  }, []);
+  const [searchQuery, setSearchQuery] = useState("");
+  const debouncedSearchQuery = useDebounce(searchQuery, 300);
 
   const handleAddCompetitor = async (e) => {
     e.preventDefault();
@@ -72,22 +65,16 @@ export default function Competitors() {
     }
 
     try {
-      setSubmitting(true);
       toast.loading("Analyzing and tracking competitor profile...", { id: "addComp" });
-
       await addCompetitor({ platform, urlOrHandle });
-
       toast.success("Competitor successfully added and synced!", { id: "addComp" });
       setUrlOrHandle("");
-      await loadCompetitors();
     } catch (err) {
       console.error(err);
       toast.error(
         err?.response?.data?.message || "Failed to add competitor. Ensure URL or handle is valid.",
         { id: "addComp" }
       );
-    } finally {
-      setSubmitting(false);
     }
   };
 
@@ -98,16 +85,22 @@ export default function Competitors() {
       toast.loading(`Removing ${name}...`, { id: "remComp" });
       await deleteCompetitor(id);
       toast.success("Competitor removed successfully", { id: "remComp" });
-      await loadCompetitors();
     } catch (err) {
       console.error(err);
       toast.error("Failed to remove competitor.", { id: "remComp" });
     }
   };
 
+  const filteredCompetitors = competitors.filter((comp) => {
+    return (
+      comp.accountName.toLowerCase().includes(debouncedSearchQuery.toLowerCase()) ||
+      comp.platform.toLowerCase().includes(debouncedSearchQuery.toLowerCase())
+    );
+  });
+
   // Process data for charts
   const getComparisonData = () => {
-    return competitors.map((comp) => ({
+    return filteredCompetitors.map((comp) => ({
       name: comp.accountName,
       Followers: comp.followers,
       Views: comp.views,
@@ -120,7 +113,7 @@ export default function Competitors() {
   const getHistoricalData = () => {
     // Generate dates list based on all historical timestamps
     const datesSet = new Set();
-    competitors.forEach((c) => {
+    filteredCompetitors.forEach((c) => {
       c.history?.forEach((h) => datesSet.add(h.date));
     });
 
@@ -128,7 +121,7 @@ export default function Competitors() {
 
     return sortedDates.map((date) => {
       const row = { date };
-      competitors.forEach((c) => {
+      filteredCompetitors.forEach((c) => {
         const snap = c.history?.find((h) => h.date === date);
         row[c.accountName] = snap ? snap.followers : null;
       });
@@ -236,8 +229,18 @@ export default function Competitors() {
             <div className="space-y-8">
               {/* Competitors Stats Table */}
               <div className="bg-[#121318]/40 backdrop-blur-md rounded-2xl border border-white/[0.06] overflow-hidden shadow-2xl">
-                <div className="px-6 py-5 border-b border-white/[0.06]">
+                <div className="px-6 py-5 border-b border-white/[0.06] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <h3 className="text-sm font-semibold text-white">Competitor Metrics Registry</h3>
+                  <div className="relative w-full sm:w-64">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={14} />
+                    <input
+                      type="text"
+                      placeholder="Search tracked competitors..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="w-full h-8 pl-8 pr-3 bg-white/[0.02] border border-white/[0.08] rounded-lg text-xs text-white placeholder-slate-550 focus:outline-none focus:border-indigo-500/50 transition"
+                    />
+                  </div>
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-xs text-slate-300 border-collapse">
@@ -254,50 +257,58 @@ export default function Competitors() {
                     </thead>
                     <tbody className="divide-y divide-white/[0.04]">
                       <AnimatePresence>
-                        {competitors.map((comp) => (
-                          <tr key={comp._id} className="hover:bg-white/[0.01] transition-colors">
-                            <td className="px-6 py-4 font-bold text-white text-sm">{comp.accountName}</td>
-                            <td className="px-6 py-4">
-                              <span className="flex items-center gap-1.5 capitalize font-medium text-slate-300">
-                                {comp.platform === "youtube" ? (
-                                  <YoutubeIcon size={14} className="text-red-500" />
-                                ) : (
-                                  <span className="font-bold text-white">𝕏</span>
-                                )}
-                                {comp.platform}
-                              </span>
-                            </td>
-                            <td className="px-6 py-4 font-mono font-semibold">{comp.followers.toLocaleString()}</td>
-                            <td className="px-6 py-4">
-                              <span
-                                className={`inline-flex items-center gap-1 font-semibold ${
-                                  comp.growth >= 0 ? "text-emerald-400" : "text-rose-400"
-                                }`}
-                              >
-                                <TrendingUp size={12} className={comp.growth >= 0 ? "" : "rotate-180"} />
-                                {comp.growth >= 0 ? "+" : ""}
-                                {comp.growth}%
-                              </span>
-                            </td>
-                            <td className="px-6 py-4 font-mono">
-                              {comp.views > 0 ? comp.views.toLocaleString() : "N/A"}
-                            </td>
-                            <td className="px-6 py-4">
-                              <span className="px-2.5 py-1 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 font-semibold">
-                                {comp.engagement}%
-                              </span>
-                            </td>
-                            <td className="px-6 py-4 text-right">
-                              <button
-                                onClick={() => handleRemoveCompetitor(comp._id, comp.accountName)}
-                                className="p-2 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-xl transition"
-                                title="Remove Competitor"
-                              >
-                                <Trash2 size={15} />
-                              </button>
+                        {filteredCompetitors.length === 0 ? (
+                          <tr>
+                            <td colSpan={7} className="px-6 py-8 text-center text-slate-400">
+                              No matching competitors found.
                             </td>
                           </tr>
-                        ))}
+                        ) : (
+                          filteredCompetitors.map((comp) => (
+                            <tr key={comp._id} className="hover:bg-white/[0.01] transition-colors">
+                              <td className="px-6 py-4 font-bold text-white text-sm">{comp.accountName}</td>
+                              <td className="px-6 py-4">
+                                <span className="flex items-center gap-1.5 capitalize font-medium text-slate-300">
+                                  {comp.platform === "youtube" ? (
+                                    <YoutubeIcon size={14} className="text-red-500" />
+                                  ) : (
+                                    <span className="font-bold text-white">𝕏</span>
+                                  )}
+                                  {comp.platform}
+                                </span>
+                              </td>
+                              <td className="px-6 py-4 font-mono font-semibold">{comp.followers.toLocaleString()}</td>
+                              <td className="px-6 py-4">
+                                <span
+                                  className={`inline-flex items-center gap-1 font-semibold ${
+                                    comp.growth >= 0 ? "text-emerald-400" : "text-rose-400"
+                                  }`}
+                                >
+                                  <TrendingUp size={12} className={comp.growth >= 0 ? "" : "rotate-180"} />
+                                  {comp.growth >= 0 ? "+" : ""}
+                                  {comp.growth}%
+                                </span>
+                              </td>
+                              <td className="px-6 py-4 font-mono">
+                                {comp.views > 0 ? comp.views.toLocaleString() : "N/A"}
+                              </td>
+                              <td className="px-6 py-4">
+                                <span className="px-2.5 py-1 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 font-semibold">
+                                  {comp.engagement}%
+                                </span>
+                              </td>
+                              <td className="px-6 py-4 text-right">
+                                <button
+                                  onClick={() => handleRemoveCompetitor(comp._id, comp.accountName)}
+                                  className="p-2 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-xl transition"
+                                  title="Remove Competitor"
+                                >
+                                  <Trash2 size={15} />
+                                </button>
+                              </td>
+                            </tr>
+                          ))
+                        )}
                       </AnimatePresence>
                     </tbody>
                   </table>
