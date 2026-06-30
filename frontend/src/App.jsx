@@ -1,6 +1,8 @@
 import { lazy, Suspense } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import ProtectedRoute from "./components/ProtectedRoute";
+import RouteTracker from "./errors/RouteTracker";
+import ErrorRouter from "./errors/ErrorRouter";
 
 // Lazy loading all page views
 const LandingPage = lazy(() => import("./pages/LandingPage"));
@@ -33,6 +35,8 @@ const SuspenseFallback = () => (
 function App() {
   return (
     <BrowserRouter>
+      {/* Route tracker captures scroll heights and history logs in sessionStorage */}
+      <RouteTracker />
       <Suspense fallback={<SuspenseFallback />}>
         <Routes>
           {/* Public Routes */}
@@ -42,6 +46,9 @@ function App() {
           <Route path="/register" element={<Register />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
+
+          {/* Dedicated Error Paths */}
+          <Route path="/error/*" element={<ErrorRouter />} />
 
           {/* Protected Dashboard Workspace */}
           <Route element={<ProtectedRoute />}>
@@ -59,8 +66,8 @@ function App() {
             <Route path="/billing" element={<Billing />} />
           </Route>
 
-          {/* Fallback */}
-          <Route path="*" element={<Navigate to="/" replace />} />
+          {/* Fallback to 404 Not Found Page */}
+          <Route path="*" element={<Navigate to="/error/404" replace />} />
         </Routes>
       </Suspense>
     </BrowserRouter>

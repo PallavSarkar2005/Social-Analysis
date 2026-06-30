@@ -1,7 +1,11 @@
+import crypto from "crypto";
+
 export const errorHandler = (err, req, res, next) => {
-  console.error("[Error Handler Logs]:", err);
-  let statusCode = res.statusCode === 200 ? 500 : res.statusCode;
-  let message = err.message;
+  // Generate a correlation ID for every error — clients display this to users
+  const correlationId = "err-" + crypto.randomBytes(4).toString("hex");
+
+  let statusCode = res.statusCode && res.statusCode !== 200 ? res.statusCode : 500;
+  let message = err.message || "An unexpected server error occurred";
   let errors = null;
 
   // Mongoose Bad ObjectId
@@ -13,14 +17,14 @@ export const errorHandler = (err, req, res, next) => {
   // Mongoose Duplicate Key Error
   if (err.code === 11000) {
     statusCode = 400;
-    const duplicatedField = Object.keys(err.keyValue)[0];
-    message = `Duplicate field value entered: ${duplicatedField}. Please use another value.`;
+    const duplicatedField = Object.keys(err.keyValue || {})[0] || "field";
+    message = `Duplicate value entered for ${duplicatedField}. Please use another value.`;
   }
 
   // Mongoose Validation Error
   if (err.name === "ValidationError") {
     statusCode = 400;
-    message = "Validation Error";
+    message = "Validation failed";
     errors = Object.values(err.errors).map((val) => ({
       field: val.path,
       message: val.message,
@@ -30,28 +34,58 @@ export const errorHandler = (err, req, res, next) => {
   // JWT Errors
   if (err.name === "JsonWebTokenError") {
     statusCode = 401;
-    message = "Not authorized, invalid token format";
+    message = "Not authorized — invalid token format";
   }
 
   if (err.name === "TokenExpiredError") {
     statusCode = 401;
-    message = "Not authorized, token has expired";
+    message = "Not authorized — session token has expired";
   }
 
-  // Standard API Error formatting
+  // Rate limiter passthrough
+  if (err.status === 429) {
+    statusCode = 429;
+    message = "Too many requests. Please slow down and retry.";
+  }
+
+  // CORS errors
+  if (err.message && err.message.includes("CORS")) {
+    statusCode = 403;
+    message = "Request origin not permitted by CORS policy.";
+  }
+
+  // CSRF errors
+  if (err.code === "EBADCSRFTOKEN") {
+    statusCode = 403;
+    message = "Invalid or missing CSRF token. Please refresh and try again.";
+  }
+
+  // Structured response — NEVER expose raw stack traces or internal details to clients
   const response = {
     success: false,
     message,
+    correlationId,
   };
 
   if (errors) {
     response.errors = errors;
   }
 
-  // Only include stack in non-production environments
-  if (process.env.NODE_ENV !== "production") {
-    response.stack = err.stack;
-  }
+  // Log full details server-side only (never sent to frontend)
+  console.error(`[API Error] [${correlationId}] ${statusCode} | ${message}`, {
+    url: req.originalUrl,
+    method: req.method,
+    userId: req.user?._id || "unauthenticated",
+    ip: req.ip,
+    stack: err.stack,
+  });
 
   res.status(statusCode).json(response);
+};
+
+export const notFound = (req, res) => {
+  res.status(404).json({
+    success: false,
+    message: `Route not found: ${req.originalUrl}`,
+  });
 };

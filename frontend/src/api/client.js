@@ -137,6 +137,46 @@ client.interceptors.response.use(
       }
     }
 
+    // Smart error page redirection for hard infrastructure failures
+    const status = error.response?.status;
+    const message = (error.message || '').toLowerCase();
+    const url = originalRequest?.url || '';
+
+    // Skip redirects for auth, CSRF, and refresh token endpoints — these are handled by AuthContext
+    const skipRedirect =
+      url.includes('/auth/') ||
+      url.includes('/csrf') ||
+      url.includes('/activity/log') ||
+      originalRequest?._skipErrorRedirect;
+
+    if (!skipRedirect && typeof window !== 'undefined') {
+      const currentPath = window.location.pathname;
+
+      // Only redirect if not already on an error page to avoid redirect loops
+      if (!currentPath.startsWith('/error')) {
+        if (!navigator.onLine) {
+          window.location.href = '/error/offline';
+          return Promise.reject(error);
+        }
+        if (status === 403) {
+          window.location.href = '/error/403';
+          return Promise.reject(error);
+        }
+        if (status === 503 || status === 504) {
+          window.location.href = '/error/network';
+          return Promise.reject(error);
+        }
+        if (status >= 500) {
+          window.location.href = '/error/500';
+          return Promise.reject(error);
+        }
+        if (!status && (message.includes('network error') || message.includes('timeout'))) {
+          window.location.href = '/error/network';
+          return Promise.reject(error);
+        }
+      }
+    }
+
     return Promise.reject(error);
   }
 );

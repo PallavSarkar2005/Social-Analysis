@@ -18,3 +18,26 @@ export const getActivityLogs = async (req, res, next) => {
     next(error);
   }
 };
+
+// @desc    Log client side error
+// @route   POST /api/activity/log
+// @access  Private
+export const logClientError = async (req, res, next) => {
+  try {
+    const { action, details } = req.body;
+    
+    await ActivityLog.create({
+      userId: req.user ? req.user._id : null,
+      action: action || "client_error",
+      details: typeof details === "object" ? JSON.stringify(details) : details,
+      ipAddress: req.ip || req.headers["x-forwarded-for"] || req.socket.remoteAddress,
+    });
+
+    res.status(201).json({
+      success: true,
+      message: "Client error logged successfully",
+    });
+  } catch (error) {
+    next(error);
+  }
+};

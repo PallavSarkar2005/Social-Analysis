@@ -1,46 +1,292 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { useParams, Link } from "react-router-dom";
 import Sidebar from "../components/layout/Sidebar";
 import Navbar from "../components/layout/Navbar";
 import { useParty, useAccounts } from "../hooks/useQueries";
-import {
-  Users,
-  Eye,
-  Video,
-  Percent,
-  TrendingUp,
-  Clock,
-  ArrowLeft,
-  RefreshCw,
-  Award,
-  ChevronRight,
-  TrendingDown,
-  Grid,
-  List,
-  Globe,
-  Plus,
-} from "lucide-react";
+import { getPartyTheme } from "../config/partyThemes";
 import { motion, AnimatePresence } from "framer-motion";
 import toast, { Toaster } from "react-hot-toast";
+import {
+  Users, Eye, Video, TrendingUp, Clock, ArrowLeft,
+  RefreshCw, Award, ChevronRight, Grid, List, Globe,
+  Star, Zap, BarChart2, UserCheck, CalendarDays,
+  TrendingDown, MapPin, Flame,
+} from "lucide-react";
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+const fmt = (n) => {
+  if (n == null || isNaN(n)) return "0";
+  if (Math.abs(n) >= 1e9) return (n / 1e9).toFixed(1) + "B";
+  if (Math.abs(n) >= 1e6) return (n / 1e6).toFixed(1) + "M";
+  if (Math.abs(n) >= 1e3) return (n / 1e3).toFixed(1) + "K";
+  return String(Math.round(n));
+};
+
+const relTime = (dateStr) => {
+  if (!dateStr) return "Never";
+  const diff = Date.now() - new Date(dateStr).getTime();
+  if (diff < 0) return "Just now";
+  const h = Math.floor(diff / 3_600_000);
+  if (h < 1) return "Just now";
+  if (h < 24) return `${h}h ago`;
+  const d = Math.floor(h / 24);
+  return `${d}d ago`;
+};
+
+const growthColor = (v) => {
+  if (v > 0) return "text-emerald-400";
+  if (v < 0) return "text-red-400";
+  return "text-slate-400";
+};
+
+const growthSign = (v) => (v > 0 ? "+" : "");
+
+// ─── Avatar ───────────────────────────────────────────────────────────────────
+function CreatorAvatar({ creator, size = 40 }) {
+  const src = creator.profileImage || creator.thumbnail || creator.profileUrl || "";
+  const initials = (creator.name || "?").split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
+
+  if (src) {
+    return (
+      <img
+        src={src}
+        alt={creator.name}
+        className="rounded-full object-cover flex-shrink-0"
+        style={{ width: size, height: size }}
+        onError={(e) => { e.target.style.display = "none"; e.target.nextSibling.style.display = "flex"; }}
+        loading="lazy"
+      />
+    );
+  }
+  return (
+    <div
+      className="rounded-full flex items-center justify-center flex-shrink-0 font-bold text-white select-none"
+      style={{ width: size, height: size, background: "linear-gradient(135deg, #6366f1, #8b5cf6)", fontSize: size * 0.36 }}
+    >
+      {initials}
+    </div>
+  );
+}
+
+// ─── Skeleton loader ──────────────────────────────────────────────────────────
+function Skeleton({ className = "" }) {
+  return <div className={`animate-pulse rounded-xl bg-white/[0.04] ${className}`} />;
+}
+
+// ─── Summary metric card ──────────────────────────────────────────────────────
+function MetricCard({ label, value, sub, icon: Icon, color, theme }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      className={`relative bg-[#111318]/60 border ${theme.border} rounded-2xl p-4 space-y-2 overflow-hidden backdrop-blur-sm group transition-all hover:bg-[#13151e]/80`}
+    >
+      {/* Glow blob */}
+      <div
+        className="absolute inset-0 rounded-2xl pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-500"
+        style={{ background: `radial-gradient(circle at 30% 50%, ${theme.glowColor}, transparent 70%)` }}
+      />
+      <div className="flex items-center justify-between">
+        <span className="text-[9px] font-bold text-slate-500 uppercase tracking-[0.12em]">{label}</span>
+        {Icon && <Icon size={13} className={color || theme.text} />}
+      </div>
+      <p className={`text-2xl font-black tracking-tight ${color || theme.text}`}>{value}</p>
+      {sub != null && <p className="text-[10px] text-slate-500">{sub}</p>}
+    </motion.div>
+  );
+}
+
+// ─── State Distribution Bar ───────────────────────────────────────────────────
+function StateBar({ state, count, total, theme }) {
+  const pct = total > 0 ? Math.round((count / total) * 100) : 0;
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center justify-between">
+        <span className="text-xs text-slate-300 font-medium">{state}</span>
+        <span className={`text-xs font-bold ${theme.text}`}>{count} creator{count !== 1 ? "s" : ""}</span>
+      </div>
+      <div className="h-1.5 bg-white/[0.05] rounded-full overflow-hidden">
+        <motion.div
+          initial={{ width: 0 }}
+          animate={{ width: `${pct}%` }}
+          transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
+          className="h-full rounded-full"
+          style={{ background: `linear-gradient(90deg, ${theme.accent}, ${theme.accentLight})` }}
+        />
+      </div>
+    </div>
+  );
+}
+
+// ─── Creator Card (card view) ─────────────────────────────────────────────────
+function CreatorCard({ creator, theme, onGroupChange }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, scale: 0.97 }}
+      animate={{ opacity: 1, scale: 1 }}
+      whileHover={{ y: -2 }}
+      transition={{ duration: 0.25 }}
+      className={`relative bg-[#111318]/60 border ${theme.border} ${theme.borderHover} rounded-2xl p-5 space-y-4 overflow-hidden group transition-all backdrop-blur-sm`}
+    >
+      {/* Glow */}
+      <div
+        className="absolute inset-0 rounded-2xl pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-500"
+        style={{ background: `radial-gradient(ellipse at 50% 0%, ${theme.glowColor}, transparent 65%)` }}
+      />
+
+      {/* Top row */}
+      <div className="flex items-start justify-between gap-3 relative">
+        <div className="flex items-center gap-3">
+          <CreatorAvatar creator={creator} size={44} />
+          <div className="min-w-0">
+            <p className="text-sm font-bold text-white truncate">{creator.name}</p>
+            <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md ${theme.badge}`}>
+                {creator.party || "Independent"}
+              </span>
+              {creator.state && (
+                <span className="text-[9px] text-slate-500 flex items-center gap-0.5">
+                  <MapPin size={8} />{creator.state}
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Growth badge */}
+        <div className={`flex-shrink-0 text-[10px] font-bold flex items-center gap-0.5 px-2 py-1 rounded-lg ${
+          creator.growth > 0 ? "bg-emerald-500/10 text-emerald-400" :
+          creator.growth < 0 ? "bg-red-500/10 text-red-400" : "bg-white/[0.04] text-slate-400"
+        }`}>
+          {creator.growth > 0 ? <TrendingUp size={9} /> : creator.growth < 0 ? <TrendingDown size={9} /> : null}
+          {growthSign(creator.growth)}{creator.growth?.toFixed(1)}%
+        </div>
+      </div>
+
+      {/* Metrics grid */}
+      <div className="grid grid-cols-3 gap-2">
+        {[
+          { label: "Subscribers", val: fmt(creator.subscribers) },
+          { label: "Total Views",  val: fmt(creator.totalViews) },
+          { label: "Videos",       val: fmt(creator.totalVideos) },
+        ].map(({ label, val }) => (
+          <div key={label} className="bg-white/[0.03] rounded-xl p-2.5 text-center">
+            <p className={`text-sm font-black ${theme.text}`}>{val}</p>
+            <p className="text-[9px] text-slate-500 mt-0.5">{label}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Secondary row */}
+      <div className="grid grid-cols-2 gap-2 text-[10px]">
+        <div className="flex items-center justify-between bg-white/[0.02] rounded-lg px-2.5 py-2">
+          <span className="text-slate-500">Engagement</span>
+          <span className="font-bold text-white">{creator.engagementRate?.toFixed(1) || "0.0"}%</span>
+        </div>
+        <div className="flex items-center justify-between bg-white/[0.02] rounded-lg px-2.5 py-2">
+          <span className="text-slate-500">Weekly</span>
+          <span className={`font-bold ${growthColor(creator.weeklyGrowth)}`}>
+            {growthSign(creator.weeklyGrowth)}{creator.weeklyGrowth?.toFixed(1) || "0.0"}%
+          </span>
+        </div>
+      </div>
+
+      {/* Footer */}
+      <div className="flex items-center justify-between pt-1 border-t border-white/[0.04]">
+        <span className="text-[9px] text-slate-600 flex items-center gap-1">
+          <Clock size={8} /> {relTime(creator.lastSync)}
+        </span>
+
+        <select
+          value={creator.group || "Other"}
+          onChange={(e) => onGroupChange(e, creator._id)}
+          onClick={(e) => e.stopPropagation()}
+          className="text-[9px] font-semibold bg-transparent border border-white/[0.06] rounded-lg px-1.5 py-0.5 text-slate-400 cursor-pointer focus:outline-none"
+        >
+          {["BJP", "Congress", "AAP", "BJD", "SP", "TMC", "Independent", "Other"].map((g) => (
+            <option key={g} value={g}>{g}</option>
+          ))}
+        </select>
+      </div>
+    </motion.div>
+  );
+}
+
+// ─── Creator Row (list view) ──────────────────────────────────────────────────
+function CreatorRow({ creator, theme, index, onGroupChange }) {
+  return (
+    <motion.tr
+      initial={{ opacity: 0, x: -8 }}
+      animate={{ opacity: 1, x: 0 }}
+      transition={{ delay: index * 0.03 }}
+      className="border-b border-white/[0.04] hover:bg-white/[0.02] transition-colors group"
+    >
+      <td className="py-3 px-4">
+        <div className="flex items-center gap-3">
+          <CreatorAvatar creator={creator} size={32} />
+          <div>
+            <p className="text-xs font-semibold text-white">{creator.name}</p>
+            <p className="text-[10px] text-slate-500 flex items-center gap-1">
+              <MapPin size={8} />{creator.state || "—"}
+            </p>
+          </div>
+        </div>
+      </td>
+      <td className="py-3 px-4 text-right">
+        <span className={`text-xs font-bold ${theme.text}`}>{fmt(creator.subscribers)}</span>
+      </td>
+      <td className="py-3 px-4 text-right">
+        <span className="text-xs text-slate-300">{fmt(creator.totalViews)}</span>
+      </td>
+      <td className="py-3 px-4 text-right">
+        <span className="text-xs text-slate-300">{fmt(creator.totalVideos)}</span>
+      </td>
+      <td className="py-3 px-4 text-right">
+        <span className={`text-xs font-bold ${growthColor(creator.growth)}`}>
+          {growthSign(creator.growth)}{creator.growth?.toFixed(1)}%
+        </span>
+      </td>
+      <td className="py-3 px-4 text-right">
+        <span className="text-xs text-slate-400">{creator.engagementRate?.toFixed(1)}%</span>
+      </td>
+      <td className="py-3 px-4 text-right">
+        <span className="text-[10px] text-slate-600">{relTime(creator.lastSync)}</span>
+      </td>
+      <td className="py-3 px-4">
+        <select
+          value={creator.group || "Other"}
+          onChange={(e) => onGroupChange(e, creator._id)}
+          className="text-[9px] bg-transparent border border-white/[0.06] rounded-lg px-1.5 py-0.5 text-slate-400"
+        >
+          {["BJP", "Congress", "AAP", "BJD", "SP", "TMC", "Independent", "Other"].map((g) => (
+            <option key={g} value={g}>{g}</option>
+          ))}
+        </select>
+      </td>
+    </motion.tr>
+  );
+}
+
+// ─── Main Component ───────────────────────────────────────────────────────────
 export default function GroupAnalytics() {
   const { groupName } = useParams();
   const { data: creators = [], isLoading: loading, refetch: loadCreators } = useParty(groupName);
   const { updateAccountGroup } = useAccounts();
 
-  const [displayMode, setDisplayMode] = useState(() => {
-    return localStorage.getItem(`group-display-${groupName}`) || "card";
-  });
+  const [displayMode, setDisplayMode] = useState(
+    () => localStorage.getItem(`group-display-${groupName}`) || "card"
+  );
+
+  const theme = getPartyTheme(groupName);
 
   const handleGroupChange = async (e, creatorId) => {
     const newGroup = e.target.value;
     try {
-      toast.loading("Updating group assignment...", { id: `group-${creatorId}` });
+      toast.loading("Updating group…", { id: `grp-${creatorId}` });
       await updateAccountGroup({ id: creatorId, group: newGroup });
-      toast.success("Group updated successfully!", { id: `group-${creatorId}` });
-    } catch (err) {
-      console.error(err);
-      toast.error("Failed to update group.", { id: `group-${creatorId}` });
+      toast.success("Group updated!", { id: `grp-${creatorId}` });
+    } catch {
+      toast.error("Failed to update group.", { id: `grp-${creatorId}` });
     }
   };
 
@@ -49,461 +295,310 @@ export default function GroupAnalytics() {
     localStorage.setItem(`group-display-${groupName}`, mode);
   };
 
-  const formatNumber = (num) => {
-    if (num >= 1e9) return (num / 1e9).toFixed(1) + "B";
-    if (num >= 1e6) return (num / 1e6).toFixed(1) + "M";
-    if (num >= 1e3) return (num / 1e3).toFixed(1) + "K";
-    return num;
-  };
-
-  const getRelativeTime = (dateStr) => {
-    if (!dateStr) return "N/A";
-    const date = new Date(dateStr);
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    if (diffMs < 0) return "Just now";
-    
-    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-    if (diffHours < 24) {
-      return diffHours <= 0 ? "Just now" : `${diffHours}h ago`;
-    }
-    const diffDays = Math.floor(diffHours / 24);
-    return `${diffDays}d ago`;
-  };
-
+  // ── Computed metrics ─────────────────────────────────────────────────────
   const metrics = useMemo(() => {
     if (!creators || creators.length === 0) return null;
 
-    const totalCreators = creators.length;
-    const combinedSubscribers = creators.reduce((sum, c) => sum + (c.subscribers || 0), 0);
-    const combinedViews = creators.reduce((sum, c) => sum + (c.totalViews || 0), 0);
-    const totalVideos = creators.reduce((sum, c) => sum + (c.totalVideos || 0), 0);
-    
-    const avgMonthlyGrowth = (creators.reduce((sum, c) => sum + (c.growth || 0), 0) / totalCreators).toFixed(2);
-    const avgEngagement = (creators.reduce((sum, c) => sum + (parseFloat(c.engagementRate) || 0), 0) / totalCreators).toFixed(2);
+    const n = creators.length;
+    const totalSubscribers = creators.reduce((s, c) => s + (c.subscribers || 0), 0);
+    const totalViews       = creators.reduce((s, c) => s + (c.totalViews || 0), 0);
+    const totalVideos      = creators.reduce((s, c) => s + (c.totalVideos || 0), 0);
+    const avgEngagement    = creators.reduce((s, c) => s + (parseFloat(c.engagementRate) || 0), 0) / n;
+    const avgGrowth        = creators.reduce((s, c) => s + (c.growth || 0), 0) / n;
+    const avgWeekly        = creators.reduce((s, c) => s + (c.weeklyGrowth || 0), 0) / n;
+    const avgMonthly       = creators.reduce((s, c) => s + (c.monthlyGrowth || 0), 0) / n;
 
+    // State distribution
     const stateDist = {};
-    creators.forEach(c => {
-      const st = c.state || "Unknown State";
+    creators.forEach((c) => {
+      const st = c.state || "Unknown";
       stateDist[st] = (stateDist[st] || 0) + 1;
     });
 
-    let topPerformer = creators[0] || {};
-    let fastestGrowing = creators[0] || {};
-    let mostViewed = creators[0] || {};
-    let newestAdded = creators[0] || {};
-    let lastSynced = new Date((creators[0] && creators[0].lastSync) || 0);
+    // Highlights
+    const pick = (arr, key, higher = true) =>
+      arr.reduce((best, c) =>
+        higher
+          ? (c[key] || 0) > (best[key] || 0) ? c : best
+          : (c[key] || 0) < (best[key] || 0) ? c : best
+      , arr[0]);
 
-    creators.forEach(c => {
-      if ((c.subscribers || 0) > (topPerformer.subscribers || 0)) topPerformer = c;
-      if ((c.growth || 0) > (fastestGrowing.growth || 0)) fastestGrowing = c;
-      if ((c.totalViews || 0) > (mostViewed.totalViews || 0)) mostViewed = c;
-      const cDate = new Date(c.lastSync || 0);
-      if (cDate > new Date(newestAdded.lastSync || 0)) newestAdded = c;
-      if (cDate > lastSynced) lastSynced = cDate;
-    });
+    const topPerformer    = pick(creators, "subscribers");
+    const fastestGrowing  = pick(creators, "growth");
+    const mostViewed      = pick(creators, "totalViews");
+    const mostEngaged     = pick(creators, "engagementRate");
+    const highestSubGain  = pick(creators, "subscriberGain");
+    const highestViewGain = pick(creators, "viewGain");
+    const newestAdded     = creators.reduce((a, b) =>
+      new Date(a.lastSync || 0) > new Date(b.lastSync || 0) ? a : b
+    , creators[0]);
 
     return {
-      totalCreators,
-      combinedSubscribers,
-      combinedViews,
-      totalVideos,
-      avgMonthlyGrowth,
-      avgEngagement,
+      n, totalSubscribers, totalViews, totalVideos,
+      avgEngagement, avgGrowth, avgWeekly, avgMonthly,
       stateDist,
-      topPerformer,
-      fastestGrowing,
-      mostViewed,
-      newestAdded,
-      lastSynced,
+      topPerformer, fastestGrowing, mostViewed, mostEngaged,
+      highestSubGain, highestViewGain, newestAdded,
     };
   }, [creators]);
 
-  // Theme accent mappings based on group name
-  const getGroupTheme = () => {
-    const name = groupName.toLowerCase();
-    if (name === "bjp") {
-      return {
-        accent: "from-orange-500 to-amber-600",
-        shadow: "shadow-orange-500/10",
-        border: "hover:border-orange-500/30",
-        text: "text-orange-400",
-        bg: "bg-orange-500/10",
-      };
-    }
-    if (name === "congress") {
-      return {
-        accent: "from-cyan-500 to-indigo-600",
-        shadow: "shadow-cyan-500/10",
-        border: "hover:border-cyan-500/30",
-        text: "text-cyan-400",
-        bg: "bg-cyan-500/10",
-      };
-    }
-    // Default theme for dynamic groups
-    return {
-      accent: "from-indigo-500 to-purple-600",
-      shadow: "shadow-indigo-500/10",
-      border: "hover:border-indigo-500/30",
-      text: "text-indigo-400",
-      bg: "bg-indigo-500/10",
-    };
-  };
+  // ── Sort states by count desc ────────────────────────────────────────────
+  const sortedStates = useMemo(() => {
+    if (!metrics?.stateDist) return [];
+    return Object.entries(metrics.stateDist).sort((a, b) => b[1] - a[1]);
+  }, [metrics]);
 
-  const theme = getGroupTheme();
+  const highlights = useMemo(() => {
+    if (!metrics) return [];
+    return [
+      { label: "Top Performer",    creator: metrics.topPerformer,    icon: Star,      meta: `${fmt(metrics.topPerformer?.subscribers)} subs` },
+      { label: "Fastest Growing",  creator: metrics.fastestGrowing,  icon: TrendingUp, meta: `+${metrics.fastestGrowing?.growth?.toFixed(1)}%` },
+      { label: "Most Viewed",      creator: metrics.mostViewed,      icon: Eye,       meta: `${fmt(metrics.mostViewed?.totalViews)} views` },
+      { label: "Most Engaged",     creator: metrics.mostEngaged,     icon: Flame,     meta: `${metrics.mostEngaged?.engagementRate?.toFixed(1)}% eng.` },
+      { label: "Highest Sub Gain", creator: metrics.highestSubGain,  icon: UserCheck, meta: `+${fmt(metrics.highestSubGain?.subscriberGain)}` },
+      { label: "Highest View Gain",creator: metrics.highestViewGain, icon: BarChart2, meta: `+${fmt(metrics.highestViewGain?.viewGain)}` },
+      { label: "Recently Synced",  creator: metrics.newestAdded,     icon: CalendarDays, meta: relTime(metrics.newestAdded?.lastSync) },
+    ];
+  }, [metrics]);
 
   return (
-    <div className="flex min-h-screen bg-[#090a0f] text-slate-100 antialiased font-sans selection:bg-indigo-500/30 selection:text-indigo-200">
+    <div className="flex min-h-screen bg-[#090a0f] text-slate-100 antialiased font-sans">
       <Toaster position="top-right" />
       <Sidebar />
 
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative z-10">
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <Navbar />
 
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto space-y-8 z-10 relative">
-          
-          {/* Header */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/[0.06] pb-6">
-            <div className="space-y-1 text-left">
-              <Link to="/dashboard" className="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-white transition mb-2">
-                <ArrowLeft size={12} /> Back to Dashboard
-              </Link>
-              <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white flex items-center gap-3">
-                <span className={`px-2.5 py-0.5 rounded-lg text-xs font-extrabold uppercase ${theme.bg} ${theme.text} border border-white/[0.04]`}>
-                  {groupName} Group
-                </span>
-                {groupName.toUpperCase()} Analytics
-              </h1>
-              <p className="text-xs sm:text-sm text-slate-400 font-medium">
-                Performance analytics of all tracked {groupName.toUpperCase()} leaders, ministers, and official creators.
-              </p>
+        <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 space-y-8">
+
+          {/* ── Header ── */}
+          <div
+            className="relative rounded-3xl overflow-hidden p-6 sm:p-8 border border-white/[0.06]"
+            style={{ background: `linear-gradient(135deg, ${theme.glowColor} 0%, transparent 60%), #0d0e14` }}
+          >
+            {/* Decorative watermark */}
+            <div className="absolute right-6 top-4 text-6xl opacity-[0.06] select-none pointer-events-none">
+              {theme.watermark}
             </div>
 
-            <div className="flex items-center gap-2 self-start sm:self-center">
-              {/* Display Mode Dropdown */}
-              <div className="flex items-center bg-white/[0.02] border border-white/[0.08] rounded-xl p-0.5">
-                <button
-                  onClick={() => handleDisplayModeChange("card")}
-                  className={`p-1.5 rounded-lg transition-all ${
-                    displayMode === "card"
-                      ? "bg-indigo-600 text-white"
-                      : "text-slate-400 hover:text-white"
-                  }`}
-                  title="Card View"
-                >
-                  <Grid size={14} />
-                </button>
-                <button
-                  onClick={() => handleDisplayModeChange("list")}
-                  className={`p-1.5 rounded-lg transition-all ${
-                    displayMode === "list"
-                      ? "bg-indigo-600 text-white"
-                      : "text-slate-400 hover:text-white"
-                  }`}
-                  title="List View"
-                >
-                  <List size={14} />
-                </button>
+            <Link to="/dashboard" className="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-white transition mb-4">
+              <ArrowLeft size={12} /> Back to Dashboard
+            </Link>
+
+            <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+              <div className="space-y-2">
+                <div className="flex items-center gap-3">
+                  <span className={`px-3 py-1 rounded-lg text-xs font-black uppercase ${theme.badge}`}>
+                    {groupName}
+                  </span>
+                  {metrics && (
+                    <span className="text-xs text-slate-500 font-medium">
+                      {metrics.n} creator{metrics.n !== 1 ? "s" : ""} tracked
+                    </span>
+                  )}
+                </div>
+                <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white">
+                  {groupName.toUpperCase()} Analytics
+                </h1>
+                <p className="text-sm text-slate-400">
+                  Live performance data for all tracked {groupName} political creators.
+                </p>
               </div>
 
-              <button
-                onClick={() => loadCreators()}
-                disabled={loading}
-                className="h-10 px-4 bg-white/[0.03] border border-white/[0.08] hover:bg-white/[0.06] rounded-xl text-xs font-semibold text-slate-300 transition flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
-              >
-                <RefreshCw size={12} className={loading ? "animate-spin" : ""} />
-                Refresh Group Stats
-              </button>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                {/* View toggle */}
+                <div className="flex bg-white/[0.03] border border-white/[0.08] rounded-xl p-0.5">
+                  <button
+                    onClick={() => handleDisplayModeChange("card")}
+                    className={`p-1.5 rounded-lg transition ${displayMode === "card" ? "text-white" : "text-slate-500 hover:text-white"}`}
+                    style={displayMode === "card" ? { backgroundColor: theme.accent } : {}}
+                  ><Grid size={13} /></button>
+                  <button
+                    onClick={() => handleDisplayModeChange("list")}
+                    className={`p-1.5 rounded-lg transition ${displayMode === "list" ? "text-white" : "text-slate-500 hover:text-white"}`}
+                    style={displayMode === "list" ? { backgroundColor: theme.accent } : {}}
+                  ><List size={13} /></button>
+                </div>
+
+                <button
+                  onClick={() => loadCreators()}
+                  disabled={loading}
+                  className="h-9 px-4 bg-white/[0.03] border border-white/[0.08] hover:bg-white/[0.06] rounded-xl text-xs font-semibold text-slate-300 transition flex items-center gap-1.5 disabled:opacity-50"
+                >
+                  <RefreshCw size={12} className={loading ? "animate-spin" : ""} />
+                  Refresh
+                </button>
+              </div>
             </div>
           </div>
 
-          {loading ? (
-            <div className="flex flex-col items-center justify-center py-24 space-y-4">
-              <div className="w-10 h-10 border-4 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin" />
-              <p className="text-xs text-slate-400">Loading political organization analytics...</p>
+          {/* ── Loading State ── */}
+          {loading && (
+            <div className="space-y-6">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {Array.from({ length: 8 }).map((_, i) => (
+                  <Skeleton key={i} className="h-24" />
+                ))}
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <Skeleton key={i} className="h-64" />
+                ))}
+              </div>
             </div>
-          ) : creators.length > 0 ? (
-            <>
-              {/* Summary Cards */}
-              {metrics && (
-                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-                  {/* Card 1: Total Creators */}
-                  <div className="bg-[#121318]/40 border border-white/[0.06] rounded-2xl p-4 shadow-sm flex flex-col justify-between">
-                    <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest text-left">Total Creators</span>
-                    <span className="text-xl font-black text-white mt-1 text-left">{metrics.totalCreators}</span>
-                  </div>
-                  {/* Card 2: Combined Subscribers */}
-                  <div className="bg-[#121318]/40 border border-white/[0.06] rounded-2xl p-4 shadow-sm flex flex-col justify-between">
-                    <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest text-left">Subscribers</span>
-                    <span className="text-xl font-black text-indigo-400 mt-1 text-left">{formatNumber(metrics.combinedSubscribers)}</span>
-                  </div>
-                  {/* Card 3: Combined Views */}
-                  <div className="bg-[#121318]/40 border border-white/[0.06] rounded-2xl p-4 shadow-sm flex flex-col justify-between">
-                    <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest text-left">Combined Views</span>
-                    <span className="text-xl font-black text-purple-400 mt-1 text-left">{formatNumber(metrics.combinedViews)}</span>
-                  </div>
-                  {/* Card 4: Avg Monthly Growth */}
-                  <div className="bg-[#121318]/40 border border-white/[0.06] rounded-2xl p-4 shadow-sm flex flex-col justify-between">
-                    <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest text-left">Avg Growth</span>
-                    <span className="text-xl font-black text-emerald-400 mt-1 text-left">+{metrics.avgMonthlyGrowth}%</span>
-                  </div>
-                  {/* Card 5: Total Videos */}
-                  <div className="bg-[#121318]/40 border border-white/[0.06] rounded-2xl p-4 shadow-sm flex flex-col justify-between">
-                    <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest text-left">Total Videos</span>
-                    <span className="text-xl font-black text-slate-200 mt-1 text-left">{formatNumber(metrics.totalVideos)}</span>
-                  </div>
-                  {/* Card 6: Total Engagement */}
-                  <div className="bg-[#121318]/40 border border-white/[0.06] rounded-2xl p-4 shadow-sm flex flex-col justify-between">
-                    <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest text-left">Avg Engagement</span>
-                    <span className="text-xl font-black text-pink-400 mt-1 text-left">{metrics.avgEngagement}%</span>
-                  </div>
-                </div>
-              )}
+          )}
 
-              {/* State and Performers Row */}
-              {metrics && (
+          {/* ── Empty State ── */}
+          {!loading && creators.length === 0 && (
+            <div className="flex flex-col items-center justify-center py-32 space-y-4">
+              <div
+                className="w-20 h-20 rounded-3xl flex items-center justify-center text-4xl"
+                style={{ background: `${theme.glowColor}`, border: `1px solid ${theme.accent}33` }}
+              >
+                {theme.watermark}
+              </div>
+              <h2 className="text-xl font-bold text-white">No creators in {groupName} yet</h2>
+              <p className="text-sm text-slate-400 max-w-sm text-center">
+                Use the Analyzer to track a channel and assign it to the {groupName} group.
+              </p>
+              <Link
+                to="/analyzer"
+                className="h-10 px-6 rounded-xl text-sm font-semibold text-white flex items-center gap-2 transition"
+                style={{ background: theme.accent, boxShadow: `0 0 20px ${theme.glowColor}` }}
+              >
+                <TrendingUp size={14} /> Go to Analyzer
+              </Link>
+            </div>
+          )}
+
+          {!loading && creators.length > 0 && metrics && (
+            <AnimatePresence mode="wait">
+              <motion.div
+                key="content"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="space-y-8"
+              >
+
+                {/* ── 8 Summary Cards ── */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
+                  <MetricCard label="Creators"    value={metrics.n}                                           icon={Users}      theme={theme} />
+                  <MetricCard label="Subscribers" value={fmt(metrics.totalSubscribers)}                       icon={UserCheck}  theme={theme} />
+                  <MetricCard label="Total Views" value={fmt(metrics.totalViews)}                             icon={Eye}        theme={theme} />
+                  <MetricCard label="Videos"      value={fmt(metrics.totalVideos)}                            icon={Video}      theme={theme} />
+                  <MetricCard label="Avg Eng."    value={`${metrics.avgEngagement.toFixed(1)}%`}              icon={BarChart2}  theme={theme} />
+                  <MetricCard label="Avg Growth"  value={`${growthSign(metrics.avgGrowth)}${metrics.avgGrowth.toFixed(1)}%`}   icon={TrendingUp} color={growthColor(metrics.avgGrowth)} theme={theme} />
+                  <MetricCard label="Weekly Avg"  value={`${growthSign(metrics.avgWeekly)}${metrics.avgWeekly.toFixed(1)}%`}   icon={Zap}        color={growthColor(metrics.avgWeekly)} theme={theme} />
+                  <MetricCard label="Monthly Avg" value={`${growthSign(metrics.avgMonthly)}${metrics.avgMonthly.toFixed(1)}%`} icon={CalendarDays} color={growthColor(metrics.avgMonthly)} theme={theme} />
+                </div>
+
+                {/* ── State Distribution + Performance Highlights ── */}
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
                   {/* State Distribution */}
-                  <div className="bg-[#121318]/40 border border-white/[0.06] rounded-2xl p-5 shadow-sm space-y-3">
-                    <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5 text-left">
-                      <Globe size={12} className="text-indigo-400" />
-                      State Distribution
-                    </h4>
-                    <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto pr-2">
-                      {Object.entries(metrics.stateDist).map(([st, count]) => (
-                        <span key={st} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold bg-white/[0.02] border border-white/[0.06] text-slate-300">
-                          {st}: <span className="text-indigo-400">{count}</span>
-                        </span>
+                  <div className="lg:col-span-1 bg-[#111318]/60 border border-white/[0.06] rounded-2xl p-5 space-y-4 backdrop-blur-sm">
+                    <div className="flex items-center justify-between">
+                      <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                        <Globe size={11} /> State Distribution
+                      </h2>
+                      <span className={`text-[10px] font-bold ${theme.text}`}>
+                        {sortedStates.length} state{sortedStates.length !== 1 ? "s" : ""}
+                      </span>
+                    </div>
+                    <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
+                      {sortedStates.length > 0 ? sortedStates.map(([state, count]) => (
+                        <StateBar key={state} state={state} count={count} total={metrics.n} theme={theme} />
+                      )) : (
+                        <p className="text-xs text-slate-500 italic">No state data available.</p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Performance Highlights */}
+                  <div className="lg:col-span-2 bg-[#111318]/60 border border-white/[0.06] rounded-2xl p-5 backdrop-blur-sm">
+                    <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5 mb-4">
+                      <Award size={11} /> Performance Highlights
+                    </h2>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {highlights.map(({ label, creator, icon: Icon, meta }) => (
+                        creator ? (
+                          <div
+                            key={label}
+                            className={`flex items-center gap-3 p-3 rounded-xl border ${theme.border} ${theme.bgHover} transition-all group`}
+                            style={{ background: `${theme.glowColor}` }}
+                          >
+                            <div
+                              className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0"
+                              style={{ background: `${theme.accent}22` }}
+                            >
+                              <Icon size={13} style={{ color: theme.accent }} />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="text-[9px] text-slate-500 uppercase tracking-wide">{label}</p>
+                              <p className="text-xs font-bold text-white truncate">{creator.name}</p>
+                              <p className="text-[10px]" style={{ color: theme.accent }}>{meta}</p>
+                            </div>
+                            <CreatorAvatar creator={creator} size={28} />
+                          </div>
+                        ) : null
                       ))}
                     </div>
                   </div>
-
-                  {/* Performers */}
-                  <div className="lg:col-span-2 bg-[#121318]/40 border border-white/[0.06] rounded-2xl p-5 shadow-sm grid grid-cols-2 md:grid-cols-4 gap-4 text-left">
-                    <div className="space-y-1">
-                      <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest block">Top Performer</span>
-                      <span className="text-xs font-bold text-slate-200 block truncate">{metrics.topPerformer?.name || "N/A"}</span>
-                      <span className="text-[10px] text-indigo-400 font-mono font-bold block">{formatNumber(metrics.topPerformer?.subscribers || 0)} subs</span>
-                    </div>
-                    <div className="space-y-1">
-                      <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest block">Fastest Growing</span>
-                      <span className="text-xs font-bold text-slate-200 block truncate">{metrics.fastestGrowing?.name || "N/A"}</span>
-                      <span className="text-[10px] text-emerald-400 font-mono font-bold block">+{metrics.fastestGrowing?.growth || 0}%</span>
-                    </div>
-                    <div className="space-y-1">
-                      <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest block">Most Viewed</span>
-                      <span className="text-xs font-bold text-slate-200 block truncate">{metrics.mostViewed?.name || "N/A"}</span>
-                      <span className="text-[10px] text-purple-400 font-mono font-bold block">{formatNumber(metrics.mostViewed?.totalViews || 0)} views</span>
-                    </div>
-                    <div className="space-y-1">
-                      <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest block">Newest Added</span>
-                      <span className="text-xs font-bold text-slate-200 block truncate">{metrics.newestAdded?.name || "N/A"}</span>
-                      <span className="text-[10px] text-slate-500 block truncate">{getRelativeTime(metrics.newestAdded?.lastSync)}</span>
-                    </div>
-                  </div>
                 </div>
-              )}
 
-              {/* Display list or card content */}
-              <AnimatePresence mode="wait">
-                {displayMode === "list" ? (
-                  <motion.div
-                    key="list-view"
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -10 }}
-                    transition={{ duration: 0.15 }}
-                    className="border border-white/[0.06] rounded-xl overflow-hidden shadow-xl bg-slate-950/20"
-                  >
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-left border-collapse">
+                {/* ── Creator Grid / Table ── */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-sm font-bold text-white flex items-center gap-2">
+                      <Users size={14} className={theme.text} />
+                      All Creators
+                      <span className="text-xs text-slate-500 font-normal">({metrics.n})</span>
+                    </h2>
+                  </div>
+
+                  {displayMode === "card" ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                      {creators.map((creator) => (
+                        <CreatorCard
+                          key={creator._id}
+                          creator={creator}
+                          theme={theme}
+                          onGroupChange={handleGroupChange}
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="bg-[#111318]/60 border border-white/[0.06] rounded-2xl overflow-hidden backdrop-blur-sm">
+                      <table className="w-full">
                         <thead>
-                          <tr className="bg-white/[0.02] border-b border-white/[0.06] text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                            <th className="p-4">Name</th>
-                            <th className="p-4">State</th>
-                            <th className="p-4">Subscribers</th>
-                            <th className="p-4">Total Views</th>
-                            <th className="p-4">Videos</th>
-                            <th className="p-4">Party</th>
-                            <th className="p-4 text-right">Last Updated</th>
+                          <tr className="border-b border-white/[0.06]">
+                            {["Creator", "Subscribers", "Views", "Videos", "Growth", "Engagement", "Last Sync", "Group"].map((h) => (
+                              <th key={h} className="text-left py-3 px-4 text-[9px] font-bold text-slate-500 uppercase tracking-widest">
+                                {h}
+                              </th>
+                            ))}
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-white/[0.04]">
-                          {creators.map((creator) => (
-                            <tr key={creator._id} className="hover:bg-white/[0.01] transition-colors text-xs">
-                              <td className="p-4 font-bold text-slate-200">
-                                <Link to={`/analyzer?url=${encodeURIComponent(creator.profileUrl || creator.accountId)}`} className="hover:text-indigo-400 transition-colors">
-                                  {creator.name}
-                                </Link>
-                              </td>
-                              <td className="p-4 text-slate-300">{creator.state || "Unknown State"}</td>
-                              <td className="p-4 text-slate-300 font-mono">{formatNumber(creator.subscribers)}</td>
-                              <td className="p-4 text-slate-300 font-mono">{formatNumber(creator.totalViews)}</td>
-                              <td className="p-4 text-slate-300 font-mono">{formatNumber(creator.totalVideos)}</td>
-                              <td className="p-4 text-indigo-400 font-bold">{creator.party || "Independent"}</td>
-                              <td className="p-4 text-right text-slate-500">{getRelativeTime(creator.lastSync)}</td>
-                            </tr>
+                        <tbody>
+                          {creators.map((creator, i) => (
+                            <CreatorRow
+                              key={creator._id}
+                              creator={creator}
+                              theme={theme}
+                              index={i}
+                              onGroupChange={handleGroupChange}
+                            />
                           ))}
                         </tbody>
                       </table>
                     </div>
-                  </motion.div>
-                ) : (
-                  <motion.div
-                    key="card-view"
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -10 }}
-                    transition={{ duration: 0.15 }}
-                    className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
-                  >
-                    {creators.map((creator) => (
-                      <Link
-                        key={creator._id}
-                        to={`/analyzer?url=${encodeURIComponent(creator.profileUrl || creator.accountId)}`}
-                        className="block group"
-                      >
-                        <motion.div
-                          whileHover={{ y: -6 }}
-                          transition={{ duration: 0.25, ease: "easeOut" }}
-                          className={`bg-[#121318]/45 backdrop-blur-md rounded-2xl border border-white/[0.06] ${theme.border} p-6 shadow-xl relative overflow-hidden transition-all flex flex-col justify-between h-full hover:shadow-2xl ${theme.shadow}`}
-                        >
-                          {/* Glow effect on hover */}
-                          <div className={`absolute top-0 right-0 w-32 h-32 bg-gradient-to-br ${theme.accent} opacity-0 group-hover:opacity-5 rounded-full blur-2xl transition-opacity duration-300`} />
+                  )}
+                </div>
 
-                          <div className="space-y-5">
-                            {/* Creator Metadata & Group Selection */}
-                            <div className="flex items-start justify-between gap-3">
-                              <div className="flex items-center gap-3 min-w-0">
-                                <div className="w-12 h-12 rounded-xl bg-slate-900 border border-white/[0.08] overflow-hidden flex items-center justify-center shrink-0">
-                                  {(creator.profileImage || creator.thumbnail) ? (
-                                    <img
-                                      src={creator.profileImage || creator.thumbnail}
-                                      alt=""
-                                      className="w-full h-full object-cover"
-                                      loading="lazy"
-                                    />
-                                  ) : (
-                                    <Award size={20} className="text-slate-500" />
-                                  )}
-                                </div>
-                                <div className="min-w-0 text-left">
-                                  <h3 className="text-sm font-bold text-white tracking-tight truncate group-hover:text-indigo-400 transition-colors">
-                                    {creator.name}
-                                  </h3>
-                                  <p className="text-[10px] text-slate-400 font-bold mt-0.5 truncate">
-                                    {creator.state || "Unknown State"}
-                                  </p>
-                                </div>
-                              </div>
-
-                              <div className="shrink-0" onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}>
-                                <select
-                                  defaultValue={creator.group || groupName}
-                                  onChange={(e) => handleGroupChange(e, creator._id)}
-                                  className="bg-[#171923] border border-white/[0.08] text-[10px] text-slate-300 rounded px-1.5 py-1 focus:outline-none focus:border-indigo-500 font-semibold cursor-pointer"
-                                >
-                                  <option value="BJP">BJP</option>
-                                  <option value="Congress">Congress</option>
-                                  <option value="AAP">AAP</option>
-                                  <option value="TMC">TMC</option>
-                                  <option value="BJD">BJD</option>
-                                  <option value="DMK">DMK</option>
-                                  <option value="Shiv Sena">Shiv Sena</option>
-                                  <option value="NCP">NCP</option>
-                                  <option value="Independent">Independent</option>
-                                  <option value="Other">Other</option>
-                                </select>
-                              </div>
-                            </div>
-
-                            {/* Stats Grid */}
-                            <div className="grid grid-cols-2 gap-4 border-t border-b border-white/[0.04] py-4 text-xs text-left">
-                              <div className="space-y-1">
-                                <span className="text-[10px] text-slate-500 flex items-center gap-1.5">
-                                  <Users size={12} className="text-slate-500" />
-                                  Subscribers
-                                </span>
-                                <span className="font-mono font-bold text-slate-200">
-                                  {formatNumber(creator.subscribers)}
-                                </span>
-                              </div>
-                              <div className="space-y-1">
-                                <span className="text-[10px] text-slate-500 flex items-center gap-1.5">
-                                  <Eye size={12} className="text-slate-500" />
-                                  Total Views
-                                </span>
-                                <span className="font-mono font-bold text-slate-200">
-                                  {formatNumber(creator.totalViews)}
-                                </span>
-                              </div>
-                              <div className="space-y-1">
-                                <span className="text-[10px] text-slate-500 flex items-center gap-1.5">
-                                  <Video size={12} className="text-slate-500" />
-                                  Videos count
-                                </span>
-                                <span className="font-mono font-bold text-slate-200">
-                                  {formatNumber(creator.totalVideos)}
-                                </span>
-                              </div>
-                              <div className="space-y-1">
-                                <span className="text-[10px] text-slate-500 flex items-center gap-1.5">
-                                  <Percent size={12} className="text-slate-500" />
-                                  Engagement
-                                </span>
-                                <span className="font-mono font-bold text-indigo-400">
-                                  {creator.engagementRate}%
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Footer Stats and Nav Icon */}
-                          <div className="flex items-center justify-between mt-5 pt-3 border-t border-white/[0.04] text-[10px] text-slate-500">
-                            <div className="flex items-center gap-4">
-                              <div className="flex items-center gap-1">
-                                <Clock size={10} />
-                                <span>{getRelativeTime(creator.lastSync)}</span>
-                              </div>
-
-                              {/* Growth % Badge */}
-                              <div className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded font-bold ${
-                                creator.growth >= 0 
-                                  ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" 
-                                  : "bg-rose-500/10 text-rose-400 border border-rose-500/20"
-                              }`}>
-                                {creator.growth >= 0 ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
-                                <span>{creator.growth >= 0 ? "+" : ""}{creator.growth}%</span>
-                              </div>
-                            </div>
-
-                            <ChevronRight size={14} className="text-slate-500 group-hover:text-white transition group-hover:translate-x-0.5" />
-                          </div>
-                        </motion.div>
-                      </Link>
-                    ))}
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </>
-          ) : (
-            <div className="text-center py-24 bg-[#121318]/20 border border-white/[0.06] border-dashed rounded-2xl space-y-4 max-w-xl mx-auto">
-              <div className="w-16 h-16 mx-auto rounded-full bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center">
-                <Users size={28} className="text-indigo-400" />
-              </div>
-              <div className="space-y-2">
-                <h3 className="text-base font-bold text-slate-200">No {groupName.toUpperCase()} creators tracked yet</h3>
-                <p className="text-xs text-slate-400 max-w-xs mx-auto leading-relaxed">
-                  Start tracking creators, ministers, and leaders belonging to the {groupName.toUpperCase()} group to view cumulative telemetry and performance indices.
-                </p>
-              </div>
-              <Link to="/accounts" className="inline-block">
-                <button className="h-10 px-6 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-xs font-semibold text-white transition shadow-lg shadow-indigo-600/10 active:scale-[0.98] cursor-pointer">
-                  Add Your First Creator
-                </button>
-              </Link>
-            </div>
+              </motion.div>
+            </AnimatePresence>
           )}
+
         </main>
       </div>
     </div>

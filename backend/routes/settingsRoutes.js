@@ -6,6 +6,8 @@ import {
   updatePassword,
   getNotificationPreferences,
   updateNotificationPreferences,
+  getAppearance,
+  updateAppearance,
 } from "../controllers/settingsController.js";
 import { protect } from "../middleware/authMiddleware.js";
 import { body } from "express-validator";
@@ -44,5 +46,8 @@ router.post(
   validateResult,
   updatePassword
 );
+
+router.get("/appearance", getAppearance);
+router.put("/appearance", updateAppearance);
 
 export default router;

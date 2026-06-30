@@ -16,6 +16,21 @@ export default function Navbar() {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef(null);
 
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, []);
+
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState(null);
   const [realSearchOpen, setRealSearchOpen] = useState(false);
@@ -113,7 +128,14 @@ export default function Navbar() {
   const isAvatarUrl = user?.avatar && (user.avatar.startsWith("http") || user.avatar.includes("svg"));
 
   return (
-    <motion.header
+    <>
+      {!isOnline && (
+        <div className="w-full bg-rose-600/20 border-b border-rose-500/30 text-rose-200 text-center py-2 text-[10px] font-mono font-bold flex items-center justify-center gap-2 animate-pulse z-[60] relative">
+          <span className="h-2 w-2 rounded-full bg-rose-500 animate-ping shrink-0" />
+          Offline Mode: Telemetry synchronization is paused. Check connection.
+        </div>
+      )}
+      <motion.header
       initial={{ opacity: 0, y: -8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
@@ -424,5 +446,6 @@ export default function Navbar() {
         </div>
       </div>
     </motion.header>
+    </>
   );
 }

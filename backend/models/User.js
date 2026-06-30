@@ -68,6 +68,13 @@ const userSchema = new mongoose.Schema(
       snapshotCompleted: { type: Boolean, default: true },
       milestoneReached: { type: Boolean, default: true },
     },
+    appearancePreferences: {
+      theme: { type: String, enum: ["dark", "light", "system"], default: "dark" },
+      accent: { type: String, enum: ["indigo", "emerald", "violet", "amber", "rose", "cyan", "orange"], default: "indigo" },
+      fontSize: { type: String, enum: ["small", "medium", "large"], default: "medium" },
+      compact: { type: Boolean, default: false },
+      animations: { type: String, enum: ["full", "minimal", "off"], default: "full" },
+    },
     passwordHistory: {
       type: [String],
       default: [],

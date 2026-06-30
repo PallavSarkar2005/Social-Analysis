@@ -12,7 +12,7 @@ export default function AuditLogs() {
   const fetchLogs = async () => {
     try {
       setLoading(true);
-      const res = await client.get("/api/users/activity-logs");
+      const res = await client.get("/api/activity");
       if (res.data && res.data.success) {
         setLogs(res.data.data);
       }

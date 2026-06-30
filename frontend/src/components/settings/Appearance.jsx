@@ -1,199 +1,299 @@
-import React, { useState } from "react";
-import { Sparkles, Monitor, Sun, Moon, Check, Eye, ToggleLeft, ToggleRight, Layout, Sliders } from "lucide-react";
-import toast from "react-hot-toast";
+import React, { useCallback } from "react";
+import { motion } from "framer-motion";
+import {
+  Sparkles, Monitor, Sun, Moon, Check, Eye,
+  ToggleLeft, ToggleRight, Sliders, Zap, Type, Layout,
+} from "lucide-react";
+import { useAppearance } from "../../context/AppearanceContext";
+
+const ACCENT_OPTS = [
+  { id: "indigo",  label: "Indigo",  hex: "#6366f1", ring: "#818cf8" },
+  { id: "emerald", label: "Emerald", hex: "#10b981", ring: "#34d399" },
+  { id: "violet",  label: "Violet",  hex: "#8b5cf6", ring: "#a78bfa" },
+  { id: "amber",   label: "Amber",   hex: "#f59e0b", ring: "#fcd34d" },
+  { id: "rose",    label: "Rose",    hex: "#f43f5e", ring: "#fb7185" },
+  { id: "cyan",    label: "Cyan",    hex: "#06b6d4", ring: "#22d3ee" },
+  { id: "orange",  label: "Orange",  hex: "#f97316", ring: "#fb923c" },
+];
+
+const card = "bg-[#111319]/60 border border-white/[0.05] rounded-2xl p-5 space-y-4 backdrop-blur-sm";
+const sectionLabel = "text-[10px] font-bold text-slate-500 uppercase tracking-[0.14em] flex items-center gap-1.5";
 
 export default function Appearance() {
-  const [theme, setTheme] = useState("dark");
-  const [accent, setAccent] = useState("indigo");
-  const [fontSize, setFontSize] = useState("medium");
-  const [compact, setCompact] = useState(false);
-  const [sidebarStyle, setSidebarStyle] = useState("floating");
-  const [density, setDensity] = useState("normal");
-  const [animations, setAnimations] = useState("full");
+  const { prefs, update } = useAppearance();
+  const { theme, accent, fontSize, compact, animations } = prefs;
 
-  const accents = [
-    { id: "indigo", color: "bg-indigo-500", border: "border-indigo-400" },
-    { id: "emerald", color: "bg-emerald-500", border: "border-emerald-400" },
-    { id: "violet", color: "bg-violet-500", border: "border-violet-400" },
-    { id: "amber", color: "bg-amber-500", border: "border-amber-400" },
-    { id: "rose", color: "bg-rose-500", border: "border-rose-400" },
-  ];
+  // Determine current accent hex for live preview
+  const accentHex = ACCENT_OPTS.find((a) => a.id === accent)?.hex || "#6366f1";
+  const accentRing = ACCENT_OPTS.find((a) => a.id === accent)?.ring || "#818cf8";
 
-  const handleApply = () => {
-    toast.success("Appearance settings updated locally!");
-  };
+  const handleToggleCompact = useCallback(() => update({ compact: !compact }), [compact, update]);
+
+  // Live preview theme helper
+  const previewBg   = theme === "light" ? "#f8fafc" : "#0d0e14";
+  const previewCard = theme === "light" ? "#ffffff" : "#12141c";
+  const previewText = theme === "light" ? "#0f172a" : "#e2e8f0";
+  const previewMut  = theme === "light" ? "#64748b" : "#64748b";
 
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div>
         <h2 className="text-xl font-bold text-white flex items-center gap-2">
-          <Sparkles className="text-indigo-400" size={20} /> Appearance
+          <Sparkles className="si-accent-text" size={20} /> Appearance
         </h2>
-        <p className="text-xs text-slate-400 mt-1">Personalize the styling telemetry, color accents, layout density, and animations.</p>
+        <p className="text-xs text-slate-400 mt-1">
+          All settings take effect instantly and are saved to your account.
+        </p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Customizer settings */}
-        <div className="lg:col-span-2 space-y-6">
-          {/* Theme selection */}
-          <div className="bg-[#111319]/40 border border-white/[0.04] p-6 rounded-2xl space-y-4">
-            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
-              <Monitor size={12} /> Theme Selection
-            </h3>
+        {/* ── Left Column: Controls ── */}
+        <div className="lg:col-span-2 space-y-5">
+
+          {/* Theme Mode */}
+          <div className={card}>
+            <h3 className={sectionLabel}><Monitor size={11} /> Theme Mode</h3>
             <div className="grid grid-cols-3 gap-3">
               {[
-                { id: "light", label: "Light Mode", icon: <Sun size={14} /> },
-                { id: "dark", label: "Dark Mode", icon: <Moon size={14} /> },
-                { id: "auto", label: "System Sync", icon: <Monitor size={14} /> },
+                { id: "light",  label: "Light",  icon: <Sun  size={15} /> },
+                { id: "dark",   label: "Dark",   icon: <Moon size={15} /> },
+                { id: "system", label: "System", icon: <Monitor size={15} /> },
               ].map((t) => (
-                <button
+                <motion.button
                   key={t.id}
-                  type="button"
-                  onClick={() => setTheme(t.id)}
+                  whileTap={{ scale: 0.96 }}
+                  onClick={() => update({ theme: t.id })}
                   className={`h-16 rounded-xl border flex flex-col items-center justify-center gap-2 transition-all ${
                     theme === t.id
-                      ? "bg-indigo-500/[0.04] border-indigo-500 text-indigo-400"
-                      : "bg-[#181b24]/40 border-white/[0.06] text-slate-400 hover:border-white/[0.1] hover:text-white"
+                      ? "si-accent-bg si-accent-border text-white"
+                      : "bg-[#181b24]/60 border-white/[0.06] text-slate-400 hover:border-white/[0.12] hover:text-white"
                   }`}
                 >
                   {t.icon}
                   <span className="text-[10px] font-semibold">{t.label}</span>
+                </motion.button>
+              ))}
+            </div>
+          </div>
+
+          {/* Accent Color */}
+          <div className={card}>
+            <h3 className={sectionLabel}><Sliders size={11} /> Accent Color</h3>
+            <div className="flex items-center flex-wrap gap-3">
+              {ACCENT_OPTS.map((a) => (
+                <motion.button
+                  key={a.id}
+                  whileHover={{ scale: 1.08 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => update({ accent: a.id })}
+                  title={a.label}
+                  className="relative w-9 h-9 rounded-full flex items-center justify-center transition-all"
+                  style={{
+                    background: a.hex,
+                    boxShadow: accent === a.id ? `0 0 0 3px ${a.ring}, 0 0 14px ${a.hex}55` : "none",
+                    outline: accent === a.id ? `2px solid ${a.ring}` : "2px solid transparent",
+                    outlineOffset: "2px",
+                  }}
+                >
+                  {accent === a.id && (
+                    <Check size={13} className="text-white font-extrabold drop-shadow" />
+                  )}
+                </motion.button>
+              ))}
+              <span className="text-xs text-slate-500 ml-1 capitalize">{accent}</span>
+            </div>
+
+            {/* Color name strip */}
+            <div
+              className="h-0.5 rounded-full w-full mt-1 transition-all duration-500"
+              style={{ background: `linear-gradient(90deg, ${accentHex}, ${accentRing})` }}
+            />
+          </div>
+
+          {/* Font Size */}
+          <div className={card}>
+            <h3 className={sectionLabel}><Type size={11} /> Font Size</h3>
+            <div className="bg-[#0d0e14] border border-white/[0.06] p-1 rounded-xl flex gap-1">
+              {[
+                { id: "small",  label: "Aa", sub: "Small" },
+                { id: "medium", label: "Aa", sub: "Medium" },
+                { id: "large",  label: "Aa", sub: "Large" },
+              ].map((sz) => (
+                <button
+                  key={sz.id}
+                  onClick={() => update({ fontSize: sz.id })}
+                  className={`flex-1 py-2.5 rounded-lg transition-all flex flex-col items-center gap-0.5 ${
+                    fontSize === sz.id
+                      ? "si-accent-bg text-white"
+                      : "text-slate-400 hover:text-white"
+                  }`}
+                  style={fontSize === sz.id ? {
+                    boxShadow: `0 0 12px rgba(var(--si-accent) / 0.2)`
+                  } : {}}
+                >
+                  <span className={`font-bold leading-none ${
+                    sz.id === "small" ? "text-xs" : sz.id === "large" ? "text-lg" : "text-sm"
+                  }`}>{sz.label}</span>
+                  <span className="text-[9px] font-semibold uppercase tracking-wide opacity-70">{sz.sub}</span>
                 </button>
               ))}
             </div>
           </div>
 
-          {/* Color Accent & Font Density */}
-          <div className="bg-[#111319]/40 border border-white/[0.04] p-6 rounded-2xl space-y-6">
-            {/* Color Accent */}
-            <div className="space-y-3">
-              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
-                <Sliders size={12} /> Color Accent
-              </h3>
-              <div className="flex items-center gap-3">
-                {accents.map((acc) => (
-                  <button
-                    key={acc.id}
-                    type="button"
-                    onClick={() => setAccent(acc.id)}
-                    className={`w-8 h-8 rounded-full border-2 flex items-center justify-center transition-all ${
-                      accent === acc.id
-                        ? `${acc.border} border-white scale-110 shadow-lg`
-                        : "border-transparent opacity-75 hover:opacity-100 hover:scale-105"
-                    }`}
-                  >
-                    <div className={`w-5 h-5 rounded-full ${acc.color} flex items-center justify-center`}>
-                      {accent === acc.id && <Check size={10} className="text-black font-extrabold" />}
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </div>
+          {/* Compact Mode + Animation Level */}
+          <div className={card}>
+            <div className="space-y-5 divide-y divide-white/[0.04]">
 
-            {/* Density & Compact Toggles */}
-            <div className="divide-y divide-white/[0.04] space-y-4 pt-2">
-              <div className="flex items-center justify-between pt-4 first:pt-0">
-                <div className="space-y-1 pr-4">
-                  <h4 className="text-xs font-semibold text-white">Compact Mode</h4>
-                  <p className="text-[10px] text-slate-400">Reduce spacing and padding variables to fit more charts on screen.</p>
+              {/* Compact Mode */}
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="text-sm font-semibold text-white flex items-center gap-1.5">
+                    <Layout size={13} className="si-accent-text" /> Compact Mode
+                  </h4>
+                  <p className="text-[11px] text-slate-400 mt-0.5">
+                    Reduces padding and card spacing — fits more data on screen.
+                  </p>
                 </div>
-                <button
-                  onClick={() => setCompact(!compact)}
-                  className={`w-10 h-6 rounded-full p-1 transition-colors duration-200 outline-none flex-shrink-0 ${
-                    compact ? "bg-indigo-600" : "bg-[#181b24] border border-white/[0.08]"
+                <motion.button
+                  onClick={handleToggleCompact}
+                  whileTap={{ scale: 0.9 }}
+                  className={`w-11 h-6 rounded-full p-0.5 transition-all duration-300 flex-shrink-0 ${
+                    compact ? "si-accent-bg" : "bg-white/[0.06] border border-white/[0.08]"
                   }`}
+                  style={compact ? {
+                    backgroundColor: `rgb(var(--si-accent))`,
+                    boxShadow: `0 0 10px rgba(var(--si-accent) / 0.35)`
+                  } : {}}
                 >
-                  <div
-                    className={`w-4 h-4 rounded-full bg-white transition-transform duration-200 ${
-                      compact ? "translate-x-4" : "translate-x-0"
-                    }`}
+                  <motion.div
+                    layout
+                    className="w-4.5 h-4.5 rounded-full bg-white shadow-md"
+                    animate={{ x: compact ? 18 : 2 }}
+                    transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                    style={{ width: 18, height: 18 }}
                   />
-                </button>
+                </motion.button>
               </div>
 
-              <div className="flex items-center justify-between pt-4">
-                <div className="space-y-1 pr-4">
-                  <h4 className="text-xs font-semibold text-white">Font Size</h4>
-                  <p className="text-[10px] text-slate-400">Adjust the dashboard text hierarchy rendering scale.</p>
+              {/* Animation Level */}
+              <div className="flex items-center justify-between pt-5">
+                <div>
+                  <h4 className="text-sm font-semibold text-white flex items-center gap-1.5">
+                    <Zap size={13} className="si-accent-text" /> Animation Level
+                  </h4>
+                  <p className="text-[11px] text-slate-400 mt-0.5">
+                    Controls all Framer Motion transitions and chart animation speeds.
+                  </p>
                 </div>
-                <div className="bg-[#181b24] border border-white/[0.06] p-0.5 rounded-lg flex gap-1">
-                  {["small", "medium", "large"].map((sz) => (
+                <div className="bg-[#0d0e14] border border-white/[0.06] p-0.5 rounded-xl flex gap-0.5 flex-shrink-0">
+                  {[
+                    { id: "minimal", label: "Min" },
+                    { id: "full",    label: "Full" },
+                    { id: "off",     label: "Off" },
+                  ].map((anim) => (
                     <button
-                      key={sz}
-                      onClick={() => setFontSize(sz)}
-                      className={`px-2.5 py-1 rounded text-[10px] font-bold uppercase transition ${
-                        fontSize === sz
-                          ? "bg-indigo-600 text-white"
+                      key={anim.id}
+                      onClick={() => update({ animations: anim.id })}
+                      className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wide transition-all ${
+                        animations === anim.id
+                          ? "text-white"
                           : "text-slate-400 hover:text-white"
                       }`}
+                      style={animations === anim.id ? {
+                        backgroundColor: `rgb(var(--si-accent))`,
+                        boxShadow: `0 0 8px rgba(var(--si-accent) / 0.3)`
+                      } : {}}
                     >
-                      {sz}
+                      {anim.label}
                     </button>
                   ))}
                 </div>
               </div>
 
-              <div className="flex items-center justify-between pt-4">
-                <div className="space-y-1 pr-4">
-                  <h4 className="text-xs font-semibold text-white">Animations Level</h4>
-                  <p className="text-[10px] text-slate-400">Manage framer-motion transitions and chart render durations.</p>
-                </div>
-                <select
-                  value={animations}
-                  onChange={(e) => setAnimations(e.target.value)}
-                  className="h-9 px-3 bg-[#181b24] border border-white/[0.06] rounded-xl text-xs text-white focus:outline-none"
-                >
-                  <option value="full">Full Transitions</option>
-                  <option value="minimal">Minimal Loaders</option>
-                  <option value="off">None (No Animations)</option>
-                </select>
-              </div>
             </div>
           </div>
         </div>
 
-        {/* Live Preview Card */}
+        {/* ── Right Column: Live Preview ── */}
         <div className="lg:col-span-1">
-          <div className="bg-[#111319]/40 border border-white/[0.04] p-6 rounded-2xl space-y-6 flex flex-col justify-between h-full">
+          <div className={`${card} !space-y-5 h-full flex flex-col justify-between`}>
             <div className="space-y-4">
-              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
-                <Eye size={12} /> Live Preview
-              </h3>
+              <h3 className={sectionLabel}><Eye size={11} /> Live Preview</h3>
               <p className="text-[10px] text-slate-400 leading-relaxed">
-                See a preview of how UI cards look with your selected theme and accent options.
+                Reflects your selected theme, accent, and spacing in real time.
               </p>
 
-              <div className="bg-[#090a0f] p-4 rounded-xl border border-white/[0.06] space-y-3">
+              {/* Simulated card preview */}
+              <motion.div
+                layout
+                className="rounded-xl p-4 space-y-3 border transition-all"
+                style={{
+                  background: previewCard,
+                  borderColor: "rgba(255,255,255,0.06)",
+                  padding: compact ? "0.75rem" : "1rem",
+                }}
+              >
+                {/* Fake avatar + title row */}
                 <div className="flex items-center gap-2">
-                  <div className="w-2.5 h-2.5 rounded-full bg-indigo-500" />
-                  <div className="h-2 w-16 bg-white/[0.08] rounded" />
+                  <div
+                    className="w-7 h-7 rounded-full flex-shrink-0"
+                    style={{ background: accentHex, opacity: 0.9 }}
+                  />
+                  <div className="space-y-1 flex-1">
+                    <div className="h-2 rounded-sm w-24" style={{ background: previewText, opacity: 0.7 }} />
+                    <div className="h-1.5 rounded-sm w-14" style={{ background: previewMut, opacity: 0.5 }} />
+                  </div>
                 </div>
-                <div className="space-y-1.5 pt-1">
-                  <div className="h-3 w-full bg-white/[0.06] rounded-md" />
-                  <div className="h-2 w-3/4 bg-white/[0.04] rounded-md" />
+
+                {/* Fake metric row */}
+                <div className="grid grid-cols-3 gap-2">
+                  {["12.4K", "94%", "+2.1%"].map((val, i) => (
+                    <div
+                      key={i}
+                      className="rounded-lg p-2 text-center"
+                      style={{ background: `${accentHex}18` }}
+                    >
+                      <div className="text-[10px] font-bold" style={{ color: accentHex }}>{val}</div>
+                      <div className="text-[8px] mt-0.5" style={{ color: previewMut, opacity: 0.8 }}>Metric</div>
+                    </div>
+                  ))}
                 </div>
-                <div className="flex items-center justify-between pt-2">
-                  <div className="h-4 w-10 bg-white/[0.06] rounded-md" />
-                  <button
-                    type="button"
-                    className={`h-5 px-2.5 rounded text-[8px] font-bold text-white flex items-center justify-center uppercase tracking-wider ${
-                      accent === "indigo" ? "bg-indigo-600" :
-                      accent === "emerald" ? "bg-emerald-600" :
-                      accent === "violet" ? "bg-violet-600" :
-                      accent === "amber" ? "bg-amber-600" : "bg-rose-600"
-                    }`}
-                  >
-                    Button
-                  </button>
-                </div>
+
+                {/* Fake button */}
+                <button
+                  className="w-full py-1.5 rounded-lg text-[10px] font-bold text-white uppercase tracking-wider transition-all"
+                  style={{ background: accentHex, boxShadow: `0 0 10px ${accentHex}40` }}
+                >
+                  Accent Button
+                </button>
+              </motion.div>
+
+              {/* Active settings summary */}
+              <div className="space-y-2">
+                {[
+                  { label: "Theme",      val: theme.charAt(0).toUpperCase() + theme.slice(1) },
+                  { label: "Accent",     val: ACCENT_OPTS.find(a => a.id === accent)?.label || accent },
+                  { label: "Font",       val: fontSize.charAt(0).toUpperCase() + fontSize.slice(1) },
+                  { label: "Compact",    val: compact ? "Enabled" : "Disabled" },
+                  { label: "Animations", val: animations.charAt(0).toUpperCase() + animations.slice(1) },
+                ].map(({ label, val }) => (
+                  <div key={label} className="flex items-center justify-between text-[10px]">
+                    <span className="text-slate-500">{label}</span>
+                    <span className="font-semibold" style={{ color: accentHex }}>{val}</span>
+                  </div>
+                ))}
               </div>
             </div>
 
+            {/* Reset button */}
             <button
-              onClick={handleApply}
-              className="w-full h-10 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white transition flex items-center justify-center gap-2 text-xs font-semibold shadow-lg shadow-indigo-600/20 pt-1 mt-6"
+              onClick={() => {
+                import("../../context/AppearanceContext").then(({ useAppearance: _ }) => {});
+              }}
+              className="w-full h-8 px-4 rounded-xl bg-white/[0.04] border border-white/[0.06] hover:bg-white/[0.07] text-slate-400 hover:text-white transition text-[10px] font-semibold mt-2"
             >
-              Apply Theme Specs
+              Saved automatically ✓
             </button>
           </div>
         </div>

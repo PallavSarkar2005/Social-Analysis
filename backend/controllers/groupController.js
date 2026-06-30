@@ -107,12 +107,41 @@ export const getGroupCreators = async (req, res, next) => {
         totalVideos = 0;
       }
 
+      // Calculate weekly / monthly growth by querying older snapshots
+      let weeklyGrowth = 0;
+      let monthlyGrowth = 0;
+      let subscriberGain = 0;
+      let viewGain = 0;
+
+      if (account.platform === "youtube") {
+        const weekAgoDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+        const monthAgoDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+        const [weekOldSnap, monthOldSnap, latestSnapForGrowth] = await Promise.all([
+          Snapshot.findOne({ account: account._id, capturedAt: { $lte: weekAgoDate } }).sort({ capturedAt: -1 }),
+          Snapshot.findOne({ account: account._id, capturedAt: { $lte: monthAgoDate } }).sort({ capturedAt: -1 }),
+          Snapshot.findOne({ account: account._id }).sort({ capturedAt: -1 }),
+        ]);
+
+        if (latestSnapForGrowth && weekOldSnap && weekOldSnap.followers > 0) {
+          const wDiff = latestSnapForGrowth.followers - weekOldSnap.followers;
+          weeklyGrowth = Number(((wDiff / weekOldSnap.followers) * 100).toFixed(2));
+          subscriberGain = wDiff;
+        }
+        if (latestSnapForGrowth && monthOldSnap && monthOldSnap.followers > 0) {
+          const mDiff = latestSnapForGrowth.followers - monthOldSnap.followers;
+          monthlyGrowth = Number(((mDiff / monthOldSnap.followers) * 100).toFixed(2));
+          viewGain = latestSnapForGrowth.views - monthOldSnap.views;
+        }
+      }
+
       data.push({
         _id: account._id,
         name: account.name,
         platform: account.platform,
         accountId: account.accountId,
         profileUrl: account.profileUrl,
+        profileImage: account.profileImage || account.thumbnail || "",
         subscribers,
         totalViews,
         totalVideos,
@@ -121,10 +150,15 @@ export const getGroupCreators = async (req, res, next) => {
         avgComments,
         engagementRate,
         growth,
+        weeklyGrowth,
+        monthlyGrowth,
+        subscriberGain,
+        viewGain,
         lastSync,
         state: account.state || "Unknown State",
         party: account.party || "Independent",
       });
+
     }
 
     console.log(`Returned ${data.length} creators with analytics.`);

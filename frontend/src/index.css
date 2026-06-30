@@ -1,1 +1,215 @@
 @import "tailwindcss";
+
+/* ============================================================
+   Social IQ — Global CSS Custom Properties
+   Driven by AppearanceContext. Do NOT hardcode these values
+   in components; always use var(--si-*)
+   ============================================================ */
+
+:root {
+  /* --- Accent Color (mapped by AppearanceContext) --- */
+  --si-accent:         99 102 241;   /* indigo-500 default */
+  --si-accent-light:   165 180 252;  /* indigo-300 */
+  --si-accent-dark:    67  56  202;  /* indigo-700 */
+
+  /* --- Typography Scale --- */
+  --si-text-xs:    0.70rem;
+  --si-text-sm:    0.80rem;
+  --si-text-base:  0.875rem;
+  --si-text-lg:    1.00rem;
+  --si-text-xl:    1.15rem;
+  --si-text-2xl:   1.40rem;
+  --si-text-3xl:   1.75rem;
+  --si-text-4xl:   2.10rem;
+
+  /* --- Spacing Scale (compact mode scales these down) --- */
+  --si-space-1:    0.25rem;
+  --si-space-2:    0.50rem;
+  --si-space-3:    0.75rem;
+  --si-space-4:    1.00rem;
+  --si-space-6:    1.50rem;
+  --si-space-8:    2.00rem;
+  --si-space-12:   3.00rem;
+
+  /* --- Card / Section padding --- */
+  --si-card-p:     1.50rem;
+  --si-section-p:  2.00rem;
+
+  /* --- Transition speed (animations level) --- */
+  --si-duration-fast:   150ms;
+  --si-duration-base:   300ms;
+  --si-duration-slow:   500ms;
+
+  /* --- Glow effects --- */
+  --si-glow: rgba(var(--si-accent) / 0.15);
+}
+
+/* ---- ACCENT: indigo (default) ---- */
+[data-accent="indigo"] {
+  --si-accent:        99 102 241;
+  --si-accent-light:  165 180 252;
+  --si-accent-dark:   67  56  202;
+}
+[data-accent="emerald"] {
+  --si-accent:        16 185 129;
+  --si-accent-light:  110 231 183;
+  --si-accent-dark:   4  120  87;
+}
+[data-accent="violet"] {
+  --si-accent:        139  92 246;
+  --si-accent-light:  196 181 253;
+  --si-accent-dark:   109  40 217;
+}
+[data-accent="amber"] {
+  --si-accent:        245 158  11;
+  --si-accent-light:  252 211 77;
+  --si-accent-dark:   180 83   9;
+}
+[data-accent="rose"] {
+  --si-accent:        244  63  94;
+  --si-accent-light:  253 164 175;
+  --si-accent-dark:   190  18  60;
+}
+[data-accent="cyan"] {
+  --si-accent:         6 182 212;
+  --si-accent-light:  103 232 249;
+  --si-accent-dark:   14 116 144;
+}
+[data-accent="orange"] {
+  --si-accent:        249 115  22;
+  --si-accent-light:  253 186 116;
+  --si-accent-dark:   194  65   12;
+}
+
+/* ---- FONT SIZE SCALE ---- */
+[data-fontsize="small"] {
+  --si-text-xs:   0.625rem;
+  --si-text-sm:   0.70rem;
+  --si-text-base: 0.75rem;
+  --si-text-lg:   0.875rem;
+  --si-text-xl:   1.00rem;
+  --si-text-2xl:  1.20rem;
+  --si-text-3xl:  1.50rem;
+  --si-text-4xl:  1.80rem;
+  font-size: 14px;
+}
+[data-fontsize="medium"] {
+  font-size: 16px;
+}
+[data-fontsize="large"] {
+  --si-text-xs:   0.75rem;
+  --si-text-sm:   0.875rem;
+  --si-text-base: 1.00rem;
+  --si-text-lg:   1.15rem;
+  --si-text-xl:   1.30rem;
+  --si-text-2xl:  1.60rem;
+  --si-text-3xl:  2.00rem;
+  --si-text-4xl:  2.50rem;
+  font-size: 18px;
+}
+
+/* ---- COMPACT MODE ---- */
+[data-compact="true"] {
+  --si-space-1:   0.15rem;
+  --si-space-2:   0.30rem;
+  --si-space-3:   0.50rem;
+  --si-space-4:   0.75rem;
+  --si-space-6:   1.00rem;
+  --si-space-8:   1.25rem;
+  --si-space-12:  1.75rem;
+  --si-card-p:    0.875rem;
+  --si-section-p: 1.25rem;
+}
+
+/* ---- ANIMATION LEVEL ---- */
+[data-animations="full"] {
+  --si-duration-fast:   150ms;
+  --si-duration-base:   300ms;
+  --si-duration-slow:   500ms;
+}
+[data-animations="minimal"] {
+  --si-duration-fast:   50ms;
+  --si-duration-base:   100ms;
+  --si-duration-slow:   150ms;
+}
+[data-animations="off"] {
+  --si-duration-fast:   0ms;
+  --si-duration-base:   0ms;
+  --si-duration-slow:   0ms;
+}
+
+/* ---- LIGHT THEME ---- */
+[data-theme="light"] {
+  --si-bg-primary:   #f8fafc;
+  --si-bg-secondary: #f1f5f9;
+  --si-bg-card:      #ffffff;
+  --si-text-primary: #0f172a;
+  --si-text-muted:   #64748b;
+  --si-border:       rgba(0, 0, 0, 0.08);
+}
+[data-theme="light"] body {
+  background-color: #f1f5f9;
+  color: #0f172a;
+}
+[data-theme="light"] .sidebar-bg {
+  background-color: #ffffff;
+  border-color: rgba(0, 0, 0, 0.08);
+}
+[data-theme="light"] .card-bg {
+  background: #ffffff;
+  border-color: rgba(0, 0, 0, 0.08);
+  color: #0f172a;
+}
+[data-theme="light"] .navbar-bg {
+  background: rgba(255, 255, 255, 0.9);
+  border-color: rgba(0, 0, 0, 0.06);
+}
+
+/* ---- DARK THEME (default) ---- */
+[data-theme="dark"] body,
+body {
+  background-color: #090a0f;
+  color: #e2e8f0;
+}
+
+/* ---- Accent utility classes driven by CSS vars ---- */
+.si-accent-text    { color: rgb(var(--si-accent)); }
+.si-accent-bg      { background-color: rgba(var(--si-accent) / 0.12); }
+.si-accent-border  { border-color: rgba(var(--si-accent) / 0.35); }
+.si-accent-btn {
+  background-color: rgb(var(--si-accent));
+  color: white;
+  transition: opacity var(--si-duration-fast) ease, transform var(--si-duration-fast) ease;
+}
+.si-accent-btn:hover {
+  opacity: 0.88;
+  transform: translateY(-1px);
+}
+.si-accent-glow {
+  box-shadow: 0 0 24px rgba(var(--si-accent) / 0.2);
+}
+.si-accent-ring:focus-visible {
+  outline: 2px solid rgb(var(--si-accent));
+  outline-offset: 2px;
+}
+
+/* ---- Transition helpers ---- */
+.si-transition {
+  transition-duration: var(--si-duration-base);
+  transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+}
+.si-transition-fast {
+  transition-duration: var(--si-duration-fast);
+}
+
+/* ---- Smooth scrollbar ---- */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.18); }
+
+/* ---- Selection color ---- */
+::selection {
+  background: rgba(var(--si-accent) / 0.3);
+  color: rgb(var(--si-accent-light, var(--si-accent)));
+}

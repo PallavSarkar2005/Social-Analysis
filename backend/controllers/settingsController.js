@@ -243,3 +243,77 @@ export const updateNotificationPreferences = async (req, res, next) => {
   }
 };
 
+// @desc    Get user appearance preferences
+// @route   GET /api/settings/appearance
+// @access  Private
+export const getAppearance = async (req, res, next) => {
+  try {
+    const user = await User.findById(req.user._id).select("appearancePreferences");
+    res.json({
+      success: true,
+      data: user.appearancePreferences || {
+        theme: "dark",
+        accent: "indigo",
+        fontSize: "medium",
+        compact: false,
+        animations: "full",
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Update user appearance preferences
+// @route   PUT /api/settings/appearance
+// @access  Private
+export const updateAppearance = async (req, res, next) => {
+  try {
+    const { theme, accent, fontSize, compact, animations } = req.body;
+
+    const allowed = {
+      theme: ["dark", "light", "system"],
+      accent: ["indigo", "emerald", "violet", "amber", "rose", "cyan", "orange"],
+      fontSize: ["small", "medium", "large"],
+      animations: ["full", "minimal", "off"],
+    };
+
+    if (theme && !allowed.theme.includes(theme)) {
+      return res.status(400).json({ success: false, message: "Invalid theme value" });
+    }
+    if (accent && !allowed.accent.includes(accent)) {
+      return res.status(400).json({ success: false, message: "Invalid accent value" });
+    }
+    if (fontSize && !allowed.fontSize.includes(fontSize)) {
+      return res.status(400).json({ success: false, message: "Invalid fontSize value" });
+    }
+    if (animations && !allowed.animations.includes(animations)) {
+      return res.status(400).json({ success: false, message: "Invalid animations value" });
+    }
+
+    const user = await User.findById(req.user._id);
+    user.appearancePreferences = {
+      theme: theme ?? user.appearancePreferences?.theme ?? "dark",
+      accent: accent ?? user.appearancePreferences?.accent ?? "indigo",
+      fontSize: fontSize ?? user.appearancePreferences?.fontSize ?? "medium",
+      compact: compact !== undefined ? Boolean(compact) : (user.appearancePreferences?.compact ?? false),
+      animations: animations ?? user.appearancePreferences?.animations ?? "full",
+    };
+
+    await user.save();
+
+    await logActivity(
+      req.user._id,
+      "appearance_updated",
+      `Appearance preferences updated: theme=${user.appearancePreferences.theme}, accent=${user.appearancePreferences.accent}`,
+      req
+    );
+
+    res.json({
+      success: true,
+      data: user.appearancePreferences,
+    });
+  } catch (error) {
+    next(error);
+  }
+};

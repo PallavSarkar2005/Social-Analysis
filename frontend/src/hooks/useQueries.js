@@ -229,16 +229,27 @@ export const useParty = (groupName) => {
   });
 };
 
-// 5. Analyzer Hook (With stale duration cache strategy)
+// 5. Analyzer Hook (With stale duration cache strategy + cache busting after save)
 export const useAnalyzer = (searchUrl, group = "Other", force = false, state = "Unknown State", party = "Independent", profileImage = "") => {
+  const queryClient = useQueryClient();
+
   return useQuery({
     queryKey: ["analyzer", searchUrl, group, force, state, party, profileImage],
     queryFn: async () => {
       if (!searchUrl) return null;
-      return await analyzeYoutubeUrl(searchUrl, group, force, state, party, profileImage);
+      const result = await analyzeYoutubeUrl(searchUrl, group, force, state, party, profileImage);
+      // After a successful analysis, invalidate all downstream caches so
+      // Party Analytics, Dashboard, Tracked Nodes reflect the new data immediately
+      queryClient.invalidateQueries({ queryKey: ["accounts"] });
+      queryClient.invalidateQueries({ queryKey: ["trackedNodes"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      queryClient.invalidateQueries({ queryKey: ["compare-accounts"] });
+      // Invalidate all party caches generically
+      queryClient.invalidateQueries({ predicate: (q) => q.queryKey[0]?.toString().startsWith("party") });
+      return result;
     },
     enabled: !!searchUrl,
-    staleTime: 5 * 60 * 1000, // 5 minutes cache duration
+    staleTime: 5 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
   });
 };
@@ -403,3 +414,17 @@ export const useCancelSubscription = () => {
   });
 };
 
+// 13. Appearance Preferences Hook (server-synced via AppearanceContext)
+// This is a lightweight read-only query — actual mutations go through AppearanceContext directly.
+export const useAppearanceQuery = () => {
+  return useQuery({
+    queryKey: ["settings", "appearance"],
+    queryFn: async () => {
+      const { default: client } = await import("../api/client");
+      const res = await client.get("/api/settings/appearance", { _skipErrorRedirect: true });
+      return res.data?.data || null;
+    },
+    staleTime: 10 * 60 * 1000, // 10 min — appearance rarely changes
+    retry: 0,
+  });
+};
