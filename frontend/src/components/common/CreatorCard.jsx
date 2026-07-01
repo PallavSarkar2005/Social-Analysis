@@ -1,4 +1,5 @@
 import React from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { MapPin, TrendingUp, TrendingDown, Clock, Activity } from "lucide-react";
 import LeaderAvatar from "./LeaderAvatar";
@@ -16,6 +17,15 @@ import MetricItem from "./MetricItem";
 export default function CreatorCard({ creator, theme, actions }) {
   const growth = creator.growth || 0;
   const lastSyncDate = creator.lastSync ? new Date(creator.lastSync).toLocaleDateString() : "N/A";
+  const navigate = useNavigate();
+
+  const handleCardClick = (e) => {
+    // Prevent navigating if user clicks on interactive controls like select, button, trash, or anchor tags
+    if (e.target.closest("button") || e.target.closest("select") || e.target.closest("input") || e.target.closest("a") || e.target.closest("option")) {
+      return;
+    }
+    navigate(`/profile/${creator._id || creator.id}`);
+  };
   
   // Format numbers cleanly
   const fmt = (n) => {
@@ -32,14 +42,15 @@ export default function CreatorCard({ creator, theme, actions }) {
       animate={{ opacity: 1, y: 0 }}
       whileHover={{ y: -4 }}
       transition={{ type: "spring", stiffness: 300, damping: 20 }}
-      className={`bg-[#0d0e14]/65 border ${theme.border} hover:border-indigo-500/40 rounded-2xl p-5 space-y-6 overflow-hidden group transition-all backdrop-blur-sm shadow-xl flex flex-col justify-between`}
+      onClick={handleCardClick}
+      className={`bg-[#0d0e14]/65 border ${theme.border} hover:border-indigo-500/40 rounded-2xl p-5 space-y-6 overflow-hidden group transition-all backdrop-blur-sm shadow-xl flex flex-col justify-between cursor-pointer`}
     >
       {/* Top Row: Avatar, Name, Party, State, Growth Badge */}
       <div className="flex items-start justify-between gap-3 relative">
-        <div className="flex items-center gap-3.5 min-w-0">
-          <LeaderAvatar creator={creator} size={52} className="border-indigo-500/10 ring-1 ring-white/[0.04]" />
+        <Link to={`/profile/${creator._id || creator.id}`} className="flex items-center gap-3.5 min-w-0 hover:opacity-90 group/title cursor-pointer">
+          <LeaderAvatar creator={creator} size={52} className="border-indigo-500/10 ring-1 ring-white/[0.04] group-hover/title:border-indigo-500/30 transition-all" />
           <div className="min-w-0 space-y-1">
-            <h4 className="text-sm sm:text-base font-bold text-white truncate tracking-tight select-none">
+            <h4 className="text-sm sm:text-base font-bold text-white truncate tracking-tight select-none group-hover/title:text-indigo-400 transition-colors">
               {creator.name}
             </h4>
             <div className="flex items-center gap-2 flex-wrap">
@@ -52,7 +63,7 @@ export default function CreatorCard({ creator, theme, actions }) {
               )}
             </div>
           </div>
-        </div>
+        </Link>
 
         {/* Growth badge */}
         <div className={`flex-shrink-0 text-[10px] font-bold flex items-center gap-0.5 px-2.5 py-1 rounded-lg ${

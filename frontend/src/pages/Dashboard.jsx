@@ -408,7 +408,9 @@ export default function Dashboard() {
                               className="hover:bg-white/[0.01] transition-colors text-xs"
                             >
                               <td className="p-4 font-bold text-slate-200">
-                                {acc.name}
+                                <Link to={`/profile/${acc._id || acc.accountId}`} className="hover:text-indigo-400 hover:underline cursor-pointer transition">
+                                  {acc.name}
+                                </Link>
                               </td>
                               <td className="p-4 text-slate-300">
                                 {Number(acc.followers).toLocaleString()}

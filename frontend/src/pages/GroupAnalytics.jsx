@@ -187,15 +187,15 @@ function CreatorRow({ creator, theme, index, onGroupChange, onDelete }) {
       className="border-b border-white/[0.04] hover:bg-white/[0.02] transition-colors group"
     >
       <td className="py-4 px-5">
-        <div className="flex items-center gap-3">
-          <LeaderAvatar creator={creator} size={38} />
+        <Link to={`/profile/${creator._id || creator.id}`} className="flex items-center gap-3 hover:opacity-90 group/rowLink cursor-pointer">
+          <LeaderAvatar creator={creator} size={38} className="group-hover/rowLink:border-indigo-500/35 transition-all" />
           <div>
-            <p className="text-sm font-semibold text-white">{creator.name}</p>
+            <p className="text-sm font-semibold text-white group-hover/rowLink:text-indigo-400 transition-colors">{creator.name}</p>
             <p className="text-xs text-slate-500 flex items-center gap-1 mt-0.5">
               <MapPin size={9} />{creator.state || "—"}
             </p>
           </div>
-        </div>
+        </Link>
       </td>
       <td className="py-4 px-5 text-right">
         <span className={`text-sm font-bold ${theme.text}`}>{fmt(creator.subscribers)}</span>

@@ -20,9 +20,8 @@ const hashToken = (token) => {
 };
 
 const checkIsProd = (req) => {
-  const host = req?.headers?.host || "";
-  const isLocal = host.includes("localhost") || host.includes("127.0.0.1");
-  return process.env.NODE_ENV === "production" || (host && !isLocal);
+  const isSecureConnection = req.secure || req.headers["x-forwarded-proto"] === "https";
+  return isSecureConnection;
 };
 
 // GET /api/auth/csrf

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import Sidebar from "../components/layout/Sidebar";
 import Navbar from "../components/layout/Navbar";
 import { useCompare } from "../hooks/useQueries";
@@ -258,16 +259,16 @@ export default function Compare() {
                             Analytics Variable
                           </th>
                           <th className="p-5 text-center text-sm font-extrabold text-white border-l border-white/[0.04] w-[36%] bg-indigo-500/[0.01]">
-                            <div className="flex items-center justify-center gap-3">
+                            <Link to={`/profile/${data.creatorA._id || data.creatorA.id}`} className="flex items-center justify-center gap-3 hover:text-indigo-400 hover:opacity-90 cursor-pointer transition">
                               <LeaderAvatar creator={data.creatorA} size={32} className="border border-indigo-500/30" />
                               <span>{data.creatorA.name}</span>
-                            </div>
+                            </Link>
                           </th>
                           <th className="p-5 text-center text-sm font-extrabold text-white border-l border-white/[0.04] w-[36%] bg-purple-500/[0.01]">
-                            <div className="flex items-center justify-center gap-3">
+                            <Link to={`/profile/${data.creatorB._id || data.creatorB.id}`} className="flex items-center justify-center gap-3 hover:text-purple-400 hover:opacity-90 cursor-pointer transition">
                               <LeaderAvatar creator={data.creatorB} size={32} className="border border-purple-500/30" />
                               <span>{data.creatorB.name}</span>
-                            </div>
+                            </Link>
                           </th>
                         </tr>
                       </thead>

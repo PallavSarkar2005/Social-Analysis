@@ -46,6 +46,7 @@ import searchRoutes from "./routes/searchRoutes.js";
 import groupRoutes from "./routes/groupRoutes.js";
 import userRoutes from "./routes/userRoutes.js";
 import billingRoutes from "./routes/billingRoutes.js";
+import profileRoutes from "./routes/profileRoutes.js";
 
 // Jobs & Schedulers
 import { syncAllYoutubeChannels } from "./jobs/youtubeSyncJob.js";
@@ -72,7 +73,14 @@ const corsWhitelist = [
 
 const corsOptions = {
   origin: (origin, callback) => {
-    if (!origin || corsWhitelist.includes(origin)) {
+    const isDevelopment = process.env.NODE_ENV === "development" || process.env.NODE_ENV === "test";
+    const isLocalOrigin = origin && (
+      origin.startsWith("http://localhost:") ||
+      origin.startsWith("http://127.0.0.1:") ||
+      origin.startsWith("http://192.168.")
+    );
+
+    if (!origin || corsWhitelist.includes(origin) || (isDevelopment && isLocalOrigin)) {
       callback(null, true);
     } else {
       callback(new Error("Blocked by CORS policy"));
@@ -207,6 +215,7 @@ app.use("/api/analytics", analyticsRoutes);
 app.use("/api/history", historyRoutes);
 app.use("/api/x", xRoutes);
 app.use("/api/groups", groupRoutes);
+app.use("/api/profile", strictLimiter, profileRoutes);
 
 app.get("/api/debug/youtube", (req, res) => {
   const apiKey = process.env.YOUTUBE_API_KEY || "";

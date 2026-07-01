@@ -7,12 +7,10 @@ export const csrfProtection = (req, res, next) => {
   // Generate a CSRF token if one is not already present in the cookie
   if (!csrfToken) {
     csrfToken = crypto.randomBytes(32).toString("hex");
-    const host = req.headers.host || "";
-    const isLocal = host.includes("localhost") || host.includes("127.0.0.1");
-    const isProd = process.env.NODE_ENV === "production" || !isLocal;
+    const isSecureConnection = req.secure || req.headers["x-forwarded-proto"] === "https";
     res.cookie("XSRF-TOKEN", csrfToken, {
-      secure: isProd,
-      sameSite: isProd ? "none" : "lax",
+      secure: isSecureConnection,
+      sameSite: isSecureConnection ? "none" : "lax",
       httpOnly: false, // Must be readable by client-side JS
       path: "/",
     });
@@ -20,8 +18,8 @@ export const csrfProtection = (req, res, next) => {
 
   req.csrfToken = csrfToken;
 
-  // Bypass validation for safe HTTP methods or in testing environment
-  if (process.env.NODE_ENV === "test") {
+  // Bypass validation in test or local development environments to prevent cross-origin port/cookie blockages
+  if (process.env.NODE_ENV === "test" || process.env.NODE_ENV === "development") {
     return next();
   }
 
