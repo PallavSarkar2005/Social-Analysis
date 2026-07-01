@@ -217,4 +217,61 @@ describe("Social IQ Backend API & Security Verification Suite", () => {
       expect(res.body.data.name).not.toContain("<script>");
     });
   });
+
+  // ==========================================
+  // PHASE 9: Political Profile & Deep Research Tests
+  // ==========================================
+  describe("Political Profile & Deep Research Endpoints", () => {
+    it("should successfully fetch biography for a valid creator ID", async () => {
+      const res = await request(app)
+        .get(`/api/profile/${sampleAccountId}`)
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.data.biography).toBeDefined();
+    });
+
+    it("should successfully fetch timeline milestones", async () => {
+      const res = await request(app)
+        .get(`/api/profile/${sampleAccountId}/timeline`)
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(Array.isArray(res.body.data)).toBe(true);
+    });
+
+    it("should successfully fetch press news and sentiment logs", async () => {
+      const res = await request(app)
+        .get(`/api/profile/${sampleAccountId}/news`)
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.data.news).toBeDefined();
+      expect(res.body.data.sentiment).toBeDefined();
+    });
+
+    it("should successfully fetch election history", async () => {
+      const res = await request(app)
+        .get(`/api/profile/${sampleAccountId}/elections`)
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(Array.isArray(res.body.data)).toBe(true);
+    });
+
+    it("should successfully fetch reach & influence matrix", async () => {
+      const res = await request(app)
+        .get(`/api/profile/${sampleAccountId}/influence`)
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.data.influence).toBeDefined();
+      expect(res.body.data.geographicReach).toBeDefined();
+    });
+  });
 });

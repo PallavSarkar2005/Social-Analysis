@@ -25,6 +25,7 @@ const hashToken = (token) => {
   return crypto.createHash("sha256").update(token).digest("hex");
 };
 
+<<<<<<< HEAD
 // Geolocation helper
 const getIpLocation = async (ip) => {
   if (!ip || ip === "127.0.0.1" || ip === "::1" || ip.startsWith("192.168.") || ip.startsWith("10.") || ip.startsWith("127.")) {
@@ -71,6 +72,11 @@ const verifyGoogleIdToken = async (idToken) => {
   }
 
   return payload;
+=======
+const checkIsProd = (req) => {
+  const isSecureConnection = req.secure || req.headers["x-forwarded-proto"] === "https";
+  return isSecureConnection;
+>>>>>>> main
 };
 
 // GET /api/auth/csrf

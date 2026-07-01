@@ -7,6 +7,7 @@ import {
   getVideoStats,
 } from "../services/youtubeVideoService.js";
 import { syncAllYoutubeChannels } from "../jobs/youtubeSyncJob.js";
+import { getCreatorAnalyticsData } from "./compareController.js";
 
 /*
 ========================================
@@ -26,18 +27,43 @@ export const syncYoutubeChannel = async (req, res, next) => {
       });
     }
 
-    const channel = await getChannelStats(account.accountId);
+    // Fetch comprehensive real-time statistics
+    const analytics = await getCreatorAnalyticsData(account.accountId);
+
+    // Sync back to Account
+    await Account.updateOne(
+      { _id: account._id },
+      {
+        $set: {
+          subscribers: analytics.subscribers,
+          views: analytics.totalViews,
+          videos: analytics.totalVideos,
+          engagement: analytics.engagementRate,
+          lastSynced: new Date(),
+        }
+      }
+    );
 
     const snapshot = await Snapshot.create({
       account: account._id,
-      followers: Number(channel.statistics.subscriberCount || 0),
-      views: Number(channel.statistics.viewCount || 0),
       userId: req.user._id,
+      followers: analytics.subscribers,
+      views: analytics.totalViews,
+      videos: analytics.totalVideos,
+      likes: Math.round(analytics.avgLikes * Math.min(analytics.totalVideos || 1, 10)),
+      comments: Math.round(analytics.avgComments * Math.min(analytics.totalVideos || 1, 10)),
+      engagementRate: analytics.engagementRate,
+      averageEngagement: analytics.averageEngagement,
+      party: account.party || "Independent",
+      state: account.state || "Unknown State",
+      name: account.name,
+      profileImage: account.profileImage || analytics.thumbnail || "",
+      capturedAt: new Date(),
     });
 
     res.status(200).json({
       success: true,
-      channel: channel.snippet.title,
+      channel: account.name,
       snapshot,
     });
   } catch (error) {

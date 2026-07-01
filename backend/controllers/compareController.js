@@ -314,6 +314,7 @@ export const getCreatorAnalyticsData = async (channelId) => {
   let avgLikes = 0;
   let avgComments = 0;
   let engagementRate = 0;
+  let averageEngagement = 0;
   let uploadFrequency = "Infrequent";
   let latestUpload = null;
 
@@ -331,6 +332,7 @@ export const getCreatorAnalyticsData = async (channelId) => {
     );
 
     const videoItems = videosResponseData?.items || [];
+    averageEngagement = 0;
     if (videoItems.length > 0) {
       const totalViews = videoItems.reduce((sum, item) => sum + Number(item.statistics?.viewCount || 0), 0);
       const totalLikes = videoItems.reduce((sum, item) => sum + Number(item.statistics?.likeCount || 0), 0);
@@ -340,6 +342,14 @@ export const getCreatorAnalyticsData = async (channelId) => {
       avgLikes = totalLikes / videoItems.length;
       avgComments = totalComments / videoItems.length;
       engagementRate = totalViews > 0 ? (((totalLikes + totalComments) / totalViews) * 100) : 0;
+
+      const individualEngSum = videoItems.reduce((sum, item) => {
+        const v = Number(item.statistics?.viewCount || 0);
+        const l = Number(item.statistics?.likeCount || 0);
+        const c = Number(item.statistics?.commentCount || 0);
+        return sum + (v > 0 ? (((l + c) / v) * 100) : 0);
+      }, 0);
+      averageEngagement = individualEngSum / videoItems.length;
 
       // Extract latest upload
       const sortedVideos = [...videoItems].sort(
@@ -385,6 +395,7 @@ export const getCreatorAnalyticsData = async (channelId) => {
     avgLikes: Math.round(avgLikes),
     avgComments: Math.round(avgComments),
     engagementRate: Number(engagementRate.toFixed(2)),
+    averageEngagement: Number(averageEngagement.toFixed(2)),
     uploadFrequency,
     latestUpload,
     publishedAt: snippet.publishedAt || null,
@@ -498,6 +509,16 @@ export const compareYoutubeCreators = async (req, res, next) => {
         overallWinner = "creatorB";
       }
     }
+
+    // Lookup if they exist in our Account collection to enrich with party/state
+    const accA = await Account.findOne({ accountId: id1, userId: req.user._id });
+    const accB = await Account.findOne({ accountId: id2, userId: req.user._id });
+
+    creatorA.party = accA?.party || "Independent";
+    creatorA.state = accA?.state || "Unknown State";
+
+    creatorB.party = accB?.party || "Independent";
+    creatorB.state = accB?.state || "Unknown State";
 
     console.log("Comparison completed. Overall Winner:", overallWinner);
     console.log("================ [COMPARE YOUTUBE CREATORS END] ================\n");

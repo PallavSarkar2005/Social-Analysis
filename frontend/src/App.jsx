@@ -23,6 +23,7 @@ const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 const Billing = lazy(() => import("./pages/Billing"));
 const Pricing = lazy(() => import("./pages/Pricing"));
+const PoliticalProfile = lazy(() => import("./pages/PoliticalProfile"));
 
 // Standard high-end loading fallback
 const SuspenseFallback = () => (
@@ -64,6 +65,7 @@ function App() {
             <Route path="/activity" element={<Activity />} />
             <Route path="/groups/:groupName" element={<GroupAnalytics />} />
             <Route path="/billing" element={<Billing />} />
+            <Route path="/profile/:creatorId" element={<PoliticalProfile />} />
           </Route>
 
           {/* Fallback to 404 Not Found Page */}

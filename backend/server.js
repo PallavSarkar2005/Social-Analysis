@@ -46,6 +46,7 @@ import searchRoutes from "./routes/searchRoutes.js";
 import groupRoutes from "./routes/groupRoutes.js";
 import userRoutes from "./routes/userRoutes.js";
 import billingRoutes from "./routes/billingRoutes.js";
+import profileRoutes from "./routes/profileRoutes.js";
 
 // Jobs & Schedulers
 import { syncAllYoutubeChannels } from "./jobs/youtubeSyncJob.js";
@@ -88,7 +89,14 @@ if (process.env.CORS_ORIGINS) {
 
 const corsOptions = {
   origin: (origin, callback) => {
-    if (!origin || corsWhitelist.includes(origin)) {
+    const isDevelopment = process.env.NODE_ENV === "development" || process.env.NODE_ENV === "test";
+    const isLocalOrigin = origin && (
+      origin.startsWith("http://localhost:") ||
+      origin.startsWith("http://127.0.0.1:") ||
+      origin.startsWith("http://192.168.")
+    );
+
+    if (!origin || corsWhitelist.includes(origin) || (isDevelopment && isLocalOrigin)) {
       callback(null, true);
     } else {
       callback(new Error("Blocked by CORS policy"));
@@ -122,7 +130,17 @@ app.use(
         scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
         styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
         fontSrc: ["'self'", "https://fonts.gstatic.com"],
-        imgSrc: ["'self'", "data:", "https://api.dicebear.com", "https://*.ytimg.com"],
+        imgSrc: [
+          "'self'",
+          "data:",
+          "blob:",
+          "https://api.dicebear.com",
+          "https://*.ytimg.com",
+          "https://yt3.ggpht.com",
+          "https://upload.wikimedia.org",
+          "http://localhost:5000",
+          "https://social-analysis-smoky.vercel.app",
+        ],
         connectSrc: [
           "'self'",
           "https://social-analysis-smoky.vercel.app",
@@ -164,8 +182,8 @@ app.use(xssSanitizer);
 // Rate Limiters
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 mins
-  max: 150,
-  skip: () => process.env.NODE_ENV === "test",
+  max: 1000, // Increased global threshold
+  skip: () => process.env.NODE_ENV === "test" || process.env.NODE_ENV === "development",
   standardHeaders: true,
   legacyHeaders: false,
   message: {
@@ -176,9 +194,9 @@ const apiLimiter = rateLimit({
 
 const strictLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 mins
-  max: 20,
-  skip: () => process.env.NODE_ENV === "test",
-  skipSuccessfulRequests: true,
+  max: 250, // Increased strict route threshold to prevent search/chat blockage
+  skip: () => process.env.NODE_ENV === "test" || process.env.NODE_ENV === "development",
+  skipSuccessfulRequests: false,
   standardHeaders: true,
   legacyHeaders: false,
   message: {
@@ -213,6 +231,7 @@ app.use("/api/analytics", analyticsRoutes);
 app.use("/api/history", historyRoutes);
 app.use("/api/x", xRoutes);
 app.use("/api/groups", groupRoutes);
+app.use("/api/profile", strictLimiter, profileRoutes);
 
 app.get("/api/debug/youtube", (req, res) => {
   const apiKey = process.env.YOUTUBE_API_KEY || "";

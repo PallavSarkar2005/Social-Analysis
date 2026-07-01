@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { useParams, Link } from "react-router-dom";
 import Sidebar from "../components/layout/Sidebar";
 import Navbar from "../components/layout/Navbar";
@@ -6,12 +6,22 @@ import { useParty, useAccounts } from "../hooks/useQueries";
 import { getPartyTheme } from "../config/partyThemes";
 import { motion, AnimatePresence } from "framer-motion";
 import toast, { Toaster } from "react-hot-toast";
+import { useQueryClient } from "@tanstack/react-query";
+import { healGroupImageUrls } from "../api/groupApi";
+
 import {
   Users, Eye, Video, TrendingUp, Clock, ArrowLeft,
   RefreshCw, Award, ChevronRight, Grid, List, Globe,
   Star, Zap, BarChart2, UserCheck, CalendarDays,
-  TrendingDown, MapPin, Flame,
+  TrendingDown, MapPin, Flame, Trash2, AlertTriangle, X,
 } from "lucide-react";
+
+// Reusable components
+import StatCard from "../components/common/StatCard";
+import LeaderHeader from "../components/common/LeaderHeader";
+import CreatorCard from "../components/common/CreatorCard";
+import LeaderAvatar from "../components/common/LeaderAvatar";
+import PartyBadge from "../components/common/PartyBadge";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const fmt = (n) => {
@@ -41,59 +51,9 @@ const growthColor = (v) => {
 
 const growthSign = (v) => (v > 0 ? "+" : "");
 
-// ─── Avatar ───────────────────────────────────────────────────────────────────
-function CreatorAvatar({ creator, size = 40 }) {
-  const src = creator.profileImage || creator.thumbnail || creator.profileUrl || "";
-  const initials = (creator.name || "?").split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
-
-  if (src) {
-    return (
-      <img
-        src={src}
-        alt={creator.name}
-        className="rounded-full object-cover flex-shrink-0"
-        style={{ width: size, height: size }}
-        onError={(e) => { e.target.style.display = "none"; e.target.nextSibling.style.display = "flex"; }}
-        loading="lazy"
-      />
-    );
-  }
-  return (
-    <div
-      className="rounded-full flex items-center justify-center flex-shrink-0 font-bold text-white select-none"
-      style={{ width: size, height: size, background: "linear-gradient(135deg, #6366f1, #8b5cf6)", fontSize: size * 0.36 }}
-    >
-      {initials}
-    </div>
-  );
-}
-
 // ─── Skeleton loader ──────────────────────────────────────────────────────────
 function Skeleton({ className = "" }) {
   return <div className={`animate-pulse rounded-xl bg-white/[0.04] ${className}`} />;
-}
-
-// ─── Summary metric card ──────────────────────────────────────────────────────
-function MetricCard({ label, value, sub, icon: Icon, color, theme }) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      className={`relative bg-[#111318]/60 border ${theme.border} rounded-2xl p-5 space-y-2 overflow-hidden backdrop-blur-sm group transition-all hover:bg-[#13151e]/80`}
-    >
-      {/* Glow blob */}
-      <div
-        className="absolute inset-0 rounded-2xl pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-500"
-        style={{ background: `radial-gradient(circle at 30% 50%, ${theme.glowColor}, transparent 70%)` }}
-      />
-      <div className="flex items-center justify-between">
-        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.12em]">{label}</span>
-        {Icon && <Icon size={14} className={color || theme.text} />}
-      </div>
-      <p className={`text-3xl font-black tracking-tight leading-none ${color || theme.text}`}>{value}</p>
-      {sub != null && <p className="text-xs text-slate-500 mt-1">{sub}</p>}
-    </motion.div>
-  );
 }
 
 // ─── State Distribution Bar ───────────────────────────────────────────────────
@@ -118,107 +78,107 @@ function StateBar({ state, count, total, theme }) {
   );
 }
 
-// ─── Creator Card (card view) ─────────────────────────────────────────────────
-function CreatorCard({ creator, theme, onGroupChange }) {
+// ─── Confirm Delete Modal ─────────────────────────────────────────────────────
+function ConfirmDeleteModal({ creator, onConfirm, onCancel, isDeleting }) {
   return (
-    <motion.div
-      initial={{ opacity: 0, scale: 0.97 }}
-      animate={{ opacity: 1, scale: 1 }}
-      whileHover={{ y: -2 }}
-      transition={{ duration: 0.25 }}
-      className={`relative bg-[#111318]/60 border ${theme.border} ${theme.borderHover} rounded-2xl p-5 space-y-4 overflow-hidden group transition-all backdrop-blur-sm`}
-    >
-      {/* Glow */}
-      <div
-        className="absolute inset-0 rounded-2xl pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-500"
-        style={{ background: `radial-gradient(ellipse at 50% 0%, ${theme.glowColor}, transparent 65%)` }}
-      />
-
-      {/* Top row */}
-      <div className="flex items-start justify-between gap-3 relative">
-        <div className="flex items-center gap-3">
-          <CreatorAvatar creator={creator} size={48} />
-          <div className="min-w-0">
-            <p className="text-base font-bold text-white truncate">{creator.name}</p>
-            <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${theme.badge}`}>
-                {creator.party || "Independent"}
-              </span>
-              {creator.state && (
-                <span className="text-[10px] text-slate-500 flex items-center gap-0.5">
-                  <MapPin size={9} />{creator.state}
-                </span>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Growth badge */}
-        <div className={`flex-shrink-0 text-xs font-bold flex items-center gap-0.5 px-2.5 py-1.5 rounded-lg ${
-          creator.growth > 0 ? "bg-emerald-500/10 text-emerald-400" :
-          creator.growth < 0 ? "bg-red-500/10 text-red-400" : "bg-white/[0.04] text-slate-400"
-        }`}>
-          {creator.growth > 0 ? <TrendingUp size={10} /> : creator.growth < 0 ? <TrendingDown size={10} /> : null}
-          {growthSign(creator.growth)}{creator.growth?.toFixed(1)}%
-        </div>
-      </div>
-
-      {/* Metrics grid */}
-      <div className="grid grid-cols-3 gap-2">
-        {[
-          { label: "Subscribers", val: fmt(creator.subscribers) },
-          { label: "Total Views",  val: fmt(creator.totalViews) },
-          { label: "Videos",       val: fmt(creator.totalVideos) },
-        ].map(({ label, val }) => (
-          <div key={label} className="bg-white/[0.03] rounded-xl p-3 text-center">
-            <p className={`text-base font-black ${theme.text}`}>{val}</p>
-            <p className="text-[10px] text-slate-500 mt-0.5">{label}</p>
-          </div>
-        ))}
-      </div>
-
-      {/* Secondary row — engagement always colored & visible */}
-      <div className="grid grid-cols-2 gap-2">
-        <div className="flex items-center justify-between bg-white/[0.03] rounded-xl px-3 py-2.5">
-          <span className="text-xs text-slate-400">Engagement</span>
-          <span
-            className="text-sm font-black"
-            style={{ color: creator.engagementRate > 0 ? theme.accent : '#94a3b8' }}
-          >
-            {creator.engagementRate > 0 ? creator.engagementRate.toFixed(2) : '—'}%
-          </span>
-        </div>
-        <div className="flex items-center justify-between bg-white/[0.03] rounded-xl px-3 py-2.5">
-          <span className="text-xs text-slate-400">Weekly ↑</span>
-          <span className={`text-sm font-black ${growthColor(creator.weeklyGrowth)}`}>
-            {growthSign(creator.weeklyGrowth)}{creator.weeklyGrowth?.toFixed(1) || '0.0'}%
-          </span>
-        </div>
-      </div>
-
-      {/* Footer */}
-      <div className="flex items-center justify-between pt-1 border-t border-white/[0.04]">
-        <span className="text-[9px] text-slate-600 flex items-center gap-1">
-          <Clock size={8} /> {relTime(creator.lastSync)}
-        </span>
-
-        <select
-          value={creator.group || "Other"}
-          onChange={(e) => onGroupChange(e, creator._id)}
-          onClick={(e) => e.stopPropagation()}
-          className="text-[9px] font-semibold bg-transparent border border-white/[0.06] rounded-lg px-1.5 py-0.5 text-slate-400 cursor-pointer focus:outline-none"
+    <AnimatePresence>
+      {creator && (
+        <motion.div
+          key="backdrop"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          onClick={onCancel}
         >
-          {["BJP", "Congress", "AAP", "BJD", "SP", "TMC", "Independent", "Other"].map((g) => (
-            <option key={g} value={g}>{g}</option>
-          ))}
-        </select>
-      </div>
-    </motion.div>
+          {/* Backdrop */}
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
+
+          {/* Modal */}
+          <motion.div
+            key="modal"
+            initial={{ opacity: 0, scale: 0.92, y: 12 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.92, y: 12 }}
+            transition={{ type: "spring", stiffness: 380, damping: 26 }}
+            className="relative z-10 w-full max-w-md bg-[#0f1117] border border-white/[0.08] rounded-2xl shadow-2xl overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Red accent top bar */}
+            <div className="h-0.5 w-full bg-gradient-to-r from-red-600 via-red-500 to-transparent" />
+
+            <div className="p-6 space-y-5">
+              {/* Icon + Title */}
+              <div className="flex items-start gap-4">
+                <div className="w-11 h-11 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center justify-center flex-shrink-0">
+                  <AlertTriangle size={20} className="text-red-400" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white">Remove Creator?</h3>
+                  <p className="text-sm text-slate-400 mt-1">
+                    This will permanently remove{" "}
+                    <span className="text-white font-semibold">{creator.name}</span>{" "}
+                    from your research group. This action cannot be undone.
+                  </p>
+                </div>
+
+                {/* Close button */}
+                <button
+                  onClick={onCancel}
+                  className="ml-auto flex-shrink-0 p-1.5 rounded-lg text-slate-500 hover:text-white hover:bg-white/[0.06] transition-colors"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              {/* Creator preview */}
+              <div className="flex items-center gap-3 p-3 rounded-xl bg-white/[0.03] border border-white/[0.05]">
+                <LeaderAvatar creator={creator} size={40} />
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-white truncate">{creator.name}</p>
+                  <p className="text-xs text-slate-500 flex items-center gap-1 mt-0.5">
+                    <MapPin size={9} />
+                    {creator.state || "Unknown State"}
+                  </p>
+                </div>
+                <div className="ml-auto text-right">
+                  <p className="text-xs font-bold text-slate-300">{fmt(creator.subscribers)}</p>
+                  <p className="text-[10px] text-slate-500">subscribers</p>
+                </div>
+              </div>
+
+              {/* Action buttons */}
+              <div className="flex items-center gap-3 pt-1">
+                <button
+                  onClick={onCancel}
+                  disabled={isDeleting}
+                  className="flex-1 h-10 rounded-xl border border-white/[0.08] bg-white/[0.03] text-sm font-semibold text-slate-300 hover:bg-white/[0.07] transition-all disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={onConfirm}
+                  disabled={isDeleting}
+                  className="flex-1 h-10 rounded-xl bg-red-600 hover:bg-red-500 active:scale-[0.98] text-sm font-semibold text-white transition-all flex items-center justify-center gap-2 disabled:opacity-60"
+                >
+                  {isDeleting ? (
+                    <RefreshCw size={14} className="animate-spin" />
+                  ) : (
+                    <Trash2 size={14} />
+                  )}
+                  {isDeleting ? "Removing…" : "Yes, Remove"}
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 }
 
 // ─── Creator Row (list view) ──────────────────────────────────────────────────
-function CreatorRow({ creator, theme, index, onGroupChange }) {
+function CreatorRow({ creator, theme, index, onGroupChange, onDelete }) {
   return (
     <motion.tr
       initial={{ opacity: 0, x: -8 }}
@@ -227,15 +187,15 @@ function CreatorRow({ creator, theme, index, onGroupChange }) {
       className="border-b border-white/[0.04] hover:bg-white/[0.02] transition-colors group"
     >
       <td className="py-4 px-5">
-        <div className="flex items-center gap-3">
-          <CreatorAvatar creator={creator} size={38} />
+        <Link to={`/profile/${creator._id || creator.id}`} className="flex items-center gap-3 hover:opacity-90 group/rowLink cursor-pointer">
+          <LeaderAvatar creator={creator} size={38} className="group-hover/rowLink:border-indigo-500/35 transition-all" />
           <div>
-            <p className="text-sm font-semibold text-white">{creator.name}</p>
+            <p className="text-sm font-semibold text-white group-hover/rowLink:text-indigo-400 transition-colors">{creator.name}</p>
             <p className="text-xs text-slate-500 flex items-center gap-1 mt-0.5">
               <MapPin size={9} />{creator.state || "—"}
             </p>
           </div>
-        </div>
+        </Link>
       </td>
       <td className="py-4 px-5 text-right">
         <span className={`text-sm font-bold ${theme.text}`}>{fmt(creator.subscribers)}</span>
@@ -273,6 +233,15 @@ function CreatorRow({ creator, theme, index, onGroupChange }) {
           ))}
         </select>
       </td>
+      <td className="py-4 px-5">
+        <button
+          onClick={() => onDelete(creator)}
+          title="Remove creator"
+          className="p-1.5 rounded-lg text-slate-600 hover:text-red-400 hover:bg-red-500/10 transition-all opacity-0 group-hover:opacity-100"
+        >
+          <Trash2 size={14} />
+        </button>
+      </td>
     </motion.tr>
   );
 }
@@ -280,14 +249,37 @@ function CreatorRow({ creator, theme, index, onGroupChange }) {
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function GroupAnalytics() {
   const { groupName } = useParams();
+  const queryClient = useQueryClient();
   const { data: creators = [], isLoading: loading, refetch: loadCreators } = useParty(groupName);
-  const { updateAccountGroup } = useAccounts();
+  const { updateAccountGroup, deleteAccount, deleting } = useAccounts();
 
   const [displayMode, setDisplayMode] = useState(
     () => localStorage.getItem(`group-display-${groupName}`) || "card"
   );
 
+  // Delete confirmation state
+  const [pendingDelete, setPendingDelete] = useState(null); // creator object
+
   const theme = getPartyTheme(groupName);
+
+  // ── Auto-heal mangled image URLs from old XSS sanitizer bug ─────────────
+  const healedRef = useRef(false);
+  useEffect(() => {
+    if (healedRef.current) return;
+    healedRef.current = true;
+    healGroupImageUrls()
+      .then((result) => {
+        if (result.healed > 0) {
+          // Some records were fixed — invalidate party caches so images refresh
+          queryClient.invalidateQueries({ predicate: (q) => q.queryKey[0]?.toString().startsWith("party") });
+          queryClient.invalidateQueries({ queryKey: ["accounts"] });
+        }
+      })
+      .catch(() => {
+        // Silent — heal is a best-effort operation, not critical
+      });
+  }, []);
+  // ────────────────────────────────────────────────────────────────────────
 
   const handleGroupChange = async (e, creatorId) => {
     const newGroup = e.target.value;
@@ -298,6 +290,30 @@ export default function GroupAnalytics() {
     } catch {
       toast.error("Failed to update group.", { id: `grp-${creatorId}` });
     }
+  };
+
+  const handleDeleteRequest = (creator) => {
+    setPendingDelete(creator);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!pendingDelete) return;
+    const creatorName = pendingDelete.name;
+    const creatorId = pendingDelete._id;
+    try {
+      await deleteAccount(creatorId);
+      // Invalidate party-specific query key so the list re-fetches without the deleted item
+      queryClient.invalidateQueries({ predicate: (q) => q.queryKey[0]?.toString().startsWith("party") });
+      toast.success(`${creatorName} removed from group.`);
+    } catch {
+      toast.error("Failed to remove creator.");
+    } finally {
+      setPendingDelete(null);
+    }
+  };
+
+  const handleDeleteCancel = () => {
+    setPendingDelete(null);
   };
 
   const handleDisplayModeChange = (mode) => {
@@ -361,13 +377,13 @@ export default function GroupAnalytics() {
   const highlights = useMemo(() => {
     if (!metrics) return [];
     return [
-      { label: "Top Performer",    creator: metrics.topPerformer,    icon: Star,      meta: `${fmt(metrics.topPerformer?.subscribers)} subs` },
-      { label: "Fastest Growing",  creator: metrics.fastestGrowing,  icon: TrendingUp, meta: `+${metrics.fastestGrowing?.growth?.toFixed(1)}%` },
-      { label: "Most Viewed",      creator: metrics.mostViewed,      icon: Eye,       meta: `${fmt(metrics.mostViewed?.totalViews)} views` },
-      { label: "Most Engaged",     creator: metrics.mostEngaged,     icon: Flame,     meta: `${metrics.mostEngaged?.engagementRate?.toFixed(1)}% eng.` },
-      { label: "Highest Sub Gain", creator: metrics.highestSubGain,  icon: UserCheck, meta: `+${fmt(metrics.highestSubGain?.subscriberGain)}` },
-      { label: "Highest View Gain",creator: metrics.highestViewGain, icon: BarChart2, meta: `+${fmt(metrics.highestViewGain?.viewGain)}` },
-      { label: "Recently Synced",  creator: metrics.newestAdded,     icon: CalendarDays, meta: relTime(metrics.newestAdded?.lastSync) },
+      { label: "Top Performer",    creator: metrics.topPerformer,    type: "topPerformer",    meta: `${fmt(metrics.topPerformer?.subscribers)} subs` },
+      { label: "Fastest Growing",  creator: metrics.fastestGrowing,  type: "fastestGrowing",  meta: `+${metrics.fastestGrowing?.growth?.toFixed(1)}%` },
+      { label: "Most Viewed",      creator: metrics.mostViewed,      type: "mostViewed",      meta: `${fmt(metrics.mostViewed?.totalViews)} views` },
+      { label: "Most Engaged",     creator: metrics.mostEngaged,     type: "mostEngaged",     meta: `${metrics.mostEngaged?.engagementRate?.toFixed(1)}% eng.` },
+      { label: "Highest Sub Gain", creator: metrics.highestSubGain,  type: "highestSubGain",  meta: `+${fmt(metrics.highestSubGain?.subscriberGain)}` },
+      { label: "Highest View Gain",creator: metrics.highestViewGain, type: "highestViewGain", meta: `+${fmt(metrics.highestViewGain?.viewGain)}` },
+      { label: "Recently Synced",  creator: metrics.newestAdded,     type: "recentlySynced",  meta: relTime(metrics.newestAdded?.lastSync) },
     ];
   }, [metrics]);
 
@@ -376,71 +392,56 @@ export default function GroupAnalytics() {
       <Toaster position="top-right" />
       <Sidebar />
 
+      {/* ── Confirm Delete Modal ── */}
+      <ConfirmDeleteModal
+        creator={pendingDelete}
+        onConfirm={handleDeleteConfirm}
+        onCancel={handleDeleteCancel}
+        isDeleting={deleting}
+      />
+
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <Navbar />
 
         <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 space-y-8">
 
           {/* ── Header ── */}
-          <div
-            className="relative rounded-3xl overflow-hidden p-6 sm:p-8 border border-white/[0.06]"
-            style={{ background: `linear-gradient(135deg, ${theme.glowColor} 0%, transparent 60%), #0d0e14` }}
-          >
-            {/* Decorative watermark */}
-            <div className="absolute right-6 top-4 text-6xl opacity-[0.06] select-none pointer-events-none">
-              {theme.watermark}
-            </div>
-
-            <Link to="/dashboard" className="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-white transition mb-4">
-              <ArrowLeft size={12} /> Back to Dashboard
-            </Link>
-
-            <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
-              <div className="space-y-2">
-                <div className="flex items-center gap-3">
-                  <span className={`px-3 py-1 rounded-lg text-xs font-black uppercase ${theme.badge}`}>
-                    {groupName}
-                  </span>
-                  {metrics && (
-                    <span className="text-xs text-slate-500 font-medium">
-                      {metrics.n} creator{metrics.n !== 1 ? "s" : ""} tracked
-                    </span>
-                  )}
-                </div>
-                <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white">
-                  {theme.fullName} Analytics
-                </h1>
-                <p className="text-sm text-slate-400">
-                  Live performance data for all tracked {theme.fullName} political creators.
-                </p>
-              </div>
-
-              <div className="flex items-center gap-2 flex-shrink-0">
+          <LeaderHeader
+            groupName={groupName}
+            fullName={theme.fullName}
+            creatorCount={metrics?.n || 0}
+            theme={theme}
+            actions={
+              <div className="flex items-center gap-3 p-1.5 rounded-2xl bg-white/[0.02] border border-white/[0.05] backdrop-blur-md">
                 {/* View toggle */}
-                <div className="flex bg-white/[0.03] border border-white/[0.08] rounded-xl p-0.5">
+                <div className="flex bg-white/[0.02] border border-white/[0.06] rounded-xl p-0.5">
                   <button
                     onClick={() => handleDisplayModeChange("card")}
-                    className={`p-1.5 rounded-lg transition ${displayMode === "card" ? "text-white" : "text-slate-500 hover:text-white"}`}
+                    className={`p-2.5 rounded-lg transition-all ${displayMode === "card" ? "text-white shadow-lg shadow-black/20" : "text-slate-500 hover:text-white"}`}
                     style={displayMode === "card" ? { backgroundColor: theme.accent } : {}}
-                  ><Grid size={13} /></button>
+                  >
+                    <Grid size={18} />
+                  </button>
                   <button
                     onClick={() => handleDisplayModeChange("list")}
-                    className={`p-1.5 rounded-lg transition ${displayMode === "list" ? "text-white" : "text-slate-500 hover:text-white"}`}
+                    className={`p-2.5 rounded-lg transition-all ${displayMode === "list" ? "text-white shadow-lg shadow-black/20" : "text-slate-500 hover:text-white"}`}
                     style={displayMode === "list" ? { backgroundColor: theme.accent } : {}}
-                  ><List size={13} /></button>
+                  >
+                    <List size={18} />
+                  </button>
                 </div>
 
                 <button
                   onClick={() => loadCreators()}
                   disabled={loading}
-                  className="h-9 px-4 bg-white/[0.03] border border-white/[0.08] hover:bg-white/[0.06] rounded-xl text-xs font-semibold text-slate-300 transition flex items-center gap-1.5 disabled:opacity-50"
+                  className="h-11 px-5 bg-white/[0.03] border border-white/[0.06] hover:bg-white/[0.08] active:scale-95 rounded-xl text-xs sm:text-sm font-semibold text-slate-200 transition-all flex items-center gap-2 disabled:opacity-50"
                 >
-                  <RefreshCw size={12} className={loading ? "animate-spin" : ""} />
+                  <RefreshCw size={15} className={loading ? "animate-spin" : ""} />
                   Refresh
                 </button>
               </div>
-            </div>
-          </div>
+            }
+          />
 
           {/* ── Loading State ── */}
           {loading && (
@@ -492,14 +493,14 @@ export default function GroupAnalytics() {
 
                 {/* ── 8 Summary Cards ── */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
-                  <MetricCard label="Creators"    value={metrics.n}                                           icon={Users}      theme={theme} />
-                  <MetricCard label="Subscribers" value={fmt(metrics.totalSubscribers)}                       icon={UserCheck}  theme={theme} />
-                  <MetricCard label="Total Views" value={fmt(metrics.totalViews)}                             icon={Eye}        theme={theme} />
-                  <MetricCard label="Videos"      value={fmt(metrics.totalVideos)}                            icon={Video}      theme={theme} />
-                  <MetricCard label="Avg Eng."    value={`${metrics.avgEngagement.toFixed(1)}%`}              icon={BarChart2}  theme={theme} />
-                  <MetricCard label="Avg Growth"  value={`${growthSign(metrics.avgGrowth)}${metrics.avgGrowth.toFixed(1)}%`}   icon={TrendingUp} color={growthColor(metrics.avgGrowth)} theme={theme} />
-                  <MetricCard label="Weekly Avg"  value={`${growthSign(metrics.avgWeekly)}${metrics.avgWeekly.toFixed(1)}%`}   icon={Zap}        color={growthColor(metrics.avgWeekly)} theme={theme} />
-                  <MetricCard label="Monthly Avg" value={`${growthSign(metrics.avgMonthly)}${metrics.avgMonthly.toFixed(1)}%`} icon={CalendarDays} color={growthColor(metrics.avgMonthly)} theme={theme} />
+                  <StatCard label="Creators"    value={metrics.n}                                           icon={Users}      type="default" />
+                  <StatCard label="Subscribers" value={fmt(metrics.totalSubscribers)}                       icon={UserCheck}  type="default" />
+                  <StatCard label="Total Views" value={fmt(metrics.totalViews)}                             icon={Eye}        type="default" />
+                  <StatCard label="Videos"      value={fmt(metrics.totalVideos)}                            icon={Video}      type="default" />
+                  <StatCard label="Avg Eng."    value={`${metrics.avgEngagement.toFixed(1)}%`}              icon={BarChart2}  type="default" />
+                  <StatCard label="Avg Growth"  value={`${growthSign(metrics.avgGrowth)}${metrics.avgGrowth.toFixed(1)}%`}   icon={TrendingUp} type="fastestGrowing" />
+                  <StatCard label="Weekly Avg"  value={`${growthSign(metrics.avgWeekly)}${metrics.avgWeekly.toFixed(1)}%`}   icon={Zap}        type="recentlySynced" />
+                  <StatCard label="Monthly Avg" value={`${growthSign(metrics.avgMonthly)}${metrics.avgMonthly.toFixed(1)}%`} icon={CalendarDays} type="highestViewGain" />
                 </div>
 
                 {/* ── State Distribution + Performance Highlights ── */}
@@ -530,26 +531,16 @@ export default function GroupAnalytics() {
                       <Award size={11} /> Performance Highlights
                     </h2>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      {highlights.map(({ label, creator, icon: Icon, meta }) => (
+                      {highlights.map(({ label, creator, type, meta }) => (
                         creator ? (
-                          <div
+                          <StatCard
                             key={label}
-                            className={`flex items-center gap-3 p-3 rounded-xl border ${theme.border} ${theme.bgHover} transition-all group`}
-                            style={{ background: `${theme.glowColor}` }}
-                          >
-                            <div
-                              className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0"
-                              style={{ background: `${theme.accent}22` }}
-                            >
-                              <Icon size={13} style={{ color: theme.accent }} />
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <p className="text-[9px] text-slate-500 uppercase tracking-wide">{label}</p>
-                              <p className="text-xs font-bold text-white truncate">{creator.name}</p>
-                              <p className="text-[10px]" style={{ color: theme.accent }}>{meta}</p>
-                            </div>
-                            <CreatorAvatar creator={creator} size={28} />
-                          </div>
+                            label={label}
+                            value={creator.name}
+                            sub={meta}
+                            type={type}
+                            creator={creator}
+                          />
                         ) : null
                       ))}
                     </div>
@@ -573,7 +564,30 @@ export default function GroupAnalytics() {
                           key={creator._id}
                           creator={creator}
                           theme={theme}
-                          onGroupChange={handleGroupChange}
+                          actions={
+                            <div className="flex items-center gap-2">
+                              <select
+                                value={creator.group || "Other"}
+                                onChange={(e) => handleGroupChange(e, creator._id)}
+                                onClick={(e) => e.stopPropagation()}
+                                className="text-[9px] font-semibold bg-transparent border border-white/[0.06] rounded-lg px-1.5 py-0.5 text-slate-400 cursor-pointer focus:outline-none"
+                              >
+                                {["BJP", "Congress", "AAP", "BJD", "SP", "TMC", "Independent", "Other"].map((g) => (
+                                  <option key={g} value={g}>{g}</option>
+                                ))}
+                              </select>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDeleteRequest(creator);
+                                }}
+                                title="Remove creator"
+                                className="p-1 rounded-lg text-slate-600 hover:text-red-400 hover:bg-red-500/10 transition-all"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            </div>
+                          }
                         />
                       ))}
                     </div>
@@ -582,7 +596,7 @@ export default function GroupAnalytics() {
                       <table className="w-full">
                         <thead>
                           <tr className="border-b border-white/[0.06]">
-                            {["Creator", "Subscribers", "Views", "Videos", "Growth", "Engagement", "Last Sync", "Group"].map((h) => (
+                            {["Creator", "Subscribers", "Views", "Videos", "Growth", "Engagement", "Last Sync", "Group", ""].map((h) => (
                               <th key={h} className="text-left py-3 px-4 text-[9px] font-bold text-slate-500 uppercase tracking-widest">
                                 {h}
                               </th>
@@ -597,6 +611,7 @@ export default function GroupAnalytics() {
                               theme={theme}
                               index={i}
                               onGroupChange={handleGroupChange}
+                              onDelete={handleDeleteRequest}
                             />
                           ))}
                         </tbody>

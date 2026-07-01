@@ -10,6 +10,7 @@ export const PARTY_THEMES = {
     id: "bjp",
     label: "BJP",
     fullName: "Bharatiya Janata Party",
+    logo: "/BJPLogo.jpg",
 
     // Gradient used on header / hero areas
     gradient: "from-orange-600 via-amber-500 to-orange-700",
@@ -44,6 +45,7 @@ export const PARTY_THEMES = {
     id: "congress",
     label: "Congress",
     fullName: "Indian National Congress",
+    logo: "/CongressLogo.jpg",
 
     gradient: "from-blue-700 via-blue-500 to-green-600",
     gradientSubtle: "from-blue-500/10 via-blue-400/5 to-transparent",
@@ -74,6 +76,7 @@ export const PARTY_THEMES = {
     id: "aap",
     label: "AAP",
     fullName: "Aam Aadmi Party",
+    logo: "/AAPLogo.jpg",
 
     gradient: "from-sky-500 via-cyan-400 to-sky-600",
     gradientSubtle: "from-sky-500/10 via-cyan-400/5 to-transparent",
@@ -104,6 +107,7 @@ export const PARTY_THEMES = {
     id: "bjd",
     label: "BJD",
     fullName: "Biju Janata Dal",
+    logo: "/BJDimage.avif",
 
     gradient: "from-emerald-600 via-green-500 to-emerald-700",
     gradientSubtle: "from-emerald-500/10 via-green-500/5 to-transparent",
@@ -134,6 +138,7 @@ export const PARTY_THEMES = {
     id: "sp",
     label: "SP",
     fullName: "Samajwadi Party",
+    logo: null,
 
     gradient: "from-red-600 via-rose-500 to-red-700",
     gradientSubtle: "from-red-500/10 via-rose-400/5 to-transparent",
@@ -164,6 +169,7 @@ export const PARTY_THEMES = {
     id: "tmc",
     label: "TMC",
     fullName: "All India Trinamool Congress",
+    logo: null,
 
     gradient: "from-teal-600 via-teal-400 to-green-600",
     gradientSubtle: "from-teal-500/10 via-teal-400/5 to-transparent",
@@ -194,6 +200,7 @@ export const PARTY_THEMES = {
     id: "independent",
     label: "Independent",
     fullName: "Independent",
+    logo: null,
 
     gradient: "from-violet-600 via-purple-500 to-violet-700",
     gradientSubtle: "from-violet-500/10 via-purple-500/5 to-transparent",
@@ -224,6 +231,7 @@ export const PARTY_THEMES = {
     id: "other",
     label: "Other",
     fullName: "Other Parties",
+    logo: null,
 
     gradient: "from-slate-600 via-slate-500 to-slate-700",
     gradientSubtle: "from-slate-500/10 via-slate-400/5 to-transparent",
@@ -249,6 +257,14 @@ export const PARTY_THEMES = {
     watermark: "🏛️",
     glowColor: "rgba(100,116,139,0.15)",
   },
+};
+
+// Centralized dynamic logo mapping
+export const PARTY_LOGOS = {
+  BJP: "/BJPLogo.jpg",
+  Congress: "/CongressLogo.jpg",
+  AAP: "/AAPLogo.jpg",
+  BJD: "/BJDimage.avif",
 };
 
 /**

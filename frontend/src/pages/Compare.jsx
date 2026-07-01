@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import Sidebar from "../components/layout/Sidebar";
 import Navbar from "../components/layout/Navbar";
 import { useCompare } from "../hooks/useQueries";
@@ -31,6 +32,9 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import toast, { Toaster } from "react-hot-toast";
+import PartyLogo from "../components/common/PartyLogo";
+import LeaderAvatar from "../components/common/LeaderAvatar";
+
 
 export default function Compare() {
   const [creator1, setCreator1] = useState("");
@@ -255,30 +259,16 @@ export default function Compare() {
                             Analytics Variable
                           </th>
                           <th className="p-5 text-center text-sm font-extrabold text-white border-l border-white/[0.04] w-[36%] bg-indigo-500/[0.01]">
-                            <div className="flex items-center justify-center gap-3">
-                              {(data.creatorA.profileImage || data.creatorA.thumbnail) && (
-                                <img
-                                  src={data.creatorA.profileImage || data.creatorA.thumbnail}
-                                  alt=""
-                                  className="w-8 h-8 rounded-full border border-indigo-500/30 object-cover"
-                                  loading="lazy"
-                                />
-                              )}
+                            <Link to={`/profile/${data.creatorA._id || data.creatorA.id}`} className="flex items-center justify-center gap-3 hover:text-indigo-400 hover:opacity-90 cursor-pointer transition">
+                              <LeaderAvatar creator={data.creatorA} size={32} className="border border-indigo-500/30" />
                               <span>{data.creatorA.name}</span>
-                            </div>
+                            </Link>
                           </th>
                           <th className="p-5 text-center text-sm font-extrabold text-white border-l border-white/[0.04] w-[36%] bg-purple-500/[0.01]">
-                            <div className="flex items-center justify-center gap-3">
-                              {(data.creatorB.profileImage || data.creatorB.thumbnail) && (
-                                <img
-                                  src={data.creatorB.profileImage || data.creatorB.thumbnail}
-                                  alt=""
-                                  className="w-8 h-8 rounded-full border border-purple-500/30 object-cover"
-                                  loading="lazy"
-                                />
-                              )}
+                            <Link to={`/profile/${data.creatorB._id || data.creatorB.id}`} className="flex items-center justify-center gap-3 hover:text-purple-400 hover:opacity-90 cursor-pointer transition">
+                              <LeaderAvatar creator={data.creatorB} size={32} className="border border-purple-500/30" />
                               <span>{data.creatorB.name}</span>
-                            </div>
+                            </Link>
                           </th>
                         </tr>
                       </thead>
@@ -292,6 +282,23 @@ export default function Compare() {
                           </td>
                           <td className="p-4 text-center font-sans text-white font-bold border-l border-white/[0.04]">
                             {data.creatorB.name}
+                          </td>
+                        </tr>
+
+                        {/* Political Party */}
+                        <tr className="hover:bg-white/[0.01]">
+                          <td className="p-4 text-slate-400 font-sans font-semibold">Political Party</td>
+                          <td className="p-4 text-center border-l border-white/[0.04] bg-white/[0.01]">
+                            <div className="flex items-center justify-center gap-2 font-sans font-semibold">
+                              <PartyLogo party={data.creatorA.party} size={24} />
+                              <span className="text-slate-200">{data.creatorA.party || "Independent"}</span>
+                            </div>
+                          </td>
+                          <td className="p-4 text-center border-l border-white/[0.04] bg-white/[0.01]">
+                            <div className="flex items-center justify-center gap-2 font-sans font-semibold">
+                              <PartyLogo party={data.creatorB.party} size={24} />
+                              <span className="text-slate-200">{data.creatorB.party || "Independent"}</span>
+                            </div>
                           </td>
                         </tr>
 

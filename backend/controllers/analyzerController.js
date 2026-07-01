@@ -2,6 +2,9 @@ import axios from "axios";
 import Account from "../models/Account.js";
 import Snapshot from "../models/Snapshot.js";
 import { youtubeGet } from "../utils/youtubeClient.js";
+import { getCreatorAnalyticsData } from "./compareController.js";
+import { resolveOfficialPublicImage } from "../utils/imageResolver.js";
+
 
 /*
 ========================================
@@ -19,6 +22,57 @@ export const unescapeUrl = (str) => {
     .replace(/&quot;/g, '"')
     .replace(/&#x27;/g, "'")
     .replace(/&#x2F;/g, "/");
+};
+
+/*
+========================================
+Normalize YouTube URL
+========================================
+Parses and normalizes YouTube URLs into a standard format.
+Handles handles, custom aliases, channel paths, protocol, and subdomains.
+*/
+export const normalizeYoutubeUrl = (rawUrl) => {
+  if (!rawUrl || typeof rawUrl !== "string") return "";
+  
+  // 1. Unescape html entities
+  let url = unescapeUrl(rawUrl.trim());
+  
+  // 2. Remove query parameters
+  url = url.split("?")[0];
+  
+  // 3. Remove trailing slashes
+  if (url.endsWith("/")) {
+    url = url.slice(0, -1);
+  }
+  
+  // 4. Standardize protocol and subdomains
+  url = url.replace(/^http:\/\//i, "https://");
+  url = url.replace(/^https:\/\/www\./i, "https://");
+  
+  // 5. Handles startsWith("@") -> convert to handle path
+  if (url.startsWith("@")) {
+    return `https://youtube.com/${url.toLowerCase()}`;
+  }
+  
+  // 6. Handle "/@" paths -> lowercase handle part
+  if (url.includes("youtube.com/@")) {
+    const parts = url.split("youtube.com/@");
+    return `https://youtube.com/@${parts[1].toLowerCase()}`;
+  }
+  
+  // 7. Handle "/c/" paths -> lowercase custom path part
+  if (url.includes("youtube.com/c/")) {
+    const parts = url.split("youtube.com/c/");
+    return `https://youtube.com/c/${parts[1].toLowerCase()}`;
+  }
+  
+  // 8. Handle "/channel/" paths -> keep channel ID case-sensitive!
+  if (url.includes("youtube.com/channel/")) {
+    const parts = url.split("youtube.com/channel/");
+    return `https://youtube.com/channel/${parts[1]}`;
+  }
+  
+  return url;
 };
 
 /*
@@ -87,12 +141,13 @@ Find Channel ID from @handle
 */
 export const getChannelByHandle = async (handle, forceRefresh = false) => {
   console.log("STEP 4.1.a: Resolving channel ID for handle =", handle);
+  const cleanHandle = handle.startsWith("@") ? handle.substring(1) : handle;
   
   const { data, cached } = await youtubeGet(
     "resolveHandle",
     "https://www.googleapis.com/youtube/v3/channels",
     {
-      forHandle: handle,
+      forHandle: cleanHandle,
       part: "id,snippet",
     },
     forceRefresh
@@ -149,6 +204,62 @@ const analyzeYoutubeError = (error) => {
 Main Analyzer Controller
 ========================================
 */
+// Coalescing request map
+const activeRequests = new Map();
+
+const fetchYoutubeData = async (channelId, url, forceRefresh) => {
+  const channelDataPromise = youtubeGet(
+    "getChannelStats",
+    "https://www.googleapis.com/youtube/v3/channels",
+    {
+      part: "snippet,statistics,contentDetails",
+      id: channelId,
+    },
+    forceRefresh
+  );
+  
+  const uploadsPlaylistId = `UU${channelId.substring(2)}`;
+  const recentVideosPromise = youtubeGet(
+    "getChannelVideos",
+    "https://www.googleapis.com/youtube/v3/playlistItems",
+    {
+      playlistId: uploadsPlaylistId,
+      part: "snippet",
+      maxResults: 10,
+    },
+    forceRefresh
+  );
+  
+  const analyticsPromise = getCreatorAnalyticsData(channelId);
+  
+  const [channelDataRes, recentVideosDataRes, analytics] = await Promise.all([
+    channelDataPromise,
+    recentVideosPromise,
+    analyticsPromise
+  ]);
+  
+  return { 
+    channelData: channelDataRes.data, 
+    recentVideosData: recentVideosDataRes.data, 
+    analytics 
+  };
+};
+
+const getCoalescedYoutubeData = (channelId, url, forceRefresh) => {
+  const key = `${channelId}_${forceRefresh}`;
+  if (activeRequests.has(key)) {
+    console.log(`COALESCE: Reusing active YouTube API fetch for channel: ${channelId}`);
+    return activeRequests.get(key);
+  }
+  
+  const promise = fetchYoutubeData(channelId, url, forceRefresh).finally(() => {
+    activeRequests.delete(key);
+  });
+  
+  activeRequests.set(key, promise);
+  return promise;
+};
+
 export const analyzeYoutubeUrl = async (req, res, next) => {
   try {
     console.log("========== ANALYZER START ==========");
@@ -182,6 +293,9 @@ export const analyzeYoutubeUrl = async (req, res, next) => {
     const selectedState = req.body?.state || "Unknown State";
     const selectedParty = req.body?.party || "Independent";
     const forceRefresh = req.body?.forceRefresh === true || req.body?.forceRefresh === "true";
+    // profileImage is a URL string like /uploads/filename.jpg — extracted before any further processing
+    const submittedProfileImage = (req.body?.profileImage || "").trim();
+    console.log("STEP 1.3: Submitted profileImage =", submittedProfileImage || "(none)");
     if (!rawUrl || typeof rawUrl !== "string") {
       console.error("STEP 3 Error: URL parsing failed due to empty/invalid url parameter");
       return res.status(400).json({
@@ -197,7 +311,7 @@ export const analyzeYoutubeUrl = async (req, res, next) => {
     console.log("STEP 3.2: Decoded URL =", url);
 
     // Validate overall YouTube structure
-    const isYoutube = url.includes("youtube.com") || url.includes("youtu.be") || url.includes("youtube-nocookie.com") || url.startsWith("@");
+    const isYoutube = url.includes("youtube.com") || url.includes("youtu.be") || url.startsWith("@");
     if (!isYoutube) {
       console.error("STEP 3 Error: Invalid YouTube URL format");
       return res.status(400).json({
@@ -206,387 +320,16 @@ export const analyzeYoutubeUrl = async (req, res, next) => {
       });
     }
 
-    /*
-    ========================================
-    CHANNEL ANALYSIS (By Handle /@)
-    ========================================
-    */
-    if (url.includes("/@") || url.startsWith("@")) {
-      console.log("STEP 4: URL identified as a channel handle. Resolving handle...");
-      
-      let handle = null;
-      if (url.startsWith("@")) {
-        handle = url;
-      } else {
-        handle = "@" + url.split("/@")[1].split("/")[0].split("?")[0];
-      }
-      console.log("STEP 4.1: Extracted handle name =", handle);
+    // Normalize URL
+    const normalizedUrl = normalizeYoutubeUrl(url);
+    console.log("Normalized URL:", normalizedUrl);
 
-      const channelId = await getChannelByHandle(handle, forceRefresh);
-      if (!channelId) {
-        console.error("STEP 4.2 Error: Channel handle did not resolve to a channel ID");
-        return res.status(404).json({
-          success: false,
-          message: "Channel not found",
-        });
-      }
-
-      console.log("STEP 4.2: Channel ID resolved successfully. Fetching channel statistics...");
-      console.log("STEP 4.2.a: Calling YouTube channels API for channelId =", channelId);
-      
-      const { data: channelData, cached: channelCached, cachedAt: channelCachedAt } = await youtubeGet(
-        "getChannelStats",
-        "https://www.googleapis.com/youtube/v3/channels",
-        {
-          part: "snippet,statistics,contentDetails",
-          id: channelId,
-        },
-        forceRefresh
-      );
-
-      console.log("STEP 4.3: YouTube channels API raw response metadata items count =", channelData?.items?.length);
-      
-      if (!channelData || !channelData.items) {
-        console.error("STEP 4.3 Error: YouTube API response schema missing data/items");
-        return res.status(500).json({
-          success: false,
-          message: "YouTube API returned empty items",
-        });
-      }
-
-      if (!channelData.items.length) {
-        console.error("STEP 4.3 Error: Channel details not found in API response");
-        return res.status(404).json({
-          success: false,
-          message: "Channel not found",
-        });
-      }
-
-      const channel = channelData.items[0];
-
-      let account;
-      try {
-        console.log("STEP 4.4: Querying MongoDB for Account model with channelId =", channelId, "userId =", req.user._id);
-        account = await Account.findOne({
-          accountId: channelId,
-          userId: req.user._id,
-        });
-
-        const youtubeThumbnail = channel.snippet?.thumbnails?.high?.url || channel.snippet?.thumbnails?.medium?.url || "";
-        const updateFields = {
-          name: channel.snippet.title,
-          platform: "youtube",
-          accountId: channelId,
-          profileUrl: url,
-          userId: req.user._id,
-          group: selectedGroup,
-          state: selectedState,
-          party: selectedParty,
-          thumbnail: youtubeThumbnail,
-        };
-
-        if (req.body.profileImage) {
-          updateFields.profileImage = req.body.profileImage;
-          updateFields.imageSource = "upload";
-          updateFields.uploadedBy = req.user._id;
-          updateFields.uploadedAt = new Date();
-        }
-
-        if (!account) {
-          console.log("STEP 4.4.a: Creating a new Account record in MongoDB");
-          account = await Account.create(updateFields);
-        } else {
-          console.log("STEP 4.4.a: Updating existing Account record in MongoDB");
-          const fieldsToUpdate = { ...updateFields };
-          if (!req.body.profileImage) {
-            // Keep existing profile image if no new upload is provided
-            delete fieldsToUpdate.profileImage;
-            delete fieldsToUpdate.imageSource;
-            delete fieldsToUpdate.uploadedBy;
-            delete fieldsToUpdate.uploadedAt;
-          }
-          account = await Account.findOneAndUpdate(
-            { _id: account._id },
-            { $set: fieldsToUpdate },
-            { new: true }
-          );
-        }
-        console.log("STEP 4.4.b: MongoDB Account ID =", account._id);
-
-        console.log("STEP 4.4.c: Creating Snapshot record in MongoDB");
-        await Snapshot.create({
-          account: account._id,
-          followers: Number(channel.statistics.subscriberCount || 0),
-          views: Number(channel.statistics.viewCount || 0),
-          userId: req.user._id,
-        });
-      } catch (dbErr) {
-        console.error("STEP 4.4 Error: MongoDB insert/find operation failed:", dbErr.message);
-        return res.status(500).json({
-          success: false,
-          message: "Database error",
-        });
-      }
-
-      let history;
-      try {
-        console.log("STEP 4.5: Fetching Snapshot history from MongoDB");
-        history = await Snapshot.find({
-          account: account._id,
-          userId: req.user._id,
-        })
-          .sort({ capturedAt: 1 })
-          .lean();
-        console.log("STEP 4.5.a: Snapshot history records count =", history.length);
-      } catch (dbErr) {
-        console.error("STEP 4.5 Error: Fetching snapshot history failed:", dbErr.message);
-        return res.status(500).json({
-          success: false,
-          message: "Database error",
-        });
-      }
-
-      const uploadsPlaylistId = channelData.items[0]?.contentDetails?.relatedPlaylists?.uploads || `UU${channelId.substring(2)}`;
-      console.log("STEP 4.6: Fetching recent video uploads for playlist =", uploadsPlaylistId);
-      const { data: recentVideosData } = await youtubeGet(
-        "getChannelVideos",
-        "https://www.googleapis.com/youtube/v3/playlistItems",
-        {
-          playlistId: uploadsPlaylistId,
-          part: "snippet",
-          maxResults: 10,
-        },
-        forceRefresh
-      );
-
-      const recentVideosRaw = recentVideosData?.items || [];
-      const recentVideosItems = recentVideosRaw.map(item => ({
-        id: {
-          kind: "youtube#video",
-          videoId: item.snippet?.resourceId?.videoId
-        },
-        snippet: item.snippet
-      }));
-      console.log("STEP 4.6.a: YouTube playlistItems API raw response videos count =", recentVideosItems.length);
-
-      const responsePayload = {
-        success: true,
-        type: "channel",
-        cached: channelCached,
-        cachedAt: channelCachedAt ? new Date(channelCachedAt).getTime() : Date.now(),
-        data: {
-          mongoId: account._id,
-          channelId,
-          title: channel.snippet.title,
-          description: channel.snippet.description,
-          thumbnail:
-            channel.snippet.thumbnails.high?.url ||
-            channel.snippet.thumbnails.medium?.url,
-          profileImage: account.profileImage || "",
-          subscribers: Number(channel.statistics.subscriberCount || 0),
-          totalViews: Number(channel.statistics.viewCount || 0),
-          videoCount: Number(channel.statistics.videoCount || 0),
-          recentVideos: recentVideosItems,
-          history: history.map((item) => ({
-            date: new Date(item.capturedAt).toLocaleDateString(),
-            followers: item.followers,
-            views: item.views,
-          })),
-        },
-      };
-
-      console.log("STEP 4.7: Final Channel response payload constructed. Sending to client.");
-      return res.json(responsePayload);
-    }
-
-    /*
-    ========================================
-    CHANNEL ANALYSIS (By Channel ID)
-    ========================================
-    */
-    if (url.includes("/channel/")) {
-      console.log("STEP 4: URL identified as direct channel URL. Extracting Channel ID...");
-      const channelId = url.split("/channel/")[1].split("/")[0].split("?")[0];
-      console.log("STEP 4.1: Extracted channelId =", channelId);
-
-      console.log("STEP 4.2: Fetching channel statistics from YouTube channels API...");
-      const { data: channelData, cached: channelCached, cachedAt: channelCachedAt } = await youtubeGet(
-        "getChannelStats",
-        "https://www.googleapis.com/youtube/v3/channels",
-        {
-          part: "snippet,statistics,contentDetails",
-          id: channelId,
-        },
-        forceRefresh
-      );
-
-      console.log("STEP 4.3: YouTube channels API raw response metadata items count =", channelData?.items?.length);
-      
-      if (!channelData || !channelData.items) {
-        console.error("STEP 4.3 Error: YouTube API response schema missing data/items");
-        return res.status(500).json({
-          success: false,
-          message: "YouTube API returned empty items",
-        });
-      }
-
-      if (!channelData.items.length) {
-        console.error("STEP 4.3 Error: Channel details not found in API response");
-        return res.status(404).json({
-          success: false,
-          message: "Channel not found",
-        });
-      }
-
-      const channel = channelData.items[0];
-
-      let account;
-      try {
-        console.log("STEP 4.4: Querying MongoDB for Account model with channelId =", channelId, "userId =", req.user._id);
-        account = await Account.findOne({
-          accountId: channelId,
-          userId: req.user._id,
-        });
-
-        const youtubeThumbnail = channel.snippet?.thumbnails?.high?.url || channel.snippet?.thumbnails?.medium?.url || "";
-        const updateFields = {
-          name: channel.snippet.title,
-          platform: "youtube",
-          accountId: channelId,
-          profileUrl: url,
-          userId: req.user._id,
-          group: selectedGroup,
-          state: selectedState,
-          party: selectedParty,
-          thumbnail: youtubeThumbnail,
-        };
-
-        if (req.body.profileImage) {
-          updateFields.profileImage = req.body.profileImage;
-          updateFields.imageSource = "upload";
-          updateFields.uploadedBy = req.user._id;
-          updateFields.uploadedAt = new Date();
-        }
-
-        if (!account) {
-          console.log("STEP 4.4.a: Creating a new Account record in MongoDB");
-          account = await Account.create(updateFields);
-        } else {
-          console.log("STEP 4.4.a: Updating existing Account record in MongoDB");
-          const fieldsToUpdate = { ...updateFields };
-          if (!req.body.profileImage) {
-            // Keep existing profile image if no new upload is provided
-            delete fieldsToUpdate.profileImage;
-            delete fieldsToUpdate.imageSource;
-            delete fieldsToUpdate.uploadedBy;
-            delete fieldsToUpdate.uploadedAt;
-          }
-          account = await Account.findOneAndUpdate(
-            { _id: account._id },
-            { $set: fieldsToUpdate },
-            { new: true }
-          );
-        }
-        console.log("STEP 4.4.b: MongoDB Account ID =", account._id);
-
-        console.log("STEP 4.4.c: Creating Snapshot record in MongoDB");
-        await Snapshot.create({
-          account: account._id,
-          followers: Number(channel.statistics.subscriberCount || 0),
-          views: Number(channel.statistics.viewCount || 0),
-          userId: req.user._id,
-        });
-      } catch (dbErr) {
-        console.error("STEP 4.4 Error: MongoDB insert/find operation failed:", dbErr.message);
-        return res.status(500).json({
-          success: false,
-          message: "Database error",
-        });
-      }
-
-      let history;
-      try {
-        console.log("STEP 4.5: Fetching Snapshot history from MongoDB");
-        history = await Snapshot.find({
-          account: account._id,
-          userId: req.user._id,
-        })
-          .sort({ capturedAt: 1 })
-          .lean();
-        console.log("STEP 4.5.a: Snapshot history records count =", history.length);
-      } catch (dbErr) {
-        console.error("STEP 4.5 Error: Fetching snapshot history failed:", dbErr.message);
-        return res.status(500).json({
-          success: false,
-          message: "Database error",
-        });
-      }
-
-      const uploadsPlaylistId = channelData.items[0]?.contentDetails?.relatedPlaylists?.uploads || `UU${channelId.substring(2)}`;
-      console.log("STEP 4.6: Fetching recent video uploads for playlist =", uploadsPlaylistId);
-      const { data: recentVideosData } = await youtubeGet(
-        "getChannelVideos",
-        "https://www.googleapis.com/youtube/v3/playlistItems",
-        {
-          playlistId: uploadsPlaylistId,
-          part: "snippet",
-          maxResults: 10,
-        },
-        forceRefresh
-      );
-
-      const recentVideosRaw = recentVideosData?.items || [];
-      const recentVideosItems = recentVideosRaw.map(item => ({
-        id: {
-          kind: "youtube#video",
-          videoId: item.snippet?.resourceId?.videoId
-        },
-        snippet: item.snippet
-      }));
-      console.log("STEP 4.6.a: YouTube playlistItems API raw response videos count =", recentVideosItems.length);
-
-      const responsePayload = {
-        success: true,
-        type: "channel",
-        cached: channelCached,
-        cachedAt: channelCachedAt ? new Date(channelCachedAt).getTime() : Date.now(),
-        data: {
-          mongoId: account._id,
-          channelId,
-          title: channel.snippet.title,
-          description: channel.snippet.description,
-          thumbnail:
-            channel.snippet.thumbnails.high?.url ||
-            channel.snippet.thumbnails.medium?.url,
-          profileImage: account.profileImage || "",
-          subscribers: Number(channel.statistics.subscriberCount || 0),
-          totalViews: Number(channel.statistics.viewCount || 0),
-          videoCount: Number(channel.statistics.videoCount || 0),
-          recentVideos: recentVideosItems,
-          history: history.map((item) => ({
-            date: new Date(item.capturedAt).toLocaleDateString(),
-            followers: item.followers,
-            views: item.views,
-          })),
-        },
-      };
-
-      console.log("STEP 4.7: Final Channel response payload constructed. Sending to client.");
-      return res.json(responsePayload);
-    }
-
-    /*
-    ========================================
-    VIDEO ANALYSIS (Single Video URL)
-    ========================================
-    */
-    console.log("STEP 4: Extracting video ID from URL");
+    // ────────────────────────────────────────────────────────────────────────
+    // 1. VIDEO ANALYSIS BLOCK (Separate Flow)
+    // ────────────────────────────────────────────────────────────────────────
     const videoId = extractVideoId(url);
-    console.log("STEP 4.1: Extracted video ID =", videoId);
-
     if (videoId) {
-      console.log("STEP 5: Calling YouTube video statistics API");
-      console.log("STEP 5.1: Request parameters for videos API:", { part: "snippet,statistics", id: videoId });
+      console.log("STEP 4: URL identified as video. ID =", videoId);
       
       const { data: videoData, cached: videoCached, cachedAt: videoCachedAt } = await youtubeGet(
         "getVideoStats",
@@ -598,36 +341,17 @@ export const analyzeYoutubeUrl = async (req, res, next) => {
         forceRefresh
       );
 
-      console.log("STEP 5.2: YouTube API raw response received");
-      console.log("STEP 5.3: Raw Response Data =", JSON.stringify(videoData, null, 2));
-
-      if (!videoData || !videoData.items) {
-        console.error("STEP 5.4 Error: YouTube API response schema missing data/items");
-        return res.status(500).json({
-          success: false,
-          message: "YouTube API returned empty items",
-        });
-      }
-
-      if (!videoData.items.length) {
-        console.error("STEP 5.4 Error: Video ID not found on YouTube");
-        return res.status(404).json({
-          success: false,
-          message: "Video not found",
-        });
+      if (!videoData || !videoData.items || !videoData.items.length) {
+        return res.status(404).json({ success: false, message: "Video not found" });
       }
 
       const video = videoData.items[0];
       const views = Number(video.statistics?.viewCount || 0);
       const likes = Number(video.statistics?.likeCount || 0);
       const comments = Number(video.statistics?.commentCount || 0);
+      const engagement = (((likes + comments) / Math.max(views, 1)) * 100).toFixed(2);
 
-      const engagement = (
-        ((likes + comments) / Math.max(views, 1)) *
-        100
-      ).toFixed(2);
-
-      const responsePayload = {
+      return res.json({
         success: true,
         type: "video",
         cached: videoCached,
@@ -638,27 +362,334 @@ export const analyzeYoutubeUrl = async (req, res, next) => {
           description: video.snippet.description,
           channel: video.snippet.channelTitle,
           channelId: video.snippet.channelId,
-          thumbnail:
-            video.snippet.thumbnails.high?.url ||
-            video.snippet.thumbnails.medium?.url ||
-            video.snippet.thumbnails.default?.url,
+          thumbnail: video.snippet.thumbnails.high?.url || video.snippet.thumbnails.medium?.url || video.snippet.thumbnails.default?.url,
           publishedAt: video.snippet.publishedAt,
           views,
           likes,
           comments,
           engagement,
         },
-      };
-
-      console.log("STEP 6: Final Video response payload constructed. Sending to client.");
-      return res.json(responsePayload);
+      });
     }
 
-    // Video extraction failed
-    console.error("STEP 4.1 Error: Video ID extraction failed for unhandled URL patterns");
-    return res.status(400).json({
-      success: false,
-      message: "Video ID extraction failed",
+    // ────────────────────────────────────────────────────────────────────────
+    // 2. CHANNEL ANALYSIS BLOCK (Intelligent Cache & DB updates)
+    // ────────────────────────────────────────────────────────────────────────
+    const now = new Date();
+    
+    // Fast URL cache lookup
+    let cachedAccount = null;
+    if (!forceRefresh) {
+      cachedAccount = await Account.findOne({
+        normalizedUrl: normalizedUrl,
+        cacheExpiresAt: { $gt: now }
+      }).lean();
+    }
+
+    let channelId = null;
+    if (cachedAccount) {
+      channelId = cachedAccount.accountId || cachedAccount.channelId;
+      console.log(`CACHE HIT (URL): Found valid global cache for URL ${normalizedUrl} with channelId ${channelId}`);
+    } else {
+      // Resolve channelId from handle or URL structure
+      if (url.includes("/channel/")) {
+        channelId = url.split("/channel/")[1].split("/")[0].split("?")[0];
+      } else {
+        let handle = null;
+        if (url.startsWith("@")) {
+          handle = url;
+        } else if (url.includes("/@")) {
+          handle = "@" + url.split("/@")[1].split("/")[0].split("?")[0];
+        }
+        
+        if (handle) {
+          channelId = await getChannelByHandle(handle, forceRefresh);
+        } else {
+          // Fallback custom alias
+          if (url.includes("/c/")) {
+            const customName = url.split("/c/")[1].split("/")[0].split("?")[0];
+            handle = "@" + customName;
+            channelId = await getChannelByHandle(handle, forceRefresh);
+          }
+        }
+      }
+    }
+
+    if (!channelId) {
+      return res.status(404).json({ success: false, message: "Channel not found" });
+    }
+
+    // Global cache lookup by resolved channelId
+    if (!cachedAccount && !forceRefresh) {
+      cachedAccount = await Account.findOne({
+        accountId: channelId,
+        cacheExpiresAt: { $gt: now }
+      }).lean();
+      if (cachedAccount) {
+        console.log(`CACHE HIT (ChannelId): Found valid global cache for channelId ${channelId}`);
+      }
+    }
+
+    let accountData = null;
+    let isDataCached = false;
+    let cachedTime = Date.now();
+
+    if (cachedAccount) {
+      isDataCached = true;
+      cachedTime = cachedAccount.analyzedAt ? new Date(cachedAccount.analyzedAt).getTime() : Date.now();
+      accountData = {
+        title: cachedAccount.name,
+        description: cachedAccount.description || "",
+        thumbnail: cachedAccount.thumbnail || "",
+        profileImage: cachedAccount.profileImage || cachedAccount.uploadedImage || cachedAccount.thumbnail || "",
+        uploadedImage: cachedAccount.uploadedImage || "",
+        resolvedImage: cachedAccount.resolvedImage || "",
+        imageSource: cachedAccount.imageSource || "youtube",
+        subscribers: cachedAccount.subscribers || 0,
+        views: cachedAccount.views || 0,
+        videos: cachedAccount.videos || 0,
+        engagement: cachedAccount.engagement || 0,
+        recentVideos: cachedAccount.recentVideos || [],
+      };
+    } else {
+      // Refresh cache: Fetch fresh data with coalesced request Map
+      console.log(`CACHE MISS: Fetching fresh YouTube data for channelId ${channelId}`);
+      const freshData = await getCoalescedYoutubeData(channelId, url, forceRefresh);
+      
+      const channel = freshData.channelData?.items?.[0];
+      if (!channel) {
+        return res.status(404).json({ success: false, message: "Channel details not found on YouTube" });
+      }
+
+      const recentVideosRaw = freshData.recentVideosData?.items || [];
+      const recentVideosItems = recentVideosRaw.map(item => ({
+        id: {
+          kind: "youtube#video",
+          videoId: item.snippet?.resourceId?.videoId
+        },
+        snippet: item.snippet
+      }));
+
+      const youtubeThumbnail = channel.snippet?.thumbnails?.high?.url || channel.snippet?.thumbnails?.medium?.url || "";
+
+      accountData = {
+        title: channel.snippet.title,
+        description: channel.snippet.description || "",
+        thumbnail: youtubeThumbnail,
+        subscribers: Number(channel.statistics.subscriberCount || 0),
+        views: Number(channel.statistics.viewCount || 0),
+        videos: Number(channel.statistics.videoCount || 0),
+        engagement: freshData.analytics.engagementRate || 0,
+        recentVideos: recentVideosItems,
+      };
+    }
+
+    // Now update or create the Account document specific to the logged-in User
+    let account = await Account.findOne({
+      accountId: channelId,
+      userId: req.user._id,
+    });
+
+    const analyzedAt = isDataCached ? (cachedAccount.analyzedAt || new Date()) : new Date();
+    const cacheExpiresAt = isDataCached ? (cachedAccount.cacheExpiresAt || new Date()) : new Date(Date.now() + 3 * 60 * 1000);
+
+    const updateFields = {
+      name: accountData.title,
+      platform: "youtube",
+      accountId: channelId,
+      channelId: channelId,
+      profileUrl: url,
+      userId: req.user._id,
+      description: accountData.description,
+      thumbnail: accountData.thumbnail,
+      subscribers: accountData.subscribers,
+      views: accountData.views,
+      videos: accountData.videos,
+      engagement: accountData.engagement,
+      recentVideos: accountData.recentVideos,
+      normalizedUrl: normalizedUrl,
+      group: selectedGroup,
+      state: selectedState,
+      party: selectedParty,
+      analyzedAt,
+      cacheExpiresAt,
+    };
+
+    // ── Resolve Image: 4-Tier Priority ─────────────────────────────────────────
+    //
+    // Priority 1 — User just uploaded a new image (highest, always replaces everything)
+    // Priority 2 — Global previously uploaded image for this creator (same channelId, any user)
+    // Priority 3 — Official public image resolved via Wikimedia/dictionary
+    // Priority 4 — YouTube channel thumbnail (always available)
+    //
+    // IMPORTANT: If Priority 1 is set, it MUST replace whatever was stored before.
+    // ────────────────────────────────────────────────────────────────────────────
+
+    let uploadedImage = "";
+    let resolvedImage = "";
+    let profileImage = "";
+    let imageSource = "youtube";
+
+    console.log("[IMAGE] submittedProfileImage =", submittedProfileImage || "(none)");
+
+    if (submittedProfileImage) {
+      // ── Priority 1: Brand-new user upload → always wins ──────────────────────
+      uploadedImage = submittedProfileImage;
+      profileImage  = submittedProfileImage;
+      imageSource   = "user";
+      updateFields.uploadedBy = req.user._id;
+      updateFields.uploadedAt = new Date();
+      console.log("[IMAGE] Priority 1 (user upload) selected:", uploadedImage);
+
+    } else {
+      // ── No new upload this run: inherit the best image that already exists ───
+      // Fetch global uploaded image (any user, same creator)
+      let globalUploadedImage = "";
+      const existingWithUpload = await Account.findOne({
+        accountId: channelId,
+        uploadedImage: { $exists: true, $ne: "" },
+      }).sort({ imageUpdatedAt: -1, updatedAt: -1 }).lean();
+      if (existingWithUpload?.uploadedImage) {
+        globalUploadedImage = existingWithUpload.uploadedImage;
+      }
+
+      // Also check the current user's existing account
+      const localUploadedImage = account?.uploadedImage || "";
+
+      if (globalUploadedImage) {
+        uploadedImage = globalUploadedImage;
+        profileImage  = globalUploadedImage;
+        imageSource   = "user";
+        console.log("[IMAGE] Priority 2a (global uploaded) selected:", uploadedImage);
+      } else if (localUploadedImage) {
+        uploadedImage = localUploadedImage;
+        profileImage  = localUploadedImage;
+        imageSource   = "user";
+        console.log("[IMAGE] Priority 2b (local uploaded) selected:", uploadedImage);
+      }
+    }
+
+    // ── Priority 3: Official resolved image (Wikimedia / verified dictionary) ──
+    let globalResolvedImage = "";
+    const existingWithResolved = await Account.findOne({
+      accountId: channelId,
+      resolvedImage: { $exists: true, $ne: "" },
+    }).sort({ updatedAt: -1 }).lean();
+    if (existingWithResolved?.resolvedImage) {
+      globalResolvedImage = existingWithResolved.resolvedImage;
+    }
+
+    let resolvedOfficialImage = globalResolvedImage || account?.resolvedImage || "";
+    if (!isDataCached && !resolvedOfficialImage) {
+      resolvedOfficialImage = await resolveOfficialPublicImage(accountData.title);
+    }
+
+    resolvedImage = resolvedOfficialImage || globalResolvedImage || account?.resolvedImage || (isDataCached && accountData.resolvedImage) || "";
+
+    // Use resolved image as profileImage only if no user upload exists
+    if (!uploadedImage && resolvedImage) {
+      profileImage = resolvedImage;
+      imageSource  = "official";
+      console.log("[IMAGE] Priority 3 (resolved official) selected:", profileImage);
+    }
+
+    // ── Priority 4: YouTube channel thumbnail ─────────────────────────────────
+    if (!profileImage) {
+      profileImage = accountData.thumbnail;
+      imageSource  = accountData.thumbnail ? "youtube" : "default";
+      console.log("[IMAGE] Priority 4 (youtube thumbnail) selected:", profileImage);
+    }
+
+    // Stamp the final image state into the update fields
+    updateFields.uploadedImage   = uploadedImage;
+    updateFields.resolvedImage   = resolvedImage;
+    updateFields.profileImage    = profileImage;
+    updateFields.imageSource     = imageSource;
+    updateFields.imageUpdatedAt  = new Date();
+
+    console.log("[IMAGE] Final state → uploadedImage:", uploadedImage, "| profileImage:", profileImage, "| imageSource:", imageSource);
+
+    // ── Persist: Create or Update the Account document ────────────────────────
+    if (!account) {
+      console.log("[DB] Creating new Account record");
+      account = await Account.create(updateFields);
+    } else {
+      console.log("[DB] Updating existing Account record:", account._id.toString());
+      account = await Account.findOneAndUpdate(
+        { _id: account._id },
+        { $set: updateFields },
+        { new: true }
+      );
+      console.log("[DB] Update result — uploadedImage:", account.uploadedImage, "| profileImage:", account.profileImage);
+    }
+
+    // ── Propagate images globally to all other user accounts for this creator ──
+    const globalUpdateResult = await Account.updateMany(
+      { accountId: channelId, _id: { $ne: account._id } },
+      {
+        $set: {
+          profileImage,
+          uploadedImage,
+          resolvedImage,
+          imageSource,
+          imageUpdatedAt: new Date(),
+        },
+      }
+    );
+    console.log("[DB] Global updateMany propagated to", globalUpdateResult.modifiedCount, "other account(s)");
+
+
+    // Create Snapshot record for tracking history
+    await Snapshot.create({
+      account: account._id,
+      userId: req.user._id,
+      followers: account.subscribers,
+      views: account.views,
+      videos: account.videos,
+      likes: Math.round((account.engagement / 100) * account.views),
+      engagementRate: account.engagement,
+      party: selectedParty,
+      state: selectedState,
+      name: account.name,
+      profileImage: account.profileImage || account.thumbnail,
+      capturedAt: new Date(),
+    });
+    // Fetch snapshot history
+    const history = await Snapshot.find({
+      account: account._id,
+      userId: req.user._id,
+    })
+      .sort({ capturedAt: 1 })
+      .lean();
+
+    return res.json({
+      success: true,
+      type: "channel",
+      cached: isDataCached,
+      cachedAt: cachedTime,
+      data: {
+        mongoId: account._id,
+        channelId: channelId,
+        title: account.name,
+        description: account.description || "",
+        thumbnail: account.thumbnail,
+        profileImage: account.profileImage || "",
+        uploadedImage: account.uploadedImage || "",
+        resolvedImage: account.resolvedImage || "",
+        imageSource: account.imageSource || "youtube",
+        // imageUpdatedAt is used by the frontend as a cache-buster (?v=timestamp)
+        // so the browser always loads the latest image even if the filename didn't change
+        imageUpdatedAt: account.imageUpdatedAt ? new Date(account.imageUpdatedAt).getTime() : Date.now(),
+        subscribers: account.subscribers,
+        totalViews: account.views,
+        videoCount: account.videos,
+        recentVideos: account.recentVideos,
+        history: history.map((item) => ({
+          date: new Date(item.capturedAt).toLocaleDateString(),
+          followers: item.followers,
+          views: item.views,
+        })),
+      }
     });
 
   } catch (error) {

@@ -224,7 +224,12 @@ export const useParty = (groupName) => {
       const res = await getGroupCreators(groupName);
       return res.data || [];
     },
+    // Always fetch fresh data when component mounts (e.g. navigating to GroupAnalytics after analysis)
+    refetchOnMount: "always",
+    // Poll every 30s for live updates
     refetchInterval: 30000,
+    // staleTime: 0 — data is always considered stale, triggering a background refetch on mount
+    staleTime: 0,
     enabled: !!groupName,
   });
 };
@@ -238,14 +243,26 @@ export const useAnalyzer = (searchUrl, group = "Other", force = false, state = "
     queryFn: async () => {
       if (!searchUrl) return null;
       const result = await analyzeYoutubeUrl(searchUrl, group, force, state, party, profileImage);
-      // After a successful analysis, invalidate all downstream caches so
-      // Party Analytics, Dashboard, Tracked Nodes reflect the new data immediately
+
+      // After a successful analysis, force a hard refetch on ALL currently mounted
+      // party/group pages so images appear immediately without waiting for poll interval
+      await queryClient.refetchQueries({
+        predicate: (q) => q.queryKey[0]?.toString().startsWith("party"),
+        type: "active",   // Only refetch queries that are currently being observed
+      });
+      // Also mark inactive (unmounted) party queries as stale so they refetch on next mount
+      queryClient.invalidateQueries({
+        predicate: (q) => q.queryKey[0]?.toString().startsWith("party"),
+        type: "inactive",
+      });
+
+      // Invalidate all other downstream caches
       queryClient.invalidateQueries({ queryKey: ["accounts"] });
       queryClient.invalidateQueries({ queryKey: ["trackedNodes"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
       queryClient.invalidateQueries({ queryKey: ["compare-accounts"] });
-      // Invalidate all party caches generically
-      queryClient.invalidateQueries({ predicate: (q) => q.queryKey[0]?.toString().startsWith("party") });
+      queryClient.invalidateQueries({ queryKey: ["reports"] });
+
       return result;
     },
     enabled: !!searchUrl,

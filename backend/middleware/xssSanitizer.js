@@ -31,11 +31,25 @@ const cleanXssObject = (obj) => {
   return cleaned;
 };
 
+// Fields that contain URLs and must not have slashes encoded
+const URL_FIELDS = new Set(["profileImage", "url", "profileUrl", "thumbnail", "avatarUrl", "imageUrl"]);
+
 export const xssSanitizer = (req, res, next) => {
   if (req.body) {
     for (const key in req.body) {
       if (Object.prototype.hasOwnProperty.call(req.body, key)) {
-        req.body[key] = cleanXssObject(req.body[key]);
+        // Skip slash-encoding for URL fields to preserve valid paths like /uploads/photo.jpg
+        if (URL_FIELDS.has(key)) {
+          if (typeof req.body[key] === "string") {
+            // Only strip <script> and obvious injection — keep slashes/quotes intact
+            req.body[key] = req.body[key]
+              .replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, "")
+              .replace(/javascript\s*:/gi, "")
+              .replace(/on\w+\s*=/gi, "");
+          }
+        } else {
+          req.body[key] = cleanXssObject(req.body[key]);
+        }
       }
     }
   }
