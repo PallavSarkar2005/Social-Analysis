@@ -25,21 +25,34 @@ const hashToken = (token) => {
   return crypto.createHash("sha256").update(token).digest("hex");
 };
 
-<<<<<<< HEAD
 // Geolocation helper
 const getIpLocation = async (ip) => {
-  if (!ip || ip === "127.0.0.1" || ip === "::1" || ip.startsWith("192.168.") || ip.startsWith("10.") || ip.startsWith("127.")) {
+  if (
+    !ip ||
+    ip === "127.0.0.1" ||
+    ip === "::1" ||
+    ip.startsWith("192.168.") ||
+    ip.startsWith("10.") ||
+    ip.startsWith("127.")
+  ) {
     return "Localhost";
   }
+
   try {
-    const response = await axios.get(`http://ip-api.com/json/${ip}`, { timeout: 2000 });
-    if (response.data && response.data.status === "success") {
+    const response = await axios.get(`http://ip-api.com/json/${ip}`, {
+      timeout: 2000,
+    });
+
+    if (response.data?.status === "success") {
       const { city, regionName, country } = response.data;
-      return `${city || ""}, ${regionName || ""}, ${country || ""}`.replace(/^,\s*/, "").replace(/,\s*$/, "");
+      return `${city || ""}, ${regionName || ""}, ${country || ""}`
+        .replace(/^,\s*/, "")
+        .replace(/,\s*$/, "");
     }
   } catch (error) {
     console.error(`Failed to geolocate IP ${ip}:`, error.message);
   }
+
   return "Unknown Location";
 };
 
@@ -57,9 +70,12 @@ const verifyGoogleIdToken = async (idToken) => {
   }
 
   const ticket = await axios.get(
-    `https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(idToken)}`,
-    { timeout: 5000 }
+    `https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(
+      idToken,
+    )}`,
+    { timeout: 5000 },
   );
+
   const payload = ticket.data;
 
   const clientId = process.env.GOOGLE_CLIENT_ID;
@@ -72,11 +88,6 @@ const verifyGoogleIdToken = async (idToken) => {
   }
 
   return payload;
-=======
-const checkIsProd = (req) => {
-  const isSecureConnection = req.secure || req.headers["x-forwarded-proto"] === "https";
-  return isSecureConnection;
->>>>>>> main
 };
 
 // GET /api/auth/csrf
@@ -107,7 +118,11 @@ const parseUserAgent = (userAgentString) => {
     browser = "Firefox";
   } else if (ua.includes("chrome") || ua.includes("chromium")) {
     browser = "Chrome";
-  } else if (ua.includes("safari") && !ua.includes("chrome") && !ua.includes("chromium")) {
+  } else if (
+    ua.includes("safari") &&
+    !ua.includes("chrome") &&
+    !ua.includes("chromium")
+  ) {
     browser = "Safari";
   } else if (ua.includes("edge") || ua.includes("edg")) {
     browser = "Edge";
@@ -142,8 +157,11 @@ const parseUserAgent = (userAgentString) => {
 const sendTokenResponse = async (user, statusCode, req, res) => {
   const rememberMe = req.body?.rememberMe === true;
 
-  const ipAddressRaw = req.headers["x-forwarded-for"] || req.socket.remoteAddress || "0.0.0.0";
-  const ipAddress = Array.isArray(ipAddressRaw) ? ipAddressRaw[0] : ipAddressRaw.split(",")[0].trim();
+  const ipAddressRaw =
+    req.headers["x-forwarded-for"] || req.socket.remoteAddress || "0.0.0.0";
+  const ipAddress = Array.isArray(ipAddressRaw)
+    ? ipAddressRaw[0]
+    : ipAddressRaw.split(",")[0].trim();
   const userAgent = req.headers["user-agent"] || "";
   const { browser, os, device } = parseUserAgent(userAgent);
 
@@ -189,13 +207,13 @@ const sendTokenResponse = async (user, statusCode, req, res) => {
   if (user.loginHistory.length > 10) {
     user.loginHistory.shift();
   }
-  
+
   await user.save();
 
   const accessToken = jwt.sign(
     { id: user._id, sessionId: session._id },
     process.env.JWT_SECRET,
-    { expiresIn: "15m" }
+    { expiresIn: "15m" },
   );
 
   const authCookieBase = getAuthCookieOptions(req);
@@ -276,15 +294,18 @@ export const register = async (req, res, next) => {
 // @route   POST /api/auth/login
 // @access  Public
 export const login = async (req, res, next) => {
-  const ipAddressRaw = req.headers["x-forwarded-for"] || req.socket.remoteAddress || "0.0.0.0";
-  const ipAddress = Array.isArray(ipAddressRaw) ? ipAddressRaw[0] : ipAddressRaw.split(",")[0].trim();
+  const ipAddressRaw =
+    req.headers["x-forwarded-for"] || req.socket.remoteAddress || "0.0.0.0";
+  const ipAddress = Array.isArray(ipAddressRaw)
+    ? ipAddressRaw[0]
+    : ipAddressRaw.split(",")[0].trim();
   const { email, password } = req.body;
 
   try {
     const attempt = await LoginAttempt.findOne({ email, ipAddress });
     if (attempt && attempt.lockoutUntil && attempt.lockoutUntil > new Date()) {
       const waitSecs = Math.ceil((attempt.lockoutUntil - new Date()) / 1000);
-      
+
       await logSecurityEvent({
         action: "login_lockout_blocked",
         details: `Login attempt blocked due to active lockout (${waitSecs}s remaining).`,
@@ -310,7 +331,8 @@ export const login = async (req, res, next) => {
     if (user.provider === "google" && !user.passwordHash) {
       return res.status(400).json({
         success: false,
-        message: "This account logs in with Google. Please use Sign in with Google.",
+        message:
+          "This account logs in with Google. Please use Sign in with Google.",
       });
     }
 
@@ -345,7 +367,8 @@ const handleFailedLogin = async (email, ipAddress) => {
       attempt.lockoutUntil = new Date(Date.now() + 15 * 60 * 1000); // 15-minute lockouts
       await logSecurityEvent({
         action: "account_locked",
-        details: "Account/IP pair temporarily locked due to 5 consecutive login failures.",
+        details:
+          "Account/IP pair temporarily locked due to 5 consecutive login failures.",
         ipAddress,
         email,
       });
@@ -365,8 +388,11 @@ const handleFailedLogin = async (email, ipAddress) => {
 // @route   POST /api/auth/refresh
 // @access  Public
 export const refresh = async (req, res, next) => {
-  const ipAddressRaw = req.headers["x-forwarded-for"] || req.socket.remoteAddress || "0.0.0.0";
-  const ipAddress = Array.isArray(ipAddressRaw) ? ipAddressRaw[0] : ipAddressRaw.split(",")[0].trim();
+  const ipAddressRaw =
+    req.headers["x-forwarded-for"] || req.socket.remoteAddress || "0.0.0.0";
+  const ipAddress = Array.isArray(ipAddressRaw)
+    ? ipAddressRaw[0]
+    : ipAddressRaw.split(",")[0].trim();
 
   try {
     const refreshTokenVal = req.cookies.socialiq_refresh_token;
@@ -394,97 +420,51 @@ export const refresh = async (req, res, next) => {
       });
 
       if (reusedSession) {
-        // Immediate response: Revoke all active sessions for this user!
-        await Session.updateMany({ userId: reusedSession.userId }, { isRevoked: true });
-        
-        res.clearCookie("socialiq_access_token");
-        res.clearCookie("socialiq_refresh_token");
-
-        await logSecurityEvent({
-          userId: reusedSession.userId,
-          action: "refresh_token_reuse_breach",
-          details: `Reused refresh token submitted! Revoking all sessions for user ${reusedSession.userId}.`,
-          ipAddress,
-        });
-
+        reusedSession.isRevoked = true;
+        await reusedSession.save();
         return res.status(401).json({
           success: false,
-          message: "Breach detected: Session has already been refreshed. Terminating all logins.",
+          message: "Refresh token has been reused",
         });
       }
 
-      await logSecurityEvent({
-        action: "refresh_failed_invalid_token",
-        details: "Refresh attempt with unrecognized or expired refresh token.",
-        ipAddress,
-      });
       return res.status(401).json({
         success: false,
-        message: "Invalid refresh token",
+        message: "Invalid or expired refresh token",
       });
     }
 
-    const user = await User.findById(session.userId);
-    if (!user) {
-      return res.status(401).json({
-        success: false,
-        message: "User not found",
-      });
-    }
-
-    // Perform rotation: generate new refresh token, update tokenHash on the session
+    // Rotate refresh token
     const newRefreshTokenVal = crypto.randomBytes(40).toString("hex");
-    const newHashedToken = hashToken(newRefreshTokenVal);
-
-    session.oldTokenHashes.push(session.tokenHash);
-    if (session.oldTokenHashes.length > 20) {
-      session.oldTokenHashes.shift();
-    }
-    session.tokenHash = newHashedToken;
-
-    const daysToAdd = session.isRememberMe ? 30 : 1;
-    const newExpiresAt = new Date();
-    newExpiresAt.setDate(newExpiresAt.getDate() + daysToAdd);
-    session.expiresAt = newExpiresAt;
-    session.lastActivity = new Date();
+    const newHashedRefreshToken = hashToken(newRefreshTokenVal);
+    session.tokenHash = newHashedRefreshToken;
+    session.oldTokenHashes = [...(session.oldTokenHashes || []), hashedRefreshToken];
+    session.expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+    session.lastUsedAt = new Date();
     session.ipAddress = ipAddress;
-
+    session.location = await getIpLocation(ipAddress);
     await session.save();
 
-    const newAccessToken = jwt.sign(
+    const accessToken = jwt.sign(
       { id: user._id, sessionId: session._id },
       process.env.JWT_SECRET,
-      { expiresIn: "15m" }
+      { expiresIn: "15m" },
     );
 
     const authCookieBase = getAuthCookieOptions(req);
-    res.cookie("socialiq_access_token", newAccessToken, {
+    res.cookie("socialiq_access_token", accessToken, {
       ...authCookieBase,
       maxAge: 15 * 60 * 1000,
     });
-
     res.cookie("socialiq_refresh_token", newRefreshTokenVal, {
       ...authCookieBase,
-      maxAge: daysToAdd * 24 * 60 * 60 * 1000,
-    });
-
-    await logSecurityEvent({
-      userId: user._id,
-      action: "refresh_token_rotated",
-      details: `Refresh token rotated for session ${session._id}`,
-      ipAddress,
+      maxAge: 30 * 24 * 60 * 60 * 1000,
     });
 
     res.json({
       success: true,
       data: {
-        _id: user._id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        plan: user.plan,
-        avatar: user.avatar,
-        token: newAccessToken,
+        token: accessToken,
       },
     });
   } catch (error) {
@@ -492,27 +472,23 @@ export const refresh = async (req, res, next) => {
   }
 };
 
-// @desc    Logout user & clear session cookies
+// @desc    Logout user
 // @route   POST /api/auth/logout
-// @access  Public
+// @access  Private
 export const logout = async (req, res, next) => {
   try {
     const refreshTokenVal = req.cookies.socialiq_refresh_token;
-
     if (refreshTokenVal) {
-      const hashedTokenVal = hashToken(refreshTokenVal);
-      await Session.updateOne({ tokenHash: hashedTokenVal }, { isRevoked: true });
+      const hashedRefreshToken = hashToken(refreshTokenVal);
+      await Session.findOneAndUpdate(
+        { tokenHash: hashedRefreshToken },
+        { $set: { isRevoked: true } },
+      );
     }
 
-    const cookieOptions = getAuthCookieOptions(req);
-    res.clearCookie("socialiq_access_token", cookieOptions);
-    res.clearCookie("socialiq_refresh_token", cookieOptions);
-
-    await logSecurityEvent({
-      action: "logout",
-      details: "User logged out of current session",
-      ipAddress: req.headers["x-forwarded-for"] || req.socket?.remoteAddress,
-    });
+    res.clearCookie("socialiq_access_token", getAuthCookieOptions(req));
+    res.clearCookie("socialiq_refresh_token", getAuthCookieOptions(req));
+    res.clearCookie("XSRF-TOKEN", getCsrfCookieOptions(req));
 
     res.json({
       success: true,
@@ -523,92 +499,40 @@ export const logout = async (req, res, next) => {
   }
 };
 
-// @desc    Logout user everywhere (revoke all user sessions)
-// @route   POST /api/auth/logout-all
-// @access  Private
-export const logoutAll = async (req, res, next) => {
+// @desc    Google OAuth login
+// @route   POST /api/auth/google
+// @access  Public
+export const googleAuth = async (req, res, next) => {
   try {
-    await Session.updateMany({ userId: req.user._id }, { isRevoked: true });
+    const { idToken } = req.body;
+    const payload = await verifyGoogleIdToken(idToken);
 
-    const cookieOptions = getAuthCookieOptions(req);
-    res.clearCookie("socialiq_access_token", cookieOptions);
-    res.clearCookie("socialiq_refresh_token", cookieOptions);
-
-    await logSecurityEvent({
-      userId: req.user._id,
-      action: "logout_all",
-      details: "User logged out of all sessions",
-    });
-
-    res.json({
-      success: true,
-      message: "Logged out of all sessions successfully",
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
-// @desc    Logout other devices (revoke other sessions except current)
-// @route   POST /api/auth/logout-other
-// @access  Private
-export const logoutOtherDevices = async (req, res, next) => {
-  try {
-    const currentRefreshToken = req.cookies.socialiq_refresh_token;
-
-    if (currentRefreshToken) {
-      // Primary: identify current session via the refresh token cookie hash
-      const hashedCurrentToken = hashToken(currentRefreshToken);
-      await Session.updateMany(
-        { userId: req.user._id, tokenHash: { $ne: hashedCurrentToken } },
-        { isRevoked: true }
-      );
-    } else if (req.sessionId) {
-      // Fallback: identify current session via the sessionId embedded in the access token JWT
-      await Session.updateMany(
-        { userId: req.user._id, _id: { $ne: req.sessionId } },
-        { isRevoked: true }
-      );
-    } else {
-      // No identifiers — revoke all sessions for safety
-      await Session.updateMany({ userId: req.user._id }, { isRevoked: true });
+    let user = await User.findOne({ email: payload.email });
+    if (!user) {
+      user = await User.create({
+        name: payload.name || payload.email,
+        email: payload.email,
+        role: "user",
+        plan: "free",
+        avatar: payload.picture,
+        provider: "google",
+        isEmailVerified: true,
+        isVerified: true,
+      });
     }
 
-    await logSecurityEvent({
-      userId: req.user._id,
-      action: "logout_other_devices",
-      details: "User logged out of all other device sessions",
-    });
-
-    res.json({
-      success: true,
-      message: "Logged out of other devices successfully",
-    });
+    await sendTokenResponse(user, 200, req, res);
   } catch (error) {
     next(error);
   }
 };
 
-// @desc    Get current user profile
-// @route   GET /api/auth/me
-// @access  Private
-export const getMe = async (req, res, next) => {
-  try {
-    res.json({
-      success: true,
-      data: req.user,
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
-// @desc    Verify email address
-// @route   POST /api/auth/verify-email
+// @desc    Verify email
+// @route   GET /api/auth/verify-email
 // @access  Public
 export const verifyEmail = async (req, res, next) => {
   try {
-    const { token } = req.body;
+    const { token } = req.query;
     if (!token) {
       return res.status(400).json({
         success: false,
@@ -616,110 +540,29 @@ export const verifyEmail = async (req, res, next) => {
       });
     }
 
-    const hashedTokenVal = hashToken(token);
-
-    const user = await User.findOne({
-      emailVerificationToken: hashedTokenVal,
-      emailVerificationExpires: { $gt: new Date() },
-    });
-
+    const user = await User.findOne({ verifyToken: token });
     if (!user) {
       return res.status(400).json({
         success: false,
-        message: "Verification token is invalid or has expired",
+        message: "Invalid or expired verification token",
       });
     }
 
     user.isEmailVerified = true;
-    user.isVerified = true; // legacy sync
-    user.emailVerificationToken = undefined;
-    user.emailVerificationExpires = undefined;
-    user.verificationToken = undefined; // legacy sync
-    user.verificationTokenExpires = undefined; // legacy sync
+    user.isVerified = true;
+    user.verifyToken = null;
     await user.save();
-
-    // Send Welcome Email
-    try {
-      const welcomeHtml = getWelcomeEmail(user.name);
-      await sendEmailReport(user.email, "Social IQ - Welcome to the Platform!", welcomeHtml);
-    } catch (mailError) {
-      console.error("[Mail Delivery Warning] Failed to dispatch welcome email:", mailError.message);
-    }
 
     res.json({
       success: true,
-      message: "Email verified successfully. You can now access your workspace.",
+      message: "Email verified successfully",
     });
   } catch (error) {
     next(error);
   }
 };
 
-// @desc    Resend verification email
-// @route   POST /api/auth/resend-verification
-// @access  Public
-export const resendVerification = async (req, res, next) => {
-  console.log("[Resend Verification] Request received.");
-  try {
-    const email = req.body?.email || req.user?.email;
-    if (!email) {
-      console.log("[Resend Verification] Failed: Email not provided.");
-      return res.status(400).json({
-        success: false,
-        message: "Email is required to resend verification link.",
-      });
-    }
-
-    const user = await User.findOne({ email });
-    if (!user) {
-      console.log(`[Resend Verification] Email not found in DB: ${email}. Returning generic success to prevent enumeration.`);
-      return res.json({
-        success: true,
-        message: "If the email exists, a verification link has been resent.",
-      });
-    }
-    console.log(`[Resend Verification] User found: ${user._id} (${user.email})`);
-
-    if (user.isEmailVerified) {
-      console.log("[Resend Verification] Failed: User is already verified.");
-      return res.status(400).json({
-        success: false,
-        message: "This email address is already verified.",
-      });
-    }
-    console.log("[Resend Verification] User is not verified. Generating fresh token...");
-
-    const verificationToken = crypto.randomBytes(32).toString("hex");
-    const hashedVerificationToken = hashToken(verificationToken);
-    
-    user.emailVerificationToken = hashedVerificationToken;
-    user.emailVerificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
-    
-    console.log("[Resend Verification] Saving user verification token...");
-    await user.save();
-    console.log("[Resend Verification] User saved successfully.");
-
-    const appUrl = getAppUrl(req);
-    const verificationLink = `${appUrl}/verify-email?token=${verificationToken}`;
-
-    console.log(`[Resend Verification] Verification Link generated: ${verificationLink}`);
-
-    console.log(`[Resend Verification] Dispatching email to: ${user.email}`);
-    const emailHtml = getVerifyEmailTemplate(user.name, verificationLink);
-    await sendEmailReport(user.email, "Social IQ - Verify Your Account", emailHtml);
-    console.log("[Resend Verification] Verification email dispatched successfully.");
-
-    res.json({
-      success: true,
-      message: "If the email exists, a verification link has been resent.",
-    });
-  } catch (error) {
-    console.error("[Resend Verification Error]:", error);
-    next(error);
-  }
-};
-
-// @desc    Forgot Password - Request reset link
+// @desc    Request password reset
 // @route   POST /api/auth/forgot-password
 // @access  Public
 export const forgotPassword = async (req, res, next) => {
@@ -728,131 +571,84 @@ export const forgotPassword = async (req, res, next) => {
     const user = await User.findOne({ email });
 
     if (!user) {
-      // Avoid revealing user exists, return generic success msg
-      return res.json({
+      return res.status(200).json({
         success: true,
-        message: "Password reset link has been dispatched if the email was registered.",
+        message: "If an account exists, a reset email has been sent",
       });
     }
 
     const resetToken = crypto.randomBytes(32).toString("hex");
-    const hashedResetToken = hashToken(resetToken);
-
-    user.passwordResetToken = hashedResetToken;
-    user.passwordResetExpires = new Date(Date.now() + 1 * 60 * 60 * 1000); // 1 hour
+    user.resetPasswordToken = resetToken;
+    user.resetPasswordExpires = new Date(Date.now() + 60 * 60 * 1000);
     await user.save();
 
-    const appUrl = getAppUrl(req);
-    const resetLink = `${appUrl}/reset-password?token=${resetToken}`;
-
-    try {
-      const emailHtml = getForgotPasswordTemplate(user.name, resetLink);
-      await sendEmailReport(user.email, "Social IQ - Reset Password", emailHtml);
-    } catch (mailError) {
-      console.error("[Mail Delivery Warning] Failed to dispatch forgot-password email:", mailError.message);
-    }
+    await sendEmailReport({
+      to: user.email,
+      subject: "Password Reset Request",
+      html: getForgotPasswordTemplate(user.name, resetToken),
+    });
 
     res.json({
       success: true,
-      message: "Password reset link has been dispatched if the email was registered.",
+      message: "If an account exists, a reset email has been sent",
     });
   } catch (error) {
     next(error);
   }
 };
 
-// @desc    Reset password using token
+// @desc    Reset password
 // @route   POST /api/auth/reset-password
 // @access  Public
 export const resetPassword = async (req, res, next) => {
   try {
     const { token, password } = req.body;
-
-    if (!token || !password) {
-      return res.status(400).json({
-        success: false,
-        message: "Verification token and new password are required",
-      });
-    }
-
-    const hashedTokenVal = hashToken(token);
-
-    const user = await User.findOne({
-      passwordResetToken: hashedTokenVal,
-      passwordResetExpires: { $gt: new Date() },
-    });
+    const user = await User.findOne({ resetPasswordToken: token });
 
     if (!user) {
       return res.status(400).json({
         success: false,
-        message: "Password reset token is invalid or has expired",
+        message: "Invalid or expired reset token",
       });
     }
 
-    // Verify Password History (last 3 passwords)
-    if (user.passwordHash) {
-      const matchesHistory = await Promise.all(
-        user.passwordHistory.map((hash) => bcrypt.compare(password, hash))
-      );
-
-      if (matchesHistory.includes(true)) {
-        return res.status(400).json({
-          success: false,
-          message: "You cannot reuse any of your last 3 passwords",
-        });
-      }
-
-      // Add old password hash to history
-      user.passwordHistory.push(user.passwordHash);
-      if (user.passwordHistory.length > 3) {
-        user.passwordHistory.shift();
-      }
+    if (user.resetPasswordExpires < new Date()) {
+      return res.status(400).json({
+        success: false,
+        message: "Reset token has expired",
+      });
     }
 
-    // Set new password (hashes with cost factor 12)
     const salt = await bcrypt.genSalt(12);
-    user.passwordHash = await bcrypt.hash(password, salt);
-    user.passwordResetToken = undefined;
-    user.passwordResetExpires = undefined;
-
-    // Invalidate old refresh tokens (Force logout on all devices)
-    await Session.updateMany({ userId: user._id }, { isRevoked: true });
-
+    const passwordHash = await bcrypt.hash(password, salt);
+    user.passwordHash = passwordHash;
+    user.resetPasswordToken = null;
+    user.resetPasswordExpires = null;
     await user.save();
 
-    await logSecurityEvent({
-      userId: user._id,
-      action: "password_reset",
-      details: "User password successfully reset via link.",
-      email: user.email,
+    await sendEmailReport({
+      to: user.email,
+      subject: "Password Updated",
+      html: getPasswordChangedTemplate(user.name),
     });
-
-    // Send confirmation email
-    try {
-      const emailHtml = getPasswordChangedTemplate(user.name);
-      await sendEmailReport(user.email, "Social IQ - Password Reset Confirmation", emailHtml);
-    } catch (mailError) {
-      console.error("[Mail Delivery Warning] Failed to dispatch password reset confirmation email:", mailError.message);
-    }
 
     res.json({
       success: true,
-      message: "Password reset successfully. You can now login.",
+      message: "Password updated successfully",
     });
   } catch (error) {
     next(error);
   }
 };
 
-// @desc    Change Password (authenticated)
-// @route   POST /api/auth/change-password
+// @desc    Delete account
+// @route   DELETE /api/auth/delete-account
 // @access  Private
-export const changePassword = async (req, res, next) => {
+export const deleteAccount = async (req, res, next) => {
   try {
-    const oldPassword = req.body.oldPassword || req.body.currentPassword;
-    const { newPassword } = req.body;
-    
-    const user = await User.findById(req.user._id);
+    const userId = req.user.id;
+
+    const user = await User.findById(userId);
     if (!user) {
       return res.status(404).json({
         success: false,
@@ -860,220 +656,18 @@ export const changePassword = async (req, res, next) => {
       });
     }
 
-    if (user.provider === "google" && !user.passwordHash) {
-      // Connect flow: user doesn't have a local password set yet
-      const salt = await bcrypt.genSalt(12);
-      user.passwordHash = await bcrypt.hash(newPassword, salt);
-      await user.save();
+    await Session.deleteMany({ userId });
+    await User.findByIdAndDelete(userId);
 
-      return res.json({
-        success: true,
-        message: "Local password set successfully",
-      });
-    }
-
-    const isMatch = await bcrypt.compare(oldPassword, user.passwordHash);
-    if (!isMatch) {
-      return res.status(400).json({
-        success: false,
-        message: "Current password is incorrect",
-      });
-    }
-
-    // Verify Password History (last 3 passwords)
-    const matchesHistory = await Promise.all(
-      user.passwordHistory.map((hash) => bcrypt.compare(newPassword, hash))
-    );
-
-    if (matchesHistory.includes(true)) {
-      return res.status(400).json({
-        success: false,
-        message: "You cannot reuse any of your last 3 passwords",
-      });
-    }
-
-    // Add old password hash to history
-    user.passwordHistory.push(user.passwordHash);
-    if (user.passwordHistory.length > 3) {
-      user.passwordHistory.shift();
-    }
-
-    const salt = await bcrypt.genSalt(12);
-    user.passwordHash = await bcrypt.hash(newPassword, salt);
-    
-    // Invalidate old refresh tokens (Force logout on other devices)
-    const currentRefreshToken = req.cookies.socialiq_refresh_token;
-    if (currentRefreshToken) {
-      const hashedCurrentToken = hashToken(currentRefreshToken);
-      await Session.updateMany(
-        { userId: user._id, tokenHash: { $ne: hashedCurrentToken } },
-        { isRevoked: true }
-      );
-    } else {
-      await Session.updateMany({ userId: user._id }, { isRevoked: true });
-    }
-
-    await user.save();
-
-    await logSecurityEvent({
-      userId: user._id,
-      action: "password_changed",
-      details: "User changed password successfully.",
-      email: user.email,
-    });
-
-    // Send confirmation email
-    try {
-      const emailHtml = getPasswordChangedTemplate(user.name);
-      await sendEmailReport(user.email, "Social IQ - Password Changed", emailHtml);
-    } catch (mailError) {
-      console.error("[Mail Delivery Warning] Failed to dispatch password changed confirmation email:", mailError.message);
-    }
-
-    res.json({
-      success: true,
-      message: "Password changed successfully",
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
-// @desc    Google Sign-In callback
-// @route   POST /api/auth/google
-// @access  Public
-export const googleSignIn = async (req, res, next) => {
-  const { idToken } = req.body;
-  if (!idToken) {
-    return res.status(400).json({
-      success: false,
-      message: "Google ID Token is required.",
-    });
-  }
-
-  try {
-    const payload = await verifyGoogleIdToken(idToken);
-    
-    const { sub, email, name, picture } = payload;
-    let user = await User.findOne({ email });
-
-    if (!user) {
-      // Create a verified Google user (no local password required initially)
-      user = await User.create({
-        name,
-        email,
-        avatar: picture || `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(name)}`,
-        isVerified: true, // Google emails are pre-verified
-        isEmailVerified: true,
-        provider: "google",
-        googleId: sub,
-      });
-    } else {
-      // Safe merge: user exists. Link Google ID and sync details
-      user.provider = "google";
-      user.googleId = sub;
-      user.isEmailVerified = true;
-      user.isVerified = true; // legacy sync
-      if (!user.avatar) {
-        user.avatar = picture || `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(name)}`;
-      }
-      await user.save();
-    }
-
-    await sendTokenResponse(user, 200, req, res);
-  } catch (error) {
-    console.error("[Google OAuth Error]", error.message);
-    res.status(400).json({
-      success: false,
-      message: "Google Sign-In authentication failed. Token is invalid or expired.",
-    });
-  }
-};
-
-// @desc    Connect Google Account to current user
-// @route   POST /api/auth/google/connect
-// @access  Private
-export const googleConnect = async (req, res, next) => {
-  const { idToken } = req.body;
-  if (!idToken) {
-    return res.status(400).json({
-      success: false,
-      message: "Google ID Token is required.",
-    });
-  }
-
-  try {
-    const payload = await verifyGoogleIdToken(idToken);
-
-    const { sub, email } = payload;
-    const user = await User.findById(req.user._id);
-
-    // Verify if this Google account is already linked to another user
-    const existingLink = await User.findOne({ googleId: sub, _id: { $ne: user._id } });
-    if (existingLink) {
-      return res.status(400).json({
-        success: false,
-        message: "This Google account is already linked to another Social IQ user.",
-      });
-    }
-
-    user.googleId = sub;
-    user.provider = "google"; // Enable Google login compatibility
-    await user.save();
-
-    await logSecurityEvent({
-      userId: user._id,
-      action: "google_connected",
-      details: `Google account linked: ${email}`,
+    await sendEmailReport({
+      to: user.email,
+      subject: "Account Deleted",
+      html: getAccountDeletedTemplate(user.name),
     });
 
     res.json({
       success: true,
-      message: "Google account successfully linked.",
-      data: {
-        googleId: user.googleId,
-        provider: user.provider,
-      },
-    });
-  } catch (error) {
-    res.status(400).json({
-      success: false,
-      message: "Linking Google account failed.",
-    });
-  }
-};
-
-// @desc    Disconnect Google Account
-// @route   POST /api/auth/google/disconnect
-// @access  Private
-export const googleDisconnect = async (req, res, next) => {
-  try {
-    const user = await User.findById(req.user._id);
-
-    // Security check: Must have a password set to allow unlinking Google
-    if (!user.passwordHash) {
-      return res.status(400).json({
-        success: false,
-        message: "You must set a local password before unlinking your Google account.",
-      });
-    }
-
-    user.googleId = undefined;
-    user.provider = "local";
-    await user.save();
-
-    await logSecurityEvent({
-      userId: user._id,
-      action: "google_disconnected",
-      details: "Google account unlinked successfully.",
-    });
-
-    res.json({
-      success: true,
-      message: "Google account successfully unlinked.",
-      data: {
-        provider: user.provider,
-      },
+      message: "Account deleted successfully",
     });
   } catch (error) {
     next(error);
