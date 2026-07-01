@@ -1,54 +1,50 @@
-import { createContext, useContext, useState, useEffect } from "react";
-import client, { fetchCsrfToken } from "../api/client";
+import { createContext, useContext, useState, useEffect, useCallback } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import client, {
+  fetchCsrfToken,
+  setAccessToken,
+  setCsrfToken,
+  syncAuthFromResponse,
+} from "../api/client";
 
 const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
-  const [token, setToken] = useState(() => {
-    if (typeof window !== "undefined") {
-      return localStorage.getItem("token");
-    }
-    return null;
-  });
+  const [token, setToken] = useState(null);
   const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
 
-  // Initialize Auth state
+  const clearAuthState = useCallback(() => {
+    setAccessToken(null);
+    setCsrfToken(null);
+    setToken(null);
+    setUser(null);
+    queryClient.clear();
+  }, [queryClient]);
+
+  const applyAuthResponse = useCallback((data) => {
+    const result = syncAuthFromResponse(data);
+    if (result?.token) {
+      setToken(result.token);
+      setUser(result.userData);
+      return true;
+    }
+    return false;
+  }, []);
+
   useEffect(() => {
     const initializeAuth = async () => {
-      // Initialize CSRF session first
-      await fetchCsrfToken();
-
-      const storedToken = typeof window !== "undefined" ? localStorage.getItem("token") : null;
-      if (storedToken) {
-        setToken(storedToken);
-      }
       try {
-        // Verify/refresh user data from backend using token or cookies
-        const res = await client.get("/api/auth/me");
-        if (res.data && res.data.success) {
-          setUser(res.data.data);
-          if (typeof window !== "undefined") {
-            localStorage.setItem("socialiq_user", JSON.stringify(res.data.data));
-          }
-          const currentToken = typeof window !== "undefined" ? localStorage.getItem("token") : null;
-          setToken(currentToken);
+        await fetchCsrfToken();
+        const res = await client.post("/api/auth/refresh");
+        if (res.data?.success) {
+          applyAuthResponse(res.data.data);
         } else {
-          if (typeof window !== "undefined") {
-            localStorage.removeItem("token");
-            localStorage.removeItem("socialiq_user");
-          }
-          setUser(null);
-          setToken(null);
+          clearAuthState();
         }
-      } catch (err) {
-        console.log("No active session or session expired.");
-        if (typeof window !== "undefined") {
-          localStorage.removeItem("token");
-          localStorage.removeItem("socialiq_user");
-        }
-        setUser(null);
-        setToken(null);
+      } catch {
+        clearAuthState();
       } finally {
         setLoading(false);
       }
@@ -56,74 +52,54 @@ export const AuthProvider = ({ children }) => {
 
     initializeAuth();
 
-    // Listen for custom logout events dispatched by Axios interceptor
     const handleAuthLogout = () => {
-      if (typeof window !== "undefined") {
-        localStorage.removeItem("token");
-        localStorage.removeItem("socialiq_user");
-      }
-      setUser(null);
-      setToken(null);
+      clearAuthState();
     };
 
     window.addEventListener("auth-logout", handleAuthLogout);
-    return () => {
-      window.removeEventListener("auth-logout", handleAuthLogout);
-    };
-  }, []);
+    return () => window.removeEventListener("auth-logout", handleAuthLogout);
+  }, [applyAuthResponse, clearAuthState]);
 
-  // Register user
   const register = async (name, email, password) => {
     try {
       const res = await client.post("/api/auth/register", { name, email, password });
-      if (res.data && res.data.success) {
-        const { token: userToken, ...userData } = res.data.data;
-        if (typeof window !== "undefined") {
-          localStorage.setItem("token", userToken);
-          localStorage.setItem("socialiq_user", JSON.stringify(userData));
-        }
-        setUser(userData);
-        setToken(userToken);
+      if (res.data?.success) {
+        applyAuthResponse(res.data.data);
+        queryClient.clear();
         return { success: true };
       }
     } catch (err) {
-      const msg = err.response?.data?.message || err.response?.data?.errors?.[0]?.message || "Registration failed";
+      const msg =
+        err.response?.data?.message ||
+        err.response?.data?.errors?.[0]?.message ||
+        "Registration failed";
       return { success: false, message: msg };
     }
   };
 
-  // Login user
   const login = async (email, password, rememberMe = false) => {
     try {
       const res = await client.post("/api/auth/login", { email, password, rememberMe });
-      if (res.data && res.data.success) {
-        const { token: userToken, ...userData } = res.data.data;
-        if (typeof window !== "undefined") {
-          localStorage.setItem("token", userToken);
-          localStorage.setItem("socialiq_user", JSON.stringify(userData));
-        }
-        setUser(userData);
-        setToken(userToken);
+      if (res.data?.success) {
+        applyAuthResponse(res.data.data);
+        queryClient.clear();
         return { success: true };
       }
     } catch (err) {
-      const msg = err.response?.data?.message || err.response?.data?.errors?.[0]?.message || "Login failed";
+      const msg =
+        err.response?.data?.message ||
+        err.response?.data?.errors?.[0]?.message ||
+        "Login failed";
       return { success: false, message: msg };
     }
   };
 
-  // Google Login
   const googleLogin = async (idToken) => {
     try {
       const res = await client.post("/api/auth/google", { idToken });
-      if (res.data && res.data.success) {
-        const { token: userToken, ...userData } = res.data.data;
-        if (typeof window !== "undefined") {
-          localStorage.setItem("token", userToken);
-          localStorage.setItem("socialiq_user", JSON.stringify(userData));
-        }
-        setUser(userData);
-        setToken(userToken);
+      if (res.data?.success) {
+        applyAuthResponse(res.data.data);
+        queryClient.clear();
         return { success: true };
       }
     } catch (err) {
@@ -132,11 +108,10 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Google Connect
   const connectGoogle = async (idToken) => {
     try {
       const res = await client.post("/api/auth/google/connect", { idToken });
-      if (res.data && res.data.success) {
+      if (res.data?.success) {
         updateUser(res.data.data);
         return { success: true };
       }
@@ -146,11 +121,10 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Google Disconnect
   const disconnectGoogle = async () => {
     try {
       const res = await client.post("/api/auth/google/disconnect");
-      if (res.data && res.data.success) {
+      if (res.data?.success) {
         updateUser(res.data.data);
         return { success: true };
       }
@@ -160,30 +134,30 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Logout user
   const logout = async () => {
     try {
       await client.post("/api/auth/logout");
     } catch (err) {
       console.warn("Server-side logout warning:", err);
     }
-    if (typeof window !== "undefined") {
-      localStorage.removeItem("token");
-      localStorage.removeItem("socialiq_user");
+    clearAuthState();
+    await fetchCsrfToken();
+  };
+
+  const refreshSession = async () => {
+    try {
+      const res = await client.post("/api/auth/refresh");
+      if (res.data?.success) {
+        applyAuthResponse(res.data.data);
+        return { success: true };
+      }
+    } catch {
+      return { success: false };
     }
-    setUser(null);
-    setToken(null);
   };
 
   const updateUser = (newData) => {
-    setUser((prev) => {
-      if (!prev) return null;
-      const updated = { ...prev, ...newData };
-      if (typeof window !== "undefined") {
-        localStorage.setItem("socialiq_user", JSON.stringify(updated));
-      }
-      return updated;
-    });
+    setUser((prev) => (prev ? { ...prev, ...newData } : null));
   };
 
   const value = {
@@ -194,6 +168,7 @@ export const AuthProvider = ({ children }) => {
     googleLogin,
     register,
     logout,
+    refreshSession,
     updateUser,
     connectGoogle,
     disconnectGoogle,

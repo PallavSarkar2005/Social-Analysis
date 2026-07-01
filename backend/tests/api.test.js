@@ -1,13 +1,16 @@
 import request from "supertest";
-import mongoose from "mongoose";
 import app from "../server.js";
 import User from "../models/User.js";
 import Account from "../models/Account.js";
-import ApiUsage from "../models/ApiUsage.js";
-import YoutubeCache from "../models/YoutubeCache.js";
 import Subscription from "../models/Subscription.js";
+import {
+  createTestAgent,
+  syncCsrfFromResponse,
+  agentPost,
+} from "./helpers.js";
 
 describe("Social IQ Backend API & Security Verification Suite", () => {
+  let agent;
   let token = "";
   let sampleAccountId = "";
   const testUser = {
@@ -17,17 +20,15 @@ describe("Social IQ Backend API & Security Verification Suite", () => {
   };
 
   beforeAll(async () => {
-    // Clear test-scoped records
     await User.deleteMany({ email: /@test.com$/ });
+    agent = await createTestAgent(app);
   });
 
   afterAll(async () => {
-    // Clean up created entities
     await User.deleteMany({ email: testUser.email });
     if (sampleAccountId) {
       await Account.deleteMany({ _id: sampleAccountId });
     }
-    await mongoose.connection.close();
   });
 
   // ==========================================
@@ -35,13 +36,12 @@ describe("Social IQ Backend API & Security Verification Suite", () => {
   // ==========================================
   describe("Authentication Flow", () => {
     it("should successfully register a new user", async () => {
-      const res = await request(app)
-        .post("/api/auth/register")
-        .send(testUser);
+      const res = await agentPost(agent, "/api/auth/register").send(testUser);
 
       expect(res.status).toBe(201);
       expect(res.body.success).toBe(true);
       expect(res.body.data.token).toBeDefined();
+      syncCsrfFromResponse(agent, res);
 
       const user = await User.findOne({ email: testUser.email });
       if (user) {
@@ -56,26 +56,23 @@ describe("Social IQ Backend API & Security Verification Suite", () => {
     });
 
     it("should fail registration on duplicate email", async () => {
-      const res = await request(app)
-        .post("/api/auth/register")
-        .send(testUser);
+      const res = await agentPost(agent, "/api/auth/register").send(testUser);
 
       expect(res.status).toBe(400);
       expect(res.body.success).toBe(false);
     });
 
     it("should login successfully and return a token", async () => {
-      const res = await request(app)
-        .post("/api/auth/login")
-        .send({
-          email: testUser.email,
-          password: testUser.password,
-        });
+      const res = await agentPost(agent, "/api/auth/login").send({
+        email: testUser.email,
+        password: testUser.password,
+      });
 
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
       expect(res.body.data.token).toBeDefined();
       token = res.body.data.token;
+      syncCsrfFromResponse(agent, res);
     });
 
     it("should reject access to protected routes with missing token", async () => {
@@ -106,9 +103,10 @@ describe("Social IQ Backend API & Security Verification Suite", () => {
   // ==========================================
   describe("Account Operations", () => {
     it("should register a new YouTube account node", async () => {
-      const res = await request(app)
+      const res = await agent
         .post("/api/accounts")
         .set("Authorization", `Bearer ${token}`)
+        .set("X-XSRF-TOKEN", agent.csrfToken)
         .send({
           name: "PewDiePie Channel",
           platform: "youtube",
@@ -125,9 +123,10 @@ describe("Social IQ Backend API & Security Verification Suite", () => {
     });
 
     it("should reject account registration with invalid formats", async () => {
-      const res = await request(app)
+      const res = await agent
         .post("/api/accounts")
         .set("Authorization", `Bearer ${token}`)
+        .set("X-XSRF-TOKEN", agent.csrfToken)
         .send({
           name: "",
           platform: "unsupported-platform",
@@ -158,9 +157,10 @@ describe("Social IQ Backend API & Security Verification Suite", () => {
       // Clear specific cache key first to test fresh run
       const targetUrl = "https://www.youtube.com/@narendramodi";
       
-      const res1 = await request(app)
+      const res1 = await agent
         .post("/api/analyzer/youtube")
         .set("Authorization", `Bearer ${token}`)
+        .set("X-XSRF-TOKEN", agent.csrfToken)
         .send({ url: targetUrl, forceRefresh: true, state: "Gujarat", party: "BJP" });
 
       expect(res1.status).toBe(200);
@@ -169,9 +169,10 @@ describe("Social IQ Backend API & Security Verification Suite", () => {
       expect(res1.body.data.channelId).toBeDefined();
 
       // Subsequent call should fetch from cache
-      const res2 = await request(app)
+      const res2 = await agent
         .post("/api/analyzer/youtube")
         .set("Authorization", `Bearer ${token}`)
+        .set("X-XSRF-TOKEN", agent.csrfToken)
         .send({ url: targetUrl, forceRefresh: false, state: "Gujarat", party: "BJP" });
 
       expect(res2.status).toBe(200);
@@ -186,12 +187,10 @@ describe("Social IQ Backend API & Security Verification Suite", () => {
   // ==========================================
   describe("Security Payloads & Parameter Injection", () => {
     it("should reject malicious SQL/NoSQL payload in login credentials", async () => {
-      const res = await request(app)
-        .post("/api/auth/login")
-        .send({
-          email: { "$gt": "" },
-          password: "password",
-        });
+      const res = await agentPost(agent, "/api/auth/login").send({
+        email: { "$gt": "" },
+        password: "password",
+      });
 
       // Express mongo sanitize should filter this or validation fail
       expect(res.status).toBe(400);
@@ -200,9 +199,10 @@ describe("Social IQ Backend API & Security Verification Suite", () => {
 
     it("should sanitize and reject XSS injection script payload in name input", async () => {
       const maliciousName = "<script>alert('xss')</script> Malicious Node";
-      const res = await request(app)
+      const res = await agent
         .post("/api/accounts")
         .set("Authorization", `Bearer ${token}`)
+        .set("X-XSRF-TOKEN", agent.csrfToken)
         .send({
           name: maliciousName,
           platform: "youtube",

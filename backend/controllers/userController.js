@@ -1,6 +1,7 @@
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import User from "../models/User.js";
+import Session from "../models/Session.js";
 import Account from "../models/Account.js";
 import TrackedCompetitor from "../models/TrackedCompetitor.js";
 import SavedReport from "../models/SavedReport.js";
@@ -204,13 +205,14 @@ export const deleteAccount = async (req, res, next) => {
     await Snapshot.deleteMany({ userId: user._id });
     await EmailSchedule.deleteMany({ userId: user._id });
     await ActivityLog.deleteMany({ userId: user._id });
+    await Session.deleteMany({ userId: user._id });
 
-    // Finally delete User (which also deletes subdocument refreshTokens)
     await user.deleteOne();
 
-    // Clear session cookies
-    res.clearCookie("socialiq_access_token");
-    res.clearCookie("socialiq_refresh_token");
+    const { getAuthCookieOptions } = await import("../utils/cookieConfig.js");
+    const cookieOptions = getAuthCookieOptions(req);
+    res.clearCookie("socialiq_access_token", cookieOptions);
+    res.clearCookie("socialiq_refresh_token", cookieOptions);
 
     res.json({
       success: true,
@@ -229,18 +231,33 @@ export const getActiveSessions = async (req, res, next) => {
     const currentRefreshToken = req.cookies.socialiq_refresh_token;
     const hashedCurrentToken = currentRefreshToken ? hashToken(currentRefreshToken) : null;
 
-    const formattedSessions = req.user.refreshTokens
-      .filter((session) => !session.isRevoked && session.expiresAt > new Date())
-      .map((session) => ({
+    const dbSessions = await Session.find({
+      userId: req.user._id,
+      isRevoked: false,
+      expiresAt: { $gt: new Date() },
+    }).sort({ lastActivity: -1 });
+
+    const now = Date.now();
+    const formattedSessions = dbSessions.map((session) => {
+      const lastActiveMs = now - new Date(session.lastActivity || session.createdAt).getTime();
+      const isActive = lastActiveMs < 30 * 60 * 1000;
+
+      return {
         _id: session._id,
         ipAddress: session.ipAddress || "Unknown",
+        location: session.location || "Unknown Location",
         userAgent: session.userAgent || "Unknown",
         browser: session.browser || "Unknown",
         device: session.device || "Unknown",
         os: session.os || "Unknown",
         createdAt: session.createdAt,
-        isCurrent: session.token === hashedCurrentToken,
-      }));
+        loggedInAt: session.createdAt,
+        lastActivity: session.lastActivity || session.createdAt,
+        isRememberMe: session.isRememberMe || false,
+        status: isActive ? "active" : "offline",
+        isCurrent: session.tokenHash === hashedCurrentToken,
+      };
+    });
 
     res.json({
       success: true,
@@ -257,57 +274,34 @@ export const getActiveSessions = async (req, res, next) => {
 export const revokeSession = async (req, res, next) => {
   try {
     const sessionId = req.params.id;
-    const user = await User.findById(req.user._id);
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: "User not found",
-      });
-    }
+    const session = await Session.findById(sessionId);
 
-    const currentRefreshToken = req.cookies.socialiq_refresh_token;
-    const hashedCurrentToken = currentRefreshToken ? hashToken(currentRefreshToken) : null;
-    const sessionToRevoke = user.refreshTokens.id(sessionId);
-
-    if (!sessionToRevoke) {
+    if (!session || session.userId.toString() !== req.user._id.toString()) {
       return res.status(404).json({
         success: false,
         message: "Session not found",
       });
     }
 
-    const isCurrent = sessionToRevoke.token === hashedCurrentToken;
+    const currentRefreshToken = req.cookies.socialiq_refresh_token;
+    const hashedCurrentToken = currentRefreshToken ? hashToken(currentRefreshToken) : null;
+    const isCurrent = session.tokenHash === hashedCurrentToken;
 
-    // Filter out the session
-    user.refreshTokens = user.refreshTokens.filter(
-      (t) => t._id.toString() !== sessionId
-    );
-    await user.save();
+    // Revoke the session document
+    session.isRevoked = true;
+    await session.save();
 
     await logSecurityEvent({
-      userId: user._id,
+      userId: req.user._id,
       action: "session_revoked",
       details: `Revoked session ${sessionId}. Current session: ${isCurrent}`,
     });
 
     if (isCurrent) {
-      const host = req?.headers?.host || "";
-      const isLocal = host.includes("localhost") || host.includes("127.0.0.1");
-      const isProd = process.env.NODE_ENV === "production" || (host && !isLocal);
-      
-      const cookieOptions = {
-        httpOnly: true,
-        secure: isProd,
-        sameSite: isProd ? "none" : "lax",
-        path: "/",
-      };
+      const { getAuthCookieOptions } = await import("../utils/cookieConfig.js");
+      const cookieOptions = getAuthCookieOptions(req);
       res.clearCookie("socialiq_access_token", cookieOptions);
       res.clearCookie("socialiq_refresh_token", cookieOptions);
-      res.clearCookie("XSRF-TOKEN", {
-        secure: isProd,
-        sameSite: isProd ? "none" : "lax",
-        path: "/",
-      });
     }
 
     res.json({

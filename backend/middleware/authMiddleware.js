@@ -1,5 +1,6 @@
 import jwt from "jsonwebtoken";
 import User from "../models/User.js";
+import Session from "../models/Session.js";
 
 export const protect = async (req, res, next) => {
   let token;
@@ -25,6 +26,33 @@ export const protect = async (req, res, next) => {
     // Verify token
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
+    if (!decoded.sessionId) {
+      return res.status(401).json({
+        success: false,
+        message: "Not authorized, invalid token session format",
+      });
+    }
+
+    // Verify session exists and is active in DB
+    const session = await Session.findOne({
+      _id: decoded.sessionId,
+      isRevoked: false,
+      expiresAt: { $gt: new Date() },
+    });
+
+    if (!session) {
+      return res.status(401).json({
+        success: false,
+        message: "Not authorized, session expired or revoked",
+      });
+    }
+
+    // Throttle lastActivity updates to once per minute
+    if (!session.lastActivity || new Date() - new Date(session.lastActivity) > 60 * 1000) {
+      session.lastActivity = new Date();
+      await session.save();
+    }
+
     // Get user from the token, attach to request
     req.user = await User.findById(decoded.id).select("-passwordHash");
     if (!req.user) {
@@ -34,6 +62,7 @@ export const protect = async (req, res, next) => {
       });
     }
 
+    req.sessionId = session._id;
     next();
   } catch (error) {
     console.error("Auth middleware error:", error.message);
@@ -65,7 +94,23 @@ export const optionalAuth = async (req, res, next) => {
   if (token) {
     try {
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
-      req.user = await User.findById(decoded.id).select("-passwordHash");
+      if (decoded.sessionId) {
+        const session = await Session.findOne({
+          _id: decoded.sessionId,
+          isRevoked: false,
+          expiresAt: { $gt: new Date() },
+        });
+
+        if (session) {
+          req.user = await User.findById(decoded.id).select("-passwordHash");
+          req.sessionId = session._id;
+
+          if (!session.lastActivity || new Date() - new Date(session.lastActivity) > 60 * 1000) {
+            session.lastActivity = new Date();
+            await session.save();
+          }
+        }
+      }
     } catch (error) {
       // Ignore token verification failure for optional authentication
     }

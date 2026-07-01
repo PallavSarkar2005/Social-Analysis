@@ -35,6 +35,8 @@ export default function SettingsLayout({
   onUpdatePrefs,
   onUpdateSchedule,
   onRevokeSession,
+  onLogoutOther,
+  onLogoutAll,
   onLogoutEverywhere,
   onDeleteAccount,
 }) {
@@ -76,6 +78,8 @@ export default function SettingsLayout({
           <Sessions
             sessions={sessions}
             onRevokeSession={onRevokeSession}
+            onLogoutOther={onLogoutOther}
+            onLogoutAll={onLogoutAll}
             loadingSessions={loadingSessions}
           />
         );

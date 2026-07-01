@@ -2,6 +2,7 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import User from "../models/User.js";
+import Session from "../models/Session.js";
 import LoginAttempt from "../models/LoginAttempt.js";
 import { logSecurityEvent } from "../utils/securityLogger.js";
 import { sendEmailReport } from "../services/emailService.js";
@@ -13,16 +14,63 @@ import {
   getAccountDeletedTemplate,
   getVerifyEmailTemplate,
 } from "../services/emailTemplateService.js";
+import {
+  getAuthCookieOptions,
+  getCsrfCookieOptions,
+  getAppUrl,
+} from "../utils/cookieConfig.js";
 
 // Helper to hash tokens for secure storage
 const hashToken = (token) => {
   return crypto.createHash("sha256").update(token).digest("hex");
 };
 
-const checkIsProd = (req) => {
-  const host = req?.headers?.host || "";
-  const isLocal = host.includes("localhost") || host.includes("127.0.0.1");
-  return process.env.NODE_ENV === "production" || (host && !isLocal);
+// Geolocation helper
+const getIpLocation = async (ip) => {
+  if (!ip || ip === "127.0.0.1" || ip === "::1" || ip.startsWith("192.168.") || ip.startsWith("10.") || ip.startsWith("127.")) {
+    return "Localhost";
+  }
+  try {
+    const response = await axios.get(`http://ip-api.com/json/${ip}`, { timeout: 2000 });
+    if (response.data && response.data.status === "success") {
+      const { city, regionName, country } = response.data;
+      return `${city || ""}, ${regionName || ""}, ${country || ""}`.replace(/^,\s*/, "").replace(/,\s*$/, "");
+    }
+  } catch (error) {
+    console.error(`Failed to geolocate IP ${ip}:`, error.message);
+  }
+  return "Unknown Location";
+};
+
+const verifyGoogleIdToken = async (idToken) => {
+  if (
+    idToken === "dummy-developer-token" &&
+    (process.env.NODE_ENV === "test" || process.env.NODE_ENV === "development")
+  ) {
+    return {
+      sub: "dev-google-sub-123",
+      email: "dev.user@socialiq.ai",
+      name: "Developer Node",
+      picture: "https://api.dicebear.com/7.x/adventurer/svg?seed=dev",
+    };
+  }
+
+  const ticket = await axios.get(
+    `https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(idToken)}`,
+    { timeout: 5000 }
+  );
+  const payload = ticket.data;
+
+  const clientId = process.env.GOOGLE_CLIENT_ID;
+  if (clientId && payload.aud !== clientId) {
+    throw new Error("Google token audience mismatch");
+  }
+
+  if (!payload.email) {
+    throw new Error("Google token missing email");
+  }
+
+  return payload;
 };
 
 // GET /api/auth/csrf
@@ -87,45 +135,37 @@ const parseUserAgent = (userAgentString) => {
 // Helper to issue access & refresh tokens via secure httpOnly cookies
 const sendTokenResponse = async (user, statusCode, req, res) => {
   const rememberMe = req.body?.rememberMe === true;
-  console.log(`[sendTokenResponse] Issuing tokens. rememberMe: ${rememberMe}`);
-
-  const accessToken = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
-    expiresIn: "15m", // 15 minutes
-  });
-
-  const refreshTokenVal = crypto.randomBytes(40).toString("hex");
-  const hashedRefreshToken = hashToken(refreshTokenVal);
-  const familyId = crypto.randomBytes(20).toString("hex");
-  
-  const expiresAt = new Date();
-  if (rememberMe) {
-    expiresAt.setDate(expiresAt.getDate() + 30); // 30 days
-  } else {
-    expiresAt.setDate(expiresAt.getDate() + 7); // 7 days
-  }
 
   const ipAddressRaw = req.headers["x-forwarded-for"] || req.socket.remoteAddress || "0.0.0.0";
   const ipAddress = Array.isArray(ipAddressRaw) ? ipAddressRaw[0] : ipAddressRaw.split(",")[0].trim();
   const userAgent = req.headers["user-agent"] || "";
   const { browser, os, device } = parseUserAgent(userAgent);
 
-  console.log("[sendTokenResponse] Saving refresh token metadata...");
-  // Push the new refresh token to user's tokens array
-  user.refreshTokens.push({
-    token: hashedRefreshToken,
+  // Geolocate IP (best effort)
+  const location = await getIpLocation(ipAddress);
+
+  const expiresAt = new Date();
+  if (rememberMe) {
+    expiresAt.setDate(expiresAt.getDate() + 30); // 30 days
+  } else {
+    expiresAt.setDate(expiresAt.getDate() + 1); // 24 hours
+  }
+
+  const refreshTokenVal = crypto.randomBytes(40).toString("hex");
+  const hashedRefreshToken = hashToken(refreshTokenVal);
+
+  const session = await Session.create({
+    userId: user._id,
+    tokenHash: hashedRefreshToken,
     expiresAt,
-    familyId,
     ipAddress,
+    location,
     userAgent,
     browser,
     device,
     os,
+    isRememberMe: rememberMe,
   });
-
-  // Keep user refreshTokens size bounded (max 50 active tokens)
-  if (user.refreshTokens.length > 50) {
-    user.refreshTokens.shift();
-  }
 
   // Update user lastLogin & loginHistory
   user.lastLogin = new Date();
@@ -144,51 +184,38 @@ const sendTokenResponse = async (user, statusCode, req, res) => {
     user.loginHistory.shift();
   }
   
-  console.log("[sendTokenResponse] Saving User document...");
   await user.save();
-  console.log("[sendTokenResponse] User document saved.");
 
-  const isProd = checkIsProd(req);
+  const accessToken = jwt.sign(
+    { id: user._id, sessionId: session._id },
+    process.env.JWT_SECRET,
+    { expiresIn: "15m" }
+  );
 
-  console.log("[sendTokenResponse] Setting HTTP-only cookies...");
-  // Set HTTP-only secure cookie configurations
+  const authCookieBase = getAuthCookieOptions(req);
+
   res.cookie("socialiq_access_token", accessToken, {
-    httpOnly: true,
-    secure: isProd,
-    sameSite: isProd ? "none" : "lax",
+    ...authCookieBase,
     maxAge: 15 * 60 * 1000,
   });
 
   res.cookie("socialiq_refresh_token", refreshTokenVal, {
-    httpOnly: true,
-    secure: isProd,
-    sameSite: isProd ? "none" : "lax",
-    maxAge: rememberMe ? 30 * 24 * 60 * 60 * 1000 : 7 * 24 * 60 * 60 * 1000,
+    ...authCookieBase,
+    maxAge: rememberMe ? 30 * 24 * 60 * 60 * 1000 : 24 * 60 * 60 * 1000,
   });
 
-  // Verify and set CSRF cookie
-  let csrfToken = req.cookies?.["XSRF-TOKEN"];
-  if (!csrfToken) {
-    csrfToken = crypto.randomBytes(32).toString("hex");
-    res.cookie("XSRF-TOKEN", csrfToken, {
-      secure: isProd,
-      sameSite: isProd ? "none" : "lax",
-      httpOnly: false,
-      path: "/",
-    });
-  }
+  // CSRF token rotation on auth status change — client must sync in-memory token from response
+  const newCsrfToken = crypto.randomBytes(32).toString("hex");
+  res.cookie("XSRF-TOKEN", newCsrfToken, getCsrfCookieOptions(req));
 
-  console.log("[sendTokenResponse] Logging security event...");
-  // Log successful login audit
   await logSecurityEvent({
     userId: user._id,
     action: "login_success",
-    details: `User successfully logged in. Provider: ${user.provider || "local"}`,
+    details: `User authenticated. Provider: ${user.provider || "local"}. Session ID: ${session._id}`,
     ipAddress,
     email: user.email,
   });
 
-  console.log("[sendTokenResponse] Returning success response.");
   res.status(statusCode).json({
     success: true,
     data: {
@@ -199,6 +226,7 @@ const sendTokenResponse = async (user, statusCode, req, res) => {
       plan: user.plan,
       avatar: user.avatar,
       token: accessToken,
+      csrfToken: newCsrfToken,
     },
   });
 };
@@ -207,27 +235,20 @@ const sendTokenResponse = async (user, statusCode, req, res) => {
 // @route   POST /api/auth/register
 // @access  Public
 export const register = async (req, res, next) => {
-  console.log("[Register] Request received. Payload:", { name: req.body?.name, email: req.body?.email });
   try {
     const { name, email, password } = req.body;
 
-    console.log("[Register] Executing User lookup...");
     const userExists = await User.findOne({ email });
     if (userExists) {
-      console.log("[Register] Failed: User already exists.");
-      // Brute-force protection/Email enumeration: return a 400 error in standard API
       return res.status(400).json({
         success: false,
         message: "User already exists with this email",
       });
     }
 
-    console.log("[Register] Hashing password...");
-    // Hash password with cost factor >= 12
     const salt = await bcrypt.genSalt(12);
     const passwordHash = await bcrypt.hash(password, salt);
 
-    console.log("[Register] Saving user to database...");
     const user = await User.create({
       name,
       email,
@@ -238,12 +259,9 @@ export const register = async (req, res, next) => {
       isEmailVerified: true,
       isVerified: true,
     });
-    console.log(`[Register] User created successfully. ID: ${user._id}`);
 
-    console.log("[Register] Sending token response...");
     await sendTokenResponse(user, 201, req, res);
   } catch (error) {
-    console.error("[Register Error]:", error);
     next(error);
   }
 };
@@ -255,11 +273,8 @@ export const login = async (req, res, next) => {
   const ipAddressRaw = req.headers["x-forwarded-for"] || req.socket.remoteAddress || "0.0.0.0";
   const ipAddress = Array.isArray(ipAddressRaw) ? ipAddressRaw[0] : ipAddressRaw.split(",")[0].trim();
   const { email, password } = req.body;
-  console.log("[Login] Request received. IP:", ipAddress, "Email:", email);
 
   try {
-    // 1. Check for active lockout
-    console.log("[Login] Checking login lockout attempt...");
     const attempt = await LoginAttempt.findOne({ email, ipAddress });
     if (attempt && attempt.lockoutUntil && attempt.lockoutUntil > new Date()) {
       const waitSecs = Math.ceil((attempt.lockoutUntil - new Date()) / 1000);
@@ -271,56 +286,43 @@ export const login = async (req, res, next) => {
         email,
       });
 
-      console.log(`[Login] Failed: Account is locked out for ${waitSecs} seconds.`);
       return res.status(423).json({
         success: false,
         message: `Account temporarily locked due to excessive failed attempts. Try again in ${waitSecs} seconds.`,
       });
     }
 
-    // 2. Find user
-    console.log("[Login] Executing User lookup...");
     const user = await User.findOne({ email });
     if (!user) {
-      console.log(`[Login] Failed: User not found: ${email}`);
       await handleFailedLogin(email, ipAddress);
       return res.status(401).json({
         success: false,
         message: "Invalid credentials",
       });
     }
-    console.log(`[Login] User found: ${user._id}. Verifying password...`);
 
-    // 3. Verify password if user is local provider
     if (user.provider === "google" && !user.passwordHash) {
-      console.log("[Login] Failed: Account uses Google provider login.");
       return res.status(400).json({
         success: false,
         message: "This account logs in with Google. Please use Sign in with Google.",
       });
     }
 
-    console.log("[Login] Comparing passwords...");
     const isMatch = await bcrypt.compare(password, user.passwordHash);
     if (!isMatch) {
-      console.log("[Login] Failed: Password mismatch.");
       await handleFailedLogin(email, ipAddress);
       return res.status(401).json({
         success: false,
         message: "Invalid credentials",
       });
     }
-    console.log("[Login] Password matched. Checking verification status...");
 
-    // 4. Successful login: reset failed counters
     if (attempt) {
       await attempt.deleteOne();
     }
 
-    console.log("[Login] Sending token response...");
     await sendTokenResponse(user, 200, req, res);
   } catch (error) {
-    console.error("[Login Error]:", error);
     next(error);
   }
 };
@@ -372,13 +374,42 @@ export const refresh = async (req, res, next) => {
 
     const hashedRefreshToken = hashToken(refreshTokenVal);
 
-    // Look up the user that owns this refresh token
-    const user = await User.findOne({ "refreshTokens.token": hashedRefreshToken });
+    // 1. Find Session with this tokenHash or check if it was reused (matches oldTokenHashes)
+    let session = await Session.findOne({
+      tokenHash: hashedRefreshToken,
+      isRevoked: false,
+      expiresAt: { $gt: new Date() },
+    });
 
-    if (!user) {
+    if (!session) {
+      // Replay check
+      const reusedSession = await Session.findOne({
+        oldTokenHashes: hashedRefreshToken,
+      });
+
+      if (reusedSession) {
+        // Immediate response: Revoke all active sessions for this user!
+        await Session.updateMany({ userId: reusedSession.userId }, { isRevoked: true });
+        
+        res.clearCookie("socialiq_access_token");
+        res.clearCookie("socialiq_refresh_token");
+
+        await logSecurityEvent({
+          userId: reusedSession.userId,
+          action: "refresh_token_reuse_breach",
+          details: `Reused refresh token submitted! Revoking all sessions for user ${reusedSession.userId}.`,
+          ipAddress,
+        });
+
+        return res.status(401).json({
+          success: false,
+          message: "Breach detected: Session has already been refreshed. Terminating all logins.",
+        });
+      }
+
       await logSecurityEvent({
         action: "refresh_failed_invalid_token",
-        details: "Refresh attempt with unrecognized refresh token.",
+        details: "Refresh attempt with unrecognized or expired refresh token.",
         ipAddress,
       });
       return res.status(401).json({
@@ -387,96 +418,55 @@ export const refresh = async (req, res, next) => {
       });
     }
 
-    // Locate the refresh token document inside user
-    const tokenDoc = user.refreshTokens.find((t) => t.token === hashedRefreshToken);
-
-    if (!tokenDoc) {
+    const user = await User.findById(session.userId);
+    if (!user) {
       return res.status(401).json({
         success: false,
-        message: "Invalid refresh token",
+        message: "User not found",
       });
     }
 
-    // Reuse Detection: If token is already revoked, breach is assumed!
-    if (tokenDoc.isRevoked) {
-      // Immediate response: Revoke all active sessions for this user!
-      user.refreshTokens = [];
-      await user.save();
-      
-      res.clearCookie("socialiq_access_token");
-      res.clearCookie("socialiq_refresh_token");
-
-      await logSecurityEvent({
-        userId: user._id,
-        action: "refresh_token_reuse_breach",
-        details: "Reused refresh token submitted! Revoking all sessions for this user.",
-        ipAddress,
-      });
-
-      return res.status(401).json({
-        success: false,
-        message: "Breach detected: Session has already been refreshed. Terminating all logins.",
-      });
-    }
-
-    // Check expiration
-    if (tokenDoc.expiresAt < new Date()) {
-      user.refreshTokens = user.refreshTokens.filter((t) => t.token !== hashedRefreshToken);
-      await user.save();
-      return res.status(401).json({
-        success: false,
-        message: "Refresh token has expired",
-      });
-    }
-
-    // Perform rotation: revoke current, issue new refresh token
+    // Perform rotation: generate new refresh token, update tokenHash on the session
     const newRefreshTokenVal = crypto.randomBytes(40).toString("hex");
     const newHashedToken = hashToken(newRefreshTokenVal);
 
-    tokenDoc.isRevoked = true;
-    tokenDoc.replacedByToken = newHashedToken;
+    session.oldTokenHashes.push(session.tokenHash);
+    if (session.oldTokenHashes.length > 20) {
+      session.oldTokenHashes.shift();
+    }
+    session.tokenHash = newHashedToken;
 
+    const daysToAdd = session.isRememberMe ? 30 : 1;
     const newExpiresAt = new Date();
-    // Maintain expiration from original request rememberMe status (approximate based on token age)
-    const originalMaxAgeDays = tokenDoc.createdAt && tokenDoc.expiresAt
-      ? (tokenDoc.expiresAt - tokenDoc.createdAt) / (24 * 60 * 60 * 1000)
-      : 7;
-    const daysToAdd = originalMaxAgeDays > 10 ? 30 : 7;
     newExpiresAt.setDate(newExpiresAt.getDate() + daysToAdd);
+    session.expiresAt = newExpiresAt;
+    session.lastActivity = new Date();
+    session.ipAddress = ipAddress;
 
-    const userAgent = req.headers["user-agent"] || "";
-    const { browser, os, device } = parseUserAgent(userAgent);
+    await session.save();
 
-    user.refreshTokens.push({
-      token: newHashedToken,
-      expiresAt: newExpiresAt,
-      familyId: tokenDoc.familyId,
-      ipAddress,
-      userAgent,
-      browser,
-      device,
-      os,
-    });
+    const newAccessToken = jwt.sign(
+      { id: user._id, sessionId: session._id },
+      process.env.JWT_SECRET,
+      { expiresIn: "15m" }
+    );
 
-    await user.save();
-
-    const newAccessToken = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
-      expiresIn: "15m",
-    });
-
-    const isProd = checkIsProd(req);
+    const authCookieBase = getAuthCookieOptions(req);
     res.cookie("socialiq_access_token", newAccessToken, {
-      httpOnly: true,
-      secure: isProd,
-      sameSite: isProd ? "none" : "lax",
+      ...authCookieBase,
       maxAge: 15 * 60 * 1000,
     });
 
     res.cookie("socialiq_refresh_token", newRefreshTokenVal, {
-      httpOnly: true,
-      secure: isProd,
-      sameSite: isProd ? "none" : "lax",
+      ...authCookieBase,
       maxAge: daysToAdd * 24 * 60 * 60 * 1000,
+    });
+
+    await logSecurityEvent({
+      userId: user._id,
+      action: "refresh_token_rotated",
+      details: `Refresh token rotated for session ${session._id}`,
+      ipAddress,
     });
 
     res.json({
@@ -505,25 +495,17 @@ export const logout = async (req, res, next) => {
 
     if (refreshTokenVal) {
       const hashedTokenVal = hashToken(refreshTokenVal);
-      await User.updateOne(
-        { "refreshTokens.token": hashedTokenVal },
-        { $pull: { refreshTokens: { token: hashedTokenVal } } }
-      );
+      await Session.updateOne({ tokenHash: hashedTokenVal }, { isRevoked: true });
     }
 
-    const isProd = checkIsProd(req);
-    const cookieOptions = {
-      httpOnly: true,
-      secure: isProd,
-      sameSite: isProd ? "none" : "lax",
-      path: "/",
-    };
+    const cookieOptions = getAuthCookieOptions(req);
     res.clearCookie("socialiq_access_token", cookieOptions);
     res.clearCookie("socialiq_refresh_token", cookieOptions);
-    res.clearCookie("XSRF-TOKEN", {
-      secure: isProd,
-      sameSite: isProd ? "none" : "lax",
-      path: "/",
+
+    await logSecurityEvent({
+      action: "logout",
+      details: "User logged out of current session",
+      ipAddress: req.headers["x-forwarded-for"] || req.socket?.remoteAddress,
     });
 
     res.json({
@@ -540,22 +522,16 @@ export const logout = async (req, res, next) => {
 // @access  Private
 export const logoutAll = async (req, res, next) => {
   try {
-    req.user.refreshTokens = [];
-    await req.user.save();
+    await Session.updateMany({ userId: req.user._id }, { isRevoked: true });
 
-    const isProd = checkIsProd(req);
-    const cookieOptions = {
-      httpOnly: true,
-      secure: isProd,
-      sameSite: isProd ? "none" : "lax",
-      path: "/",
-    };
+    const cookieOptions = getAuthCookieOptions(req);
     res.clearCookie("socialiq_access_token", cookieOptions);
     res.clearCookie("socialiq_refresh_token", cookieOptions);
-    res.clearCookie("XSRF-TOKEN", {
-      secure: isProd,
-      sameSite: isProd ? "none" : "lax",
-      path: "/",
+
+    await logSecurityEvent({
+      userId: req.user._id,
+      action: "logout_all",
+      details: "User logged out of all sessions",
     });
 
     res.json({
@@ -575,15 +551,28 @@ export const logoutOtherDevices = async (req, res, next) => {
     const currentRefreshToken = req.cookies.socialiq_refresh_token;
 
     if (currentRefreshToken) {
+      // Primary: identify current session via the refresh token cookie hash
       const hashedCurrentToken = hashToken(currentRefreshToken);
-      req.user.refreshTokens = req.user.refreshTokens.filter(
-        (t) => t.token === hashedCurrentToken
+      await Session.updateMany(
+        { userId: req.user._id, tokenHash: { $ne: hashedCurrentToken } },
+        { isRevoked: true }
+      );
+    } else if (req.sessionId) {
+      // Fallback: identify current session via the sessionId embedded in the access token JWT
+      await Session.updateMany(
+        { userId: req.user._id, _id: { $ne: req.sessionId } },
+        { isRevoked: true }
       );
     } else {
-      req.user.refreshTokens = [];
+      // No identifiers — revoke all sessions for safety
+      await Session.updateMany({ userId: req.user._id }, { isRevoked: true });
     }
 
-    await req.user.save();
+    await logSecurityEvent({
+      userId: req.user._id,
+      action: "logout_other_devices",
+      details: "User logged out of all other device sessions",
+    });
 
     res.json({
       success: true,
@@ -704,8 +693,7 @@ export const resendVerification = async (req, res, next) => {
     await user.save();
     console.log("[Resend Verification] User saved successfully.");
 
-    const isProd = checkIsProd(req);
-    const appUrl = isProd ? "https://social-analysis-smoky.vercel.app" : "http://localhost:5173";
+    const appUrl = getAppUrl(req);
     const verificationLink = `${appUrl}/verify-email?token=${verificationToken}`;
 
     console.log(`[Resend Verification] Verification Link generated: ${verificationLink}`);
@@ -748,8 +736,7 @@ export const forgotPassword = async (req, res, next) => {
     user.passwordResetExpires = new Date(Date.now() + 1 * 60 * 60 * 1000); // 1 hour
     await user.save();
 
-    const isProd = checkIsProd(req);
-    const appUrl = isProd ? "https://social-analysis-smoky.vercel.app" : "http://localhost:5173";
+    const appUrl = getAppUrl(req);
     const resetLink = `${appUrl}/reset-password?token=${resetToken}`;
 
     try {
@@ -823,7 +810,7 @@ export const resetPassword = async (req, res, next) => {
     user.passwordResetExpires = undefined;
 
     // Invalidate old refresh tokens (Force logout on all devices)
-    user.refreshTokens = [];
+    await Session.updateMany({ userId: user._id }, { isRevoked: true });
 
     await user.save();
 
@@ -856,7 +843,8 @@ export const resetPassword = async (req, res, next) => {
 // @access  Private
 export const changePassword = async (req, res, next) => {
   try {
-    const { oldPassword, newPassword } = req.body;
+    const oldPassword = req.body.oldPassword || req.body.currentPassword;
+    const { newPassword } = req.body;
     
     const user = await User.findById(req.user._id);
     if (!user) {
@@ -911,9 +899,12 @@ export const changePassword = async (req, res, next) => {
     const currentRefreshToken = req.cookies.socialiq_refresh_token;
     if (currentRefreshToken) {
       const hashedCurrentToken = hashToken(currentRefreshToken);
-      user.refreshTokens = user.refreshTokens.filter((t) => t.token === hashedCurrentToken);
+      await Session.updateMany(
+        { userId: user._id, tokenHash: { $ne: hashedCurrentToken } },
+        { isRevoked: true }
+      );
     } else {
-      user.refreshTokens = [];
+      await Session.updateMany({ userId: user._id }, { isRevoked: true });
     }
 
     await user.save();
@@ -955,26 +946,8 @@ export const googleSignIn = async (req, res, next) => {
   }
 
   try {
-    let payload;
-    if (idToken === "dummy-developer-token" && (process.env.NODE_ENV === "test" || process.env.NODE_ENV === "development")) {
-      payload = {
-        sub: "dev-google-sub-123",
-        email: "dev.user@socialiq.ai",
-        name: "Developer Node",
-        picture: "https://api.dicebear.com/7.x/adventurer/svg?seed=dev",
-      };
-    } else {
-      const ticket = await axios.get(`https://oauth2.googleapis.com/tokeninfo?id_token=${idToken}`);
-      payload = ticket.data;
-    }
+    const payload = await verifyGoogleIdToken(idToken);
     
-    if (!payload.email) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid Google token, no email payload resolved.",
-      });
-    }
-
     const { sub, email, name, picture } = payload;
     let user = await User.findOne({ email });
 
@@ -1024,17 +997,7 @@ export const googleConnect = async (req, res, next) => {
   }
 
   try {
-    let payload;
-    if (idToken === "dummy-developer-token" && (process.env.NODE_ENV === "test" || process.env.NODE_ENV === "development")) {
-      payload = {
-        sub: "dev-google-sub-123",
-        email: "dev.user@socialiq.ai",
-        name: "Developer Node",
-      };
-    } else {
-      const ticket = await axios.get(`https://oauth2.googleapis.com/tokeninfo?id_token=${idToken}`);
-      payload = ticket.data;
-    }
+    const payload = await verifyGoogleIdToken(idToken);
 
     const { sub, email } = payload;
     const user = await User.findById(req.user._id);

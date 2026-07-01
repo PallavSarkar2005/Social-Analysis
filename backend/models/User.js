@@ -1,33 +1,5 @@
 import mongoose from "mongoose";
 
-const refreshTokenSchema = new mongoose.Schema(
-  {
-    token: {
-      type: String,
-      required: true,
-      index: true,
-    },
-    expiresAt: {
-      type: Date,
-      required: true,
-    },
-    ipAddress: String,
-    userAgent: String,
-    browser: String,
-    device: String,
-    os: String,
-    isRevoked: {
-      type: Boolean,
-      default: false,
-    },
-    replacedByToken: String,
-    familyId: String,
-  },
-  {
-    timestamps: true,
-  }
-);
-
 const userSchema = new mongoose.Schema(
   {
     name: {
@@ -102,7 +74,6 @@ const userSchema = new mongoose.Schema(
     emailVerificationExpires: Date,
     passwordResetToken: String,
     passwordResetExpires: Date,
-    refreshTokens: [refreshTokenSchema],
     bio: {
       type: String,
       default: "",

@@ -133,7 +133,15 @@ export const validateGoogleSignIn = [
 
 // Change Password validation
 export const validateChangePassword = [
-  body("oldPassword").notEmpty().withMessage("Current password is required"),
+  body("oldPassword")
+    .custom((value, { req }) => {
+      const password = value || req.body.currentPassword;
+      if (!password) {
+        throw new Error("Current password is required");
+      }
+      req.body.oldPassword = password;
+      return true;
+    }),
   body("newPassword")
     .notEmpty()
     .withMessage("New password is required")

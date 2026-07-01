@@ -68,7 +68,23 @@ app.set("trust proxy", 1);
 const corsWhitelist = [
   "https://social-analysis-smoky.vercel.app",
   "http://localhost:5173",
+  "http://127.0.0.1:5173",
 ];
+
+if (process.env.FRONTEND_URL) {
+  corsWhitelist.push(process.env.FRONTEND_URL.replace(/\/$/, ""));
+}
+
+if (process.env.CORS_ORIGINS) {
+  process.env.CORS_ORIGINS.split(",")
+    .map((origin) => origin.trim().replace(/\/$/, ""))
+    .filter(Boolean)
+    .forEach((origin) => {
+      if (!corsWhitelist.includes(origin)) {
+        corsWhitelist.push(origin);
+      }
+    });
+}
 
 const corsOptions = {
   origin: (origin, callback) => {

@@ -1,12 +1,11 @@
 import axios from "axios";
 
-// Load environment variables dynamically, falling back to localhost:5000 in development
 const baseURL = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 const client = axios.create({
   baseURL,
-  timeout: 30000, // Scraper calls or AI analysis might take up to 30 seconds
-  withCredentials: true, // Enable cookies for cross-origin requests
+  timeout: 30000,
+  withCredentials: true,
   headers: {
     "Content-Type": "application/json",
   },
@@ -14,6 +13,23 @@ const client = axios.create({
 
 let isRefreshing = false;
 let failedQueue = [];
+let inMemoryToken = null;
+let csrfTokenInMemory = null;
+
+export const setAccessToken = (token) => {
+  inMemoryToken = token;
+};
+
+export const getAccessToken = () => inMemoryToken;
+
+export const setCsrfToken = (token) => {
+  csrfTokenInMemory = token || null;
+};
+
+export const getCsrfToken = () => {
+  if (csrfTokenInMemory) return csrfTokenInMemory;
+  return getCookie("XSRF-TOKEN");
+};
 
 const processQueue = (error) => {
   failedQueue.forEach((prom) => {
@@ -26,7 +42,6 @@ const processQueue = (error) => {
   failedQueue = [];
 };
 
-// Helper to parse cookies on the client side
 const getCookie = (name) => {
   if (typeof document === "undefined") return null;
   const value = `; ${document.cookie}`;
@@ -35,13 +50,11 @@ const getCookie = (name) => {
   return null;
 };
 
-let csrfTokenInMemory = null;
-
 export const fetchCsrfToken = async () => {
   try {
     const response = await client.get("/api/auth/csrf");
-    if (response.data && response.data.csrfToken) {
-      csrfTokenInMemory = response.data.csrfToken;
+    if (response.data?.csrfToken) {
+      setCsrfToken(response.data.csrfToken);
     }
     return csrfTokenInMemory;
   } catch (error) {
@@ -50,19 +63,26 @@ export const fetchCsrfToken = async () => {
   }
 };
 
-// Request Interceptor
+const syncAuthFromResponse = (data) => {
+  if (!data) return null;
+  const { token, csrfToken, ...userData } = data;
+  if (token) setAccessToken(token);
+  if (csrfToken) setCsrfToken(csrfToken);
+  return { token, userData };
+};
+
+export { syncAuthFromResponse };
+
 client.interceptors.request.use(
   (config) => {
-    console.log(`[API Request] ${config.method.toUpperCase()} ${config.url}`, config.data || "");
-    const token = localStorage.getItem("token");
+    const token = getAccessToken();
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
 
-    // Attach CSRF double-submit cookie token to modifying requests
     const safeMethods = ["get", "head", "options"];
     if (!safeMethods.includes(config.method?.toLowerCase())) {
-      const csrfToken = csrfTokenInMemory || getCookie("XSRF-TOKEN");
+      const csrfToken = getCsrfToken();
       if (csrfToken) {
         config.headers["X-XSRF-TOKEN"] = csrfToken;
       }
@@ -70,30 +90,35 @@ client.interceptors.request.use(
 
     return config;
   },
-  (error) => {
-    console.error("[API Request Error]", error);
-    return Promise.reject(error);
-  }
+  (error) => Promise.reject(error)
 );
 
-// Response Interceptor
 client.interceptors.response.use(
-  (response) => {
-    console.log(`[API Response] ${response.status} ${response.config.url}`);
-    return response;
-  },
+  (response) => response,
   async (error) => {
     const originalRequest = error.config;
+    const status = error.response?.status;
+    const errorMessage = error.response?.data?.message || "";
 
-    console.error("[API Response Error]", {
-      url: originalRequest?.url,
-      status: error.response?.status,
-      message: error.response?.data?.message || error.message,
-    });
-
-    // Check if error is 401 (Unauthorized) and not already retried
+    // CSRF mismatch: re-fetch token and retry once (fixes stale in-memory token after login)
     if (
-      error.response?.status === 401 &&
+      status === 403 &&
+      errorMessage.toLowerCase().includes("csrf") &&
+      originalRequest &&
+      !originalRequest._csrfRetry
+    ) {
+      originalRequest._csrfRetry = true;
+      await fetchCsrfToken();
+      const csrfToken = getCsrfToken();
+      if (csrfToken) {
+        originalRequest.headers["X-XSRF-TOKEN"] = csrfToken;
+      }
+      return client(originalRequest);
+    }
+
+    if (
+      status === 401 &&
+      originalRequest &&
       !originalRequest._retry &&
       originalRequest.url &&
       !originalRequest.url.includes("/auth/refresh") &&
@@ -104,12 +129,8 @@ client.interceptors.response.use(
         return new Promise((resolve, reject) => {
           failedQueue.push({ resolve, reject });
         })
-          .then(() => {
-            return client(originalRequest);
-          })
-          .catch((err) => {
-            return Promise.reject(err);
-          });
+          .then(() => client(originalRequest))
+          .catch((err) => Promise.reject(err));
       }
 
       originalRequest._retry = true;
@@ -117,19 +138,17 @@ client.interceptors.response.use(
 
       try {
         const response = await client.post("/api/auth/refresh");
-        const token = response.data?.data?.token;
-        if (token) {
-          localStorage.setItem("token", token);
-          originalRequest.headers.Authorization = `Bearer ${token}`;
-        }
+        syncAuthFromResponse(response.data?.data);
         isRefreshing = false;
         processQueue(null);
+        const token = getAccessToken();
+        if (token) {
+          originalRequest.headers.Authorization = `Bearer ${token}`;
+        }
         return client(originalRequest);
       } catch (refreshError) {
         isRefreshing = false;
         processQueue(refreshError);
-        
-        // Dispatch custom event to notify AuthContext to log user out
         if (typeof window !== "undefined") {
           window.dispatchEvent(new CustomEvent("auth-logout"));
         }
@@ -137,41 +156,35 @@ client.interceptors.response.use(
       }
     }
 
-    // Smart error page redirection for hard infrastructure failures
-    const status = error.response?.status;
-    const message = (error.message || '').toLowerCase();
-    const url = originalRequest?.url || '';
-
-    // Skip redirects for auth, CSRF, and refresh token endpoints — these are handled by AuthContext
+    const message = (error.message || "").toLowerCase();
+    const url = originalRequest?.url || "";
     const skipRedirect =
-      url.includes('/auth/') ||
-      url.includes('/csrf') ||
-      url.includes('/activity/log') ||
+      url.includes("/auth/") ||
+      url.includes("/csrf") ||
+      url.includes("/activity/log") ||
       originalRequest?._skipErrorRedirect;
 
-    if (!skipRedirect && typeof window !== 'undefined') {
+    if (!skipRedirect && typeof window !== "undefined") {
       const currentPath = window.location.pathname;
-
-      // Only redirect if not already on an error page to avoid redirect loops
-      if (!currentPath.startsWith('/error')) {
+      if (!currentPath.startsWith("/error")) {
         if (!navigator.onLine) {
-          window.location.href = '/error/offline';
+          window.location.href = "/error/offline";
           return Promise.reject(error);
         }
         if (status === 403) {
-          window.location.href = '/error/403';
+          window.location.href = "/error/403";
           return Promise.reject(error);
         }
         if (status === 503 || status === 504) {
-          window.location.href = '/error/network';
+          window.location.href = "/error/network";
           return Promise.reject(error);
         }
         if (status >= 500) {
-          window.location.href = '/error/500';
+          window.location.href = "/error/500";
           return Promise.reject(error);
         }
-        if (!status && (message.includes('network error') || message.includes('timeout'))) {
-          window.location.href = '/error/network';
+        if (!status && (message.includes("network error") || message.includes("timeout"))) {
+          window.location.href = "/error/network";
           return Promise.reject(error);
         }
       }

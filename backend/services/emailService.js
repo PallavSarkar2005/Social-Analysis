@@ -9,8 +9,10 @@ export const getTransporter = async () => {
   const user = process.env.EMAIL_USER || "";
   const pass = process.env.EMAIL_PASS || "";
 
+  const isPlaceholder = !user || !pass || user.includes("your_smtp") || pass.includes("your_smtp");
+
   // If no custom SMTP credentials provided, log warning and use ethereal mock fallback
-  if (!user || !pass) {
+  if (isPlaceholder) {
     console.log("[Email Service] SMTP credentials not fully configured in env. Creating Ethereal test account dynamically...");
     const testAccount = await nodemailer.createTestAccount();
     return nodemailer.createTransport({
@@ -42,18 +44,25 @@ export const getTransporter = async () => {
  * @param {String} htmlBody - HTML body content
  */
 export const sendEmailReport = async (to, subject, htmlBody) => {
+  const SEND_TIMEOUT_MS = 10000; // 10s hard limit to prevent blocking request handlers
+
   try {
     const transporter = await getTransporter();
     
-    const info = await transporter.sendMail({
+    const sendPromise = transporter.sendMail({
       from: process.env.EMAIL_FROM || '"Social IQ" <reports@socialiq.ai>',
       to,
       subject,
       html: htmlBody,
     });
 
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("Email send timed out after 10 seconds")), SEND_TIMEOUT_MS)
+    );
+
+    const info = await Promise.race([sendPromise, timeoutPromise]);
+
     console.log(`[Email Service] Message sent successfully. Message ID: ${info.messageId}`);
-    console.log("[Email Service] Full transporter.sendMail result:", JSON.stringify(info, null, 2));
     // If using Ethereal fallback, log test URL
     const testUrl = nodemailer.getTestMessageUrl(info);
     if (testUrl) {

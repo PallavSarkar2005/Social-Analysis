@@ -119,7 +119,7 @@ export default function SettingsEngine() {
   const handleUpdatePassword = async (oldPassword, newPassword) => {
     try {
       const res = await client.post("/api/auth/change-password", {
-        currentPassword: oldPassword,
+        oldPassword,
         newPassword,
       });
       if (res.data && res.data.success) {
@@ -203,17 +203,31 @@ export default function SettingsEngine() {
     }
   };
 
-  const handleLogoutEverywhere = async () => {
+  const handleLogoutOther = async () => {
     try {
       const res = await client.post("/api/auth/logout-other");
-      if (res.data && res.data.success) {
-        toast.success("Logged out of all other devices.");
+      if (res.data?.success) {
+        toast.success("Signed out of all other devices.");
         await fetchSessions();
       }
     } catch (err) {
-      toast.error("Failed to revoke other sessions.");
+      toast.error("Failed to sign out other devices.");
     }
   };
+
+  const handleLogoutAll = async () => {
+    try {
+      const res = await client.post("/api/auth/logout-all");
+      if (res.data?.success) {
+        toast.success("Signed out everywhere.");
+        await logout();
+      }
+    } catch (err) {
+      toast.error("Failed to sign out everywhere.");
+    }
+  };
+
+  const handleLogoutEverywhere = handleLogoutOther;
 
   const handleDeleteAccount = async (password) => {
     try {
@@ -287,6 +301,8 @@ export default function SettingsEngine() {
             onUpdatePrefs={handleUpdatePrefs}
             onUpdateSchedule={handleUpdateSchedule}
             onRevokeSession={handleRevokeSession}
+            onLogoutOther={handleLogoutOther}
+            onLogoutAll={handleLogoutAll}
             onLogoutEverywhere={handleLogoutEverywhere}
             onDeleteAccount={handleDeleteAccount}
           />
