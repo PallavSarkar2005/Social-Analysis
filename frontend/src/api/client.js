@@ -60,9 +60,13 @@ export const fetchCsrfToken = async () => {
 export const restoreSession = async () => {
   await fetchCsrfToken();
   try {
-    const response = await client.post("/api/auth/refresh", null, {
-      _skipAuthRetry: true,
-    });
+    const response = await client.post(
+      "/api/auth/refresh",
+      {},
+      {
+        _skipAuthRetry: true,
+      },
+    );
     const token = response.data?.data?.token;
     if (token) {
       setAccessToken(token);
@@ -156,9 +160,13 @@ client.interceptors.response.use(
       isRefreshing = true;
 
       try {
-        const response = await client.post("/api/auth/refresh", null, {
-          _skipAuthRetry: true,
-        });
+        const response = await client.post(
+          "/api/auth/refresh",
+          {},
+          {
+            _skipAuthRetry: true,
+          },
+        );
         const token = response.data?.data?.token;
         if (token) {
           setAccessToken(token);
