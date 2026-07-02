@@ -42,6 +42,7 @@ export const fetchCsrfToken = async () => {
     const response = await client.get("/api/auth/csrf");
     if (response.data && response.data.csrfToken) {
       csrfTokenInMemory = response.data.csrfToken;
+      console.log("[CSRF] Fresh token:", csrfTokenInMemory);
     }
     return csrfTokenInMemory;
   } catch (error) {
@@ -52,17 +53,33 @@ export const fetchCsrfToken = async () => {
 
 // Request Interceptor
 client.interceptors.request.use(
-  (config) => {
-    console.log(`[API Request] ${config.method.toUpperCase()} ${config.url}`, config.data || "");
+  async (config) => {
+    console.log(
+      `[API Request] ${config.method.toUpperCase()} ${config.url}`,
+      config.data || "",
+    );
+
     const token = localStorage.getItem("token");
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
 
-    // Attach CSRF double-submit cookie token to modifying requests
     const safeMethods = ["get", "head", "options"];
+
+    // Ensure CSRF cookie exists before login/register
+    if (
+      ["post", "put", "patch", "delete"].includes(
+        config.method?.toLowerCase(),
+      ) &&
+      (config.url?.includes("/auth/login") ||
+        config.url?.includes("/auth/register"))
+    ) {
+      await fetchCsrfToken();
+    }
+
+    // Attach CSRF header
     if (!safeMethods.includes(config.method?.toLowerCase())) {
-      const csrfToken = csrfTokenInMemory || getCookie("XSRF-TOKEN");
+      const csrfToken = getCookie("XSRF-TOKEN");
       if (csrfToken) {
         config.headers["X-XSRF-TOKEN"] = csrfToken;
       }
@@ -73,7 +90,7 @@ client.interceptors.request.use(
   (error) => {
     console.error("[API Request Error]", error);
     return Promise.reject(error);
-  }
+  },
 );
 
 // Response Interceptor
@@ -100,16 +117,20 @@ client.interceptors.response.use(
       !originalRequest.url.includes("/auth/login") &&
       !originalRequest.url.includes("/auth/register")
     ) {
+      const hasRefreshCookie = document.cookie.includes(
+        "socialiq_refresh_token",
+      );
+
+      if (!hasRefreshCookie) {
+        return Promise.reject(error);
+      }
+
       if (isRefreshing) {
         return new Promise((resolve, reject) => {
           failedQueue.push({ resolve, reject });
         })
-          .then(() => {
-            return client(originalRequest);
-          })
-          .catch((err) => {
-            return Promise.reject(err);
-          });
+          .then(() => client(originalRequest))
+          .catch((err) => Promise.reject(err));
       }
 
       originalRequest._retry = true;
@@ -120,7 +141,11 @@ client.interceptors.response.use(
         const token = response.data?.data?.token;
         if (token) {
           localStorage.setItem("token", token);
-          originalRequest.headers.Authorization = `Bearer ${token}`;
+
+          originalRequest.headers = {
+            ...originalRequest.headers,
+            Authorization: `Bearer ${token}`,
+          };
         }
         isRefreshing = false;
         processQueue(null);
@@ -128,7 +153,7 @@ client.interceptors.response.use(
       } catch (refreshError) {
         isRefreshing = false;
         processQueue(refreshError);
-        
+
         // Dispatch custom event to notify AuthContext to log user out
         if (typeof window !== "undefined") {
           window.dispatchEvent(new CustomEvent("auth-logout"));
@@ -139,46 +164,49 @@ client.interceptors.response.use(
 
     // Smart error page redirection for hard infrastructure failures
     const status = error.response?.status;
-    const message = (error.message || '').toLowerCase();
-    const url = originalRequest?.url || '';
+    const message = (error.message || "").toLowerCase();
+    const url = originalRequest?.url || "";
 
     // Skip redirects for auth, CSRF, and refresh token endpoints — these are handled by AuthContext
     const skipRedirect =
-      url.includes('/auth/') ||
-      url.includes('/csrf') ||
-      url.includes('/activity/log') ||
+      url.includes("/auth/") ||
+      url.includes("/csrf") ||
+      url.includes("/activity/log") ||
       originalRequest?._skipErrorRedirect;
 
-    if (!skipRedirect && typeof window !== 'undefined') {
+    if (!skipRedirect && typeof window !== "undefined") {
       const currentPath = window.location.pathname;
 
       // Only redirect if not already on an error page to avoid redirect loops
-      if (!currentPath.startsWith('/error')) {
+      if (!currentPath.startsWith("/error")) {
         if (!navigator.onLine) {
-          window.location.href = '/error/offline';
+          window.location.href = "/error/offline";
           return Promise.reject(error);
         }
         if (status === 403) {
-          window.location.href = '/error/403';
+          window.location.href = "/error/403";
           return Promise.reject(error);
         }
         if (status === 503 || status === 504) {
-          window.location.href = '/error/network';
+          window.location.href = "/error/network";
           return Promise.reject(error);
         }
         if (status >= 500) {
-          window.location.href = '/error/500';
+          window.location.href = "/error/500";
           return Promise.reject(error);
         }
-        if (!status && (message.includes('network error') || message.includes('timeout'))) {
-          window.location.href = '/error/network';
+        if (
+          !status &&
+          (message.includes("network error") || message.includes("timeout"))
+        ) {
+          window.location.href = "/error/network";
           return Promise.reject(error);
         }
       }
     }
 
     return Promise.reject(error);
-  }
+  },
 );
 
 export default client;

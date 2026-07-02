@@ -17,21 +17,32 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     const initializeAuth = async () => {
       // Initialize CSRF session first
+      const storedToken =
+        typeof window !== "undefined" ? localStorage.getItem("token") : null;
+
+      if (!storedToken) {
+        setLoading(false);
+        return;
+      }
+
       await fetchCsrfToken();
 
-      const storedToken = typeof window !== "undefined" ? localStorage.getItem("token") : null;
-      if (storedToken) {
-        setToken(storedToken);
-      }
+      setToken(storedToken);
+
       try {
-        // Verify/refresh user data from backend using token or cookies
         const res = await client.get("/api/auth/me");
         if (res.data && res.data.success) {
           setUser(res.data.data);
           if (typeof window !== "undefined") {
-            localStorage.setItem("socialiq_user", JSON.stringify(res.data.data));
+            localStorage.setItem(
+              "socialiq_user",
+              JSON.stringify(res.data.data),
+            );
           }
-          const currentToken = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+          const currentToken =
+            typeof window !== "undefined"
+              ? localStorage.getItem("token")
+              : null;
           setToken(currentToken);
         } else {
           if (typeof window !== "undefined") {
@@ -75,7 +86,11 @@ export const AuthProvider = ({ children }) => {
   // Register user
   const register = async (name, email, password) => {
     try {
-      const res = await client.post("/api/auth/register", { name, email, password });
+      const res = await client.post("/api/auth/register", {
+        name,
+        email,
+        password,
+      });
       if (res.data && res.data.success) {
         const { token: userToken, ...userData } = res.data.data;
         if (typeof window !== "undefined") {
@@ -87,7 +102,10 @@ export const AuthProvider = ({ children }) => {
         return { success: true };
       }
     } catch (err) {
-      const msg = err.response?.data?.message || err.response?.data?.errors?.[0]?.message || "Registration failed";
+      const msg =
+        err.response?.data?.message ||
+        err.response?.data?.errors?.[0]?.message ||
+        "Registration failed";
       return { success: false, message: msg };
     }
   };
@@ -95,7 +113,11 @@ export const AuthProvider = ({ children }) => {
   // Login user
   const login = async (email, password, rememberMe = false) => {
     try {
-      const res = await client.post("/api/auth/login", { email, password, rememberMe });
+      const res = await client.post("/api/auth/login", {
+        email,
+        password,
+        rememberMe,
+      });
       if (res.data && res.data.success) {
         const { token: userToken, ...userData } = res.data.data;
         if (typeof window !== "undefined") {
@@ -107,7 +129,10 @@ export const AuthProvider = ({ children }) => {
         return { success: true };
       }
     } catch (err) {
-      const msg = err.response?.data?.message || err.response?.data?.errors?.[0]?.message || "Login failed";
+      const msg =
+        err.response?.data?.message ||
+        err.response?.data?.errors?.[0]?.message ||
+        "Login failed";
       return { success: false, message: msg };
     }
   };
@@ -141,7 +166,8 @@ export const AuthProvider = ({ children }) => {
         return { success: true };
       }
     } catch (err) {
-      const msg = err.response?.data?.message || "Linking Google account failed";
+      const msg =
+        err.response?.data?.message || "Linking Google account failed";
       return { success: false, message: msg };
     }
   };
@@ -155,7 +181,8 @@ export const AuthProvider = ({ children }) => {
         return { success: true };
       }
     } catch (err) {
-      const msg = err.response?.data?.message || "Unlinking Google account failed";
+      const msg =
+        err.response?.data?.message || "Unlinking Google account failed";
       return { success: false, message: msg };
     }
   };
