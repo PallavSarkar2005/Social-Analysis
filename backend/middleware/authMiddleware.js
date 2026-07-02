@@ -44,9 +44,17 @@ export const protect = async (req, res, next) => {
   }
 };
 
-export const requireVerification = (req, res, next) => {
+export const requireVerifiedEmail = (req, res, next) => {
+  if (req.user && !req.user.isEmailVerified) {
+    return res.status(403).json({
+      success: false,
+      message: "Email verification required. Please verify your email address.",
+    });
+  }
   next();
 };
+
+export const requireVerification = requireVerifiedEmail;
 
 export const authenticateUser = protect;
 
@@ -70,10 +78,6 @@ export const optionalAuth = async (req, res, next) => {
       // Ignore token verification failure for optional authentication
     }
   }
-  next();
-};
-
-export const requireVerifiedEmail = (req, res, next) => {
   next();
 };
 

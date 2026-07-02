@@ -1,89 +1,62 @@
 import { createContext, useContext, useState, useEffect } from "react";
-import client, { fetchCsrfToken } from "../api/client";
+import client, { fetchCsrfToken, restoreSession } from "../api/client";
+import {
+  setAccessToken,
+  clearAccessToken,
+  setTelemetryUserId,
+  setAuthFailureHandler,
+  clearLegacyAuthStorage,
+} from "../api/authToken";
 
 const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
-  const [token, setToken] = useState(() => {
-    if (typeof window !== "undefined") {
-      return localStorage.getItem("token");
-    }
-    return null;
-  });
   const [loading, setLoading] = useState(true);
 
-  // Initialize Auth state
   useEffect(() => {
     const initializeAuth = async () => {
-      // Initialize CSRF session first
-      const storedToken =
-        typeof window !== "undefined" ? localStorage.getItem("token") : null;
+      clearLegacyAuthStorage();
+      await fetchCsrfToken();
 
-      if (!storedToken) {
+      const restored = await restoreSession();
+      if (!restored.success) {
         setLoading(false);
         return;
       }
 
-      await fetchCsrfToken();
-
-      setToken(storedToken);
-
       try {
         const res = await client.get("/api/auth/me");
-        if (res.data && res.data.success) {
+        if (res.data?.success) {
           setUser(res.data.data);
-          if (typeof window !== "undefined") {
-            localStorage.setItem(
-              "socialiq_user",
-              JSON.stringify(res.data.data),
-            );
-          }
-          const currentToken =
-            typeof window !== "undefined"
-              ? localStorage.getItem("token")
-              : null;
-          setToken(currentToken);
+          setTelemetryUserId(res.data.data._id);
         } else {
-          if (typeof window !== "undefined") {
-            localStorage.removeItem("token");
-            localStorage.removeItem("socialiq_user");
-          }
+          clearAccessToken();
           setUser(null);
-          setToken(null);
+          setTelemetryUserId(null);
         }
-      } catch (err) {
-        console.log("No active session or session expired.");
-        if (typeof window !== "undefined") {
-          localStorage.removeItem("token");
-          localStorage.removeItem("socialiq_user");
-        }
+      } catch {
+        clearAccessToken();
         setUser(null);
-        setToken(null);
+        setTelemetryUserId(null);
       } finally {
         setLoading(false);
       }
     };
 
+    setAuthFailureHandler(() => {
+      clearAccessToken();
+      setUser(null);
+      setTelemetryUserId(null);
+    });
+
     initializeAuth();
 
-    // Listen for custom logout events dispatched by Axios interceptor
-    const handleAuthLogout = () => {
-      if (typeof window !== "undefined") {
-        localStorage.removeItem("token");
-        localStorage.removeItem("socialiq_user");
-      }
-      setUser(null);
-      setToken(null);
-    };
-
-    window.addEventListener("auth-logout", handleAuthLogout);
     return () => {
-      window.removeEventListener("auth-logout", handleAuthLogout);
+      setAuthFailureHandler(null);
     };
   }, []);
 
-  // Register user
   const register = async (name, email, password) => {
     try {
       const res = await client.post("/api/auth/register", {
@@ -91,14 +64,11 @@ export const AuthProvider = ({ children }) => {
         email,
         password,
       });
-      if (res.data && res.data.success) {
+      if (res.data?.success) {
         const { token: userToken, ...userData } = res.data.data;
-        if (typeof window !== "undefined") {
-          localStorage.setItem("token", userToken);
-          localStorage.setItem("socialiq_user", JSON.stringify(userData));
-        }
+        setAccessToken(userToken);
         setUser(userData);
-        setToken(userToken);
+        setTelemetryUserId(userData._id);
         return { success: true };
       }
     } catch (err) {
@@ -110,7 +80,6 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Login user
   const login = async (email, password, rememberMe = false) => {
     try {
       const res = await client.post("/api/auth/login", {
@@ -118,14 +87,11 @@ export const AuthProvider = ({ children }) => {
         password,
         rememberMe,
       });
-      if (res.data && res.data.success) {
+      if (res.data?.success) {
         const { token: userToken, ...userData } = res.data.data;
-        if (typeof window !== "undefined") {
-          localStorage.setItem("token", userToken);
-          localStorage.setItem("socialiq_user", JSON.stringify(userData));
-        }
+        setAccessToken(userToken);
         setUser(userData);
-        setToken(userToken);
+        setTelemetryUserId(userData._id);
         return { success: true };
       }
     } catch (err) {
@@ -137,18 +103,14 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Google Login
   const googleLogin = async (idToken) => {
     try {
       const res = await client.post("/api/auth/google", { idToken });
-      if (res.data && res.data.success) {
+      if (res.data?.success) {
         const { token: userToken, ...userData } = res.data.data;
-        if (typeof window !== "undefined") {
-          localStorage.setItem("token", userToken);
-          localStorage.setItem("socialiq_user", JSON.stringify(userData));
-        }
+        setAccessToken(userToken);
         setUser(userData);
-        setToken(userToken);
+        setTelemetryUserId(userData._id);
         return { success: true };
       }
     } catch (err) {
@@ -157,11 +119,10 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Google Connect
   const connectGoogle = async (idToken) => {
     try {
       const res = await client.post("/api/auth/google/connect", { idToken });
-      if (res.data && res.data.success) {
+      if (res.data?.success) {
         updateUser(res.data.data);
         return { success: true };
       }
@@ -172,11 +133,10 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Google Disconnect
   const disconnectGoogle = async () => {
     try {
       const res = await client.post("/api/auth/google/disconnect");
-      if (res.data && res.data.success) {
+      if (res.data?.success) {
         updateUser(res.data.data);
         return { success: true };
       }
@@ -187,35 +147,28 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Logout user
   const logout = async () => {
     try {
       await client.post("/api/auth/logout");
     } catch (err) {
       console.warn("Server-side logout warning:", err);
     }
-    if (typeof window !== "undefined") {
-      localStorage.removeItem("token");
-      localStorage.removeItem("socialiq_user");
-    }
+    clearAccessToken();
     setUser(null);
-    setToken(null);
+    setTelemetryUserId(null);
   };
 
   const updateUser = (newData) => {
     setUser((prev) => {
       if (!prev) return null;
       const updated = { ...prev, ...newData };
-      if (typeof window !== "undefined") {
-        localStorage.setItem("socialiq_user", JSON.stringify(updated));
-      }
+      setTelemetryUserId(updated._id);
       return updated;
     });
   };
 
   const value = {
     user,
-    token,
     loading,
     login,
     googleLogin,

@@ -3,6 +3,7 @@ import SidebarLayout from "../components/layout/Sidebar";
 import Navbar from "../components/layout/Navbar";
 import { getAccounts } from "../api/accountApi";
 import { getChannelSummary } from "../api/analyticsApi";
+import { ensureAccessToken } from "../api/client";
 import {
   Sparkles,
   Brain,
@@ -230,7 +231,8 @@ export default function AIInsights() {
     abortControllerRef.current = controller;
 
     try {
-      const token = localStorage.getItem("token");
+      const token = await ensureAccessToken();
+      if (!token) throw new Error("Not authenticated");
       const baseURL = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
       const response = await fetch(`${baseURL}/api/ai/chat`, {

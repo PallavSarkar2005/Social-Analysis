@@ -16,7 +16,7 @@ import {
   logoutOtherDevices,
   changePassword,
   getCsrfToken,
-} from "../controllers/authController.js";
+} from "../controllers/auth/index.js";
 import { protect } from "../middleware/authMiddleware.js";
 import {
   validateRegister,

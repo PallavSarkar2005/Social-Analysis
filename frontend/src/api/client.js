@@ -1,4 +1,10 @@
 import axios from "axios";
+import {
+  getAccessToken,
+  setAccessToken,
+  clearAccessToken,
+  notifyAuthFailure,
+} from "./authToken.js";
 
 // Load environment variables dynamically, falling back to localhost:5000 in development
 const baseURL = import.meta.env.VITE_API_URL || "http://localhost:5000";
@@ -51,6 +57,29 @@ export const fetchCsrfToken = async () => {
   }
 };
 
+export const restoreSession = async () => {
+  await fetchCsrfToken();
+  try {
+    const response = await client.post("/api/auth/refresh", null, {
+      _skipAuthRetry: true,
+    });
+    const token = response.data?.data?.token;
+    if (token) {
+      setAccessToken(token);
+      return { success: true };
+    }
+  } catch {
+    clearAccessToken();
+  }
+  return { success: false };
+};
+
+export const ensureAccessToken = async () => {
+  if (getAccessToken()) return getAccessToken();
+  const result = await restoreSession();
+  return result.success ? getAccessToken() : null;
+};
+
 // Request Interceptor
 client.interceptors.request.use(
   async (config) => {
@@ -59,27 +88,24 @@ client.interceptors.request.use(
       config.data || "",
     );
 
-    const token = localStorage.getItem("token");
+    const token = getAccessToken();
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
 
     const safeMethods = ["get", "head", "options"];
 
-    // Ensure CSRF cookie exists before login/register
-    if (
-      ["post", "put", "patch", "delete"].includes(
-        config.method?.toLowerCase(),
-      ) &&
-      (config.url?.includes("/auth/login") ||
-        config.url?.includes("/auth/register"))
-    ) {
-      await fetchCsrfToken();
+    // Ensure CSRF cookie exists before any state-changing request
+    if (!safeMethods.includes(config.method?.toLowerCase())) {
+      const existingCsrf = getCookie("XSRF-TOKEN");
+      if (!existingCsrf && !csrfTokenInMemory) {
+        await fetchCsrfToken();
+      }
     }
 
-    // Attach CSRF header
+    // Attach CSRF header for state-changing requests
     if (!safeMethods.includes(config.method?.toLowerCase())) {
-      const csrfToken = getCookie("XSRF-TOKEN");
+      const csrfToken = getCookie("XSRF-TOKEN") || csrfTokenInMemory;
       if (csrfToken) {
         config.headers["X-XSRF-TOKEN"] = csrfToken;
       }
@@ -112,19 +138,12 @@ client.interceptors.response.use(
     if (
       error.response?.status === 401 &&
       !originalRequest._retry &&
+      !originalRequest._skipAuthRetry &&
       originalRequest.url &&
       !originalRequest.url.includes("/auth/refresh") &&
       !originalRequest.url.includes("/auth/login") &&
       !originalRequest.url.includes("/auth/register")
     ) {
-      const hasRefreshCookie = document.cookie.includes(
-        "socialiq_refresh_token",
-      );
-
-      if (!hasRefreshCookie) {
-        return Promise.reject(error);
-      }
-
       if (isRefreshing) {
         return new Promise((resolve, reject) => {
           failedQueue.push({ resolve, reject });
@@ -137,10 +156,12 @@ client.interceptors.response.use(
       isRefreshing = true;
 
       try {
-        const response = await client.post("/api/auth/refresh");
+        const response = await client.post("/api/auth/refresh", null, {
+          _skipAuthRetry: true,
+        });
         const token = response.data?.data?.token;
         if (token) {
-          localStorage.setItem("token", token);
+          setAccessToken(token);
 
           originalRequest.headers = {
             ...originalRequest.headers,
@@ -153,11 +174,8 @@ client.interceptors.response.use(
       } catch (refreshError) {
         isRefreshing = false;
         processQueue(refreshError);
-
-        // Dispatch custom event to notify AuthContext to log user out
-        if (typeof window !== "undefined") {
-          window.dispatchEvent(new CustomEvent("auth-logout"));
-        }
+        clearAccessToken();
+        notifyAuthFailure();
         return Promise.reject(refreshError);
       }
     }

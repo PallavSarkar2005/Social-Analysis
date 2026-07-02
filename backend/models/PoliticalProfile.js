@@ -150,9 +150,6 @@ const politicalProfileSchema = new mongoose.Schema(
   }
 );
 
-// Indexes
-politicalProfileSchema.index({ accountId: 1 });
-
 const PoliticalProfile = mongoose.model("PoliticalProfile", politicalProfileSchema);
 
 export default PoliticalProfile;

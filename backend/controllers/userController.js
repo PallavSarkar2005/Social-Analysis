@@ -1,5 +1,4 @@
 import bcrypt from "bcryptjs";
-import crypto from "crypto";
 import User from "../models/User.js";
 import Account from "../models/Account.js";
 import TrackedCompetitor from "../models/TrackedCompetitor.js";
@@ -10,13 +9,15 @@ import ActivityLog from "../models/ActivityLog.js";
 import { logSecurityEvent } from "../utils/securityLogger.js";
 import { sendEmailReport } from "../services/emailService.js";
 import {
+  getActiveSessions as listActiveSessions,
+  revokeSessionById,
+  revokeAllSessions,
+} from "../services/sessionService.js";
+import { clearAuthCookies } from "../services/cookieService.js";
+import { hashToken } from "../utils/crypto.js";
+import {
   getAccountDeletedTemplate,
 } from "../services/emailTemplateService.js";
-
-// Helper to hash tokens
-const hashToken = (token) => {
-  return crypto.createHash("sha256").update(token).digest("hex");
-};
 
 // @desc    Update user profile details (name, avatar, bio)
 // @route   PATCH /api/users/profile
@@ -204,13 +205,11 @@ export const deleteAccount = async (req, res, next) => {
     await Snapshot.deleteMany({ userId: user._id });
     await EmailSchedule.deleteMany({ userId: user._id });
     await ActivityLog.deleteMany({ userId: user._id });
+    await revokeAllSessions(user._id);
 
-    // Finally delete User (which also deletes subdocument refreshTokens)
     await user.deleteOne();
 
-    // Clear session cookies
-    res.clearCookie("socialiq_access_token");
-    res.clearCookie("socialiq_refresh_token");
+    clearAuthCookies(res, req);
 
     res.json({
       success: true,
@@ -226,21 +225,10 @@ export const deleteAccount = async (req, res, next) => {
 // @access  Private
 export const getActiveSessions = async (req, res, next) => {
   try {
-    const currentRefreshToken = req.cookies.socialiq_refresh_token;
-    const hashedCurrentToken = currentRefreshToken ? hashToken(currentRefreshToken) : null;
-
-    const formattedSessions = req.user.refreshTokens
-      .filter((session) => !session.isRevoked && session.expiresAt > new Date())
-      .map((session) => ({
-        _id: session._id,
-        ipAddress: session.ipAddress || "Unknown",
-        userAgent: session.userAgent || "Unknown",
-        browser: session.browser || "Unknown",
-        device: session.device || "Unknown",
-        os: session.os || "Unknown",
-        createdAt: session.createdAt,
-        isCurrent: session.token === hashedCurrentToken,
-      }));
+    const formattedSessions = await listActiveSessions(
+      req.user._id,
+      req.cookies.socialiq_refresh_token,
+    );
 
     res.json({
       success: true,
@@ -257,18 +245,9 @@ export const getActiveSessions = async (req, res, next) => {
 export const revokeSession = async (req, res, next) => {
   try {
     const sessionId = req.params.id;
-    const user = await User.findById(req.user._id);
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: "User not found",
-      });
-    }
-
     const currentRefreshToken = req.cookies.socialiq_refresh_token;
-    const hashedCurrentToken = currentRefreshToken ? hashToken(currentRefreshToken) : null;
-    const sessionToRevoke = user.refreshTokens.id(sessionId);
 
+    const sessionToRevoke = await revokeSessionById(req.user._id, sessionId);
     if (!sessionToRevoke) {
       return res.status(404).json({
         success: false,
@@ -276,38 +255,18 @@ export const revokeSession = async (req, res, next) => {
       });
     }
 
-    const isCurrent = sessionToRevoke.token === hashedCurrentToken;
-
-    // Filter out the session
-    user.refreshTokens = user.refreshTokens.filter(
-      (t) => t._id.toString() !== sessionId
-    );
-    await user.save();
+    const isCurrent = currentRefreshToken
+      ? sessionToRevoke.tokenHash === hashToken(currentRefreshToken)
+      : false;
 
     await logSecurityEvent({
-      userId: user._id,
+      userId: req.user._id,
       action: "session_revoked",
       details: `Revoked session ${sessionId}. Current session: ${isCurrent}`,
     });
 
     if (isCurrent) {
-      const host = req?.headers?.host || "";
-      const isLocal = host.includes("localhost") || host.includes("127.0.0.1");
-      const isProd = process.env.NODE_ENV === "production" || (host && !isLocal);
-      
-      const cookieOptions = {
-        httpOnly: true,
-        secure: isProd,
-        sameSite: isProd ? "none" : "lax",
-        path: "/",
-      };
-      res.clearCookie("socialiq_access_token", cookieOptions);
-      res.clearCookie("socialiq_refresh_token", cookieOptions);
-      res.clearCookie("XSRF-TOKEN", {
-        secure: isProd,
-        sameSite: isProd ? "none" : "lax",
-        path: "/",
-      });
+      clearAuthCookies(res, req);
     }
 
     res.json({

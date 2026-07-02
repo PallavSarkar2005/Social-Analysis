@@ -57,9 +57,11 @@ import { startEmailReportJobs } from "./jobs/emailReportJob.js";
 import { notFound } from "./middleware/notFound.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 
-connectDB();
-startSnapshotJob();
-startEmailReportJobs();
+await connectDB();
+if (process.env.NODE_ENV !== "test") {
+  startSnapshotJob();
+  startEmailReportJobs();
+}
 
 const app = express();
 
@@ -73,14 +75,19 @@ const corsWhitelist = [
 
 const corsOptions = {
   origin: (origin, callback) => {
-    const isDevelopment = process.env.NODE_ENV === "development" || process.env.NODE_ENV === "test";
-    const isLocalOrigin = origin && (
-      origin.startsWith("http://localhost:") ||
-      origin.startsWith("http://127.0.0.1:") ||
-      origin.startsWith("http://192.168.")
-    );
+    const isDevelopment =
+      process.env.NODE_ENV === "development" || process.env.NODE_ENV === "test";
+    const isLocalOrigin =
+      origin &&
+      (origin.startsWith("http://localhost:") ||
+        origin.startsWith("http://127.0.0.1:") ||
+        origin.startsWith("http://192.168."));
 
-    if (!origin || corsWhitelist.includes(origin) || (isDevelopment && isLocalOrigin)) {
+    if (
+      !origin ||
+      corsWhitelist.includes(origin) ||
+      (isDevelopment && isLocalOrigin)
+    ) {
       callback(null, true);
     } else {
       callback(new Error("Blocked by CORS policy"));
@@ -88,7 +95,15 @@ const corsOptions = {
   },
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
-  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept", "Origin", "X-XSRF-TOKEN", "X-CSRF-TOKEN"],
+  allowedHeaders: [
+    "Content-Type",
+    "Authorization",
+    "X-Requested-With",
+    "Accept",
+    "Origin",
+    "X-XSRF-TOKEN",
+    "X-CSRF-TOKEN",
+  ],
 };
 
 app.use(cookieParser);
@@ -100,7 +115,7 @@ app.use(
     verify: (req, res, buf) => {
       req.rawBody = buf;
     },
-  })
+  }),
 );
 
 app.use(cors(corsOptions));
@@ -128,6 +143,7 @@ app.use(
         connectSrc: [
           "'self'",
           "https://social-analysis-smoky.vercel.app",
+          "https://social-analysis-production.up.railway.app",
           "http://localhost:5173",
           "http://localhost:5000",
           "https://api.groq.com",
@@ -149,7 +165,7 @@ app.use(
     referrerPolicy: {
       policy: "same-origin",
     },
-  })
+  }),
 );
 
 app.use(csrfProtection);
@@ -167,7 +183,8 @@ app.use(xssSanitizer);
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 mins
   max: 1000, // Increased global threshold
-  skip: () => process.env.NODE_ENV === "test" || process.env.NODE_ENV === "development",
+  skip: () =>
+    process.env.NODE_ENV === "test" || process.env.NODE_ENV === "development",
   standardHeaders: true,
   legacyHeaders: false,
   message: {
@@ -179,7 +196,8 @@ const apiLimiter = rateLimit({
 const strictLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 mins
   max: 250, // Increased strict route threshold to prevent search/chat blockage
-  skip: () => process.env.NODE_ENV === "test" || process.env.NODE_ENV === "development",
+  skip: () =>
+    process.env.NODE_ENV === "test" || process.env.NODE_ENV === "development",
   skipSuccessfulRequests: false,
   standardHeaders: true,
   legacyHeaders: false,
@@ -223,7 +241,7 @@ app.get("/api/debug/youtube", (req, res) => {
     youtubeApiKeyPresent: !!apiKey,
     youtubeApiKeyLength: apiKey.length,
     nodeEnv: process.env.NODE_ENV || null,
-    railway: process.env.RAILWAY_ENVIRONMENT || null
+    railway: process.env.RAILWAY_ENVIRONMENT || null,
   });
 });
 
@@ -241,31 +259,45 @@ app.use(errorHandler);
 const PORT = process.env.PORT || 5000;
 
 // Sync YouTube channels hourly
-cron.schedule("0 * * * *", async () => {
-  await syncAllYoutubeChannels();
-});
+if (process.env.NODE_ENV !== "test") {
+  cron.schedule("0 * * * *", async () => {
+    await syncAllYoutubeChannels();
+  });
+}
 
 const logRuntimeDiagnostics = async () => {
   console.log("\n=== Railway Runtime Diagnostics ===");
   console.log("Platform:", process.platform);
   console.log("Node version:", process.version);
-  
+
   try {
-    const { stdout } = await execPromise(process.platform === "win32" ? "where.exe python" : "which python3 || which python");
+    const { stdout } = await execPromise(
+      process.platform === "win32"
+        ? "where.exe python"
+        : "which python3 || which python",
+    );
     console.log("python3 path:", stdout.trim());
   } catch (e) {
     console.log("python3 path: not found");
   }
 
   try {
-    const { stdout } = await execPromise(process.platform === "win32" ? "python --version" : "python3 --version || python --version");
+    const { stdout } = await execPromise(
+      process.platform === "win32"
+        ? "python --version"
+        : "python3 --version || python --version",
+    );
     console.log("python3 version:", stdout.trim());
   } catch (e) {
     console.log("python3 version: not found");
   }
 
   try {
-    const { stdout } = await execPromise(process.platform === "win32" ? "pip --version" : "pip3 --version || pip --version");
+    const { stdout } = await execPromise(
+      process.platform === "win32"
+        ? "pip --version"
+        : "pip3 --version || pip --version",
+    );
     console.log("pip version:", stdout.trim());
   } catch (e) {
     console.log("pip version: not found");

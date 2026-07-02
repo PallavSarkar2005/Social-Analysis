@@ -1,4 +1,4 @@
-import ActivityLog from "../models/ActivityLog.js";
+import * as AuditRepository from "../repositories/AuditRepository.js";
 
 /**
  * Helper to log security audit trails (e.g., failed logins, rate limits, token violations)
@@ -24,7 +24,7 @@ export const logSecurityEvent = async ({
   console.warn(logMessage);
 
   try {
-    await ActivityLog.create({
+    await AuditRepository.create({
       userId: userId || null,
       action: `security_${action}`,
       details: email ? `[Email Target: ${email}] ${details}` : details,

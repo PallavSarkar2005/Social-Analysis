@@ -1,4 +1,5 @@
 import client from "../api/client";
+import { getTelemetryUserId } from "../api/authToken";
 
 class ErrorLogger {
   static generateId() {
@@ -9,15 +10,7 @@ class ErrorLogger {
     const requestId = this.generateId();
     const timestamp = new Date().toISOString();
     
-    // Read user information from localStorage
-    let userId = "Guest";
-    try {
-      const userStr = localStorage.getItem("socialiq_user");
-      if (userStr) {
-        const parsed = JSON.parse(userStr);
-        userId = parsed._id || parsed.id || "Guest";
-      }
-    } catch (e) {}
+    const userId = getTelemetryUserId();
 
     const telemetry = {
       requestId,

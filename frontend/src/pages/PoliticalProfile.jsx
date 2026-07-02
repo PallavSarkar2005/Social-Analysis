@@ -8,7 +8,7 @@ import {
   ChevronRight, Sparkles, TrendingUp, Users, Eye, Video, BarChart2,
   PieChart as PieIcon, ThumbsUp, MessageSquare, AlertCircle, Bot
 } from "lucide-react";
-import client from "../api/client";
+import client, { ensureAccessToken } from "../api/client";
 import Sidebar from "../components/layout/Sidebar";
 import LeaderAvatar from "../components/common/LeaderAvatar";
 import IndiaMap from "../components/common/IndiaMap";
@@ -101,12 +101,14 @@ export default function PoliticalProfile() {
     setChatLoading(true);
 
     try {
-      // SSE Chat Stream
+      const token = await ensureAccessToken();
+      if (!token) throw new Error("Not authenticated");
+
       const response = await fetch(`${import.meta.env.VITE_API_URL || "http://localhost:5000"}/api/profile/${creatorId}/chat`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${localStorage.getItem("token") || ""}`,
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
           message: userMsg,

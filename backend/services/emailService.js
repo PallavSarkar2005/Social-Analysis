@@ -42,9 +42,12 @@ export const getTransporter = async () => {
  * @param {String} htmlBody - HTML body content
  */
 export const sendEmailReport = async (to, subject, htmlBody) => {
+  if (process.env.NODE_ENV === "test") {
+    return true;
+  }
   try {
     const transporter = await getTransporter();
-    
+
     const info = await transporter.sendMail({
       from: process.env.EMAIL_FROM || '"Social IQ" <reports@socialiq.ai>',
       to,
