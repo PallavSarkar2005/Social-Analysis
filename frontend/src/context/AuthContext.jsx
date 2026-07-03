@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect } from "react";
-import client, { fetchCsrfToken, restoreSession } from "../api/client";
+import client, { restoreSession } from "../api/client";
 import {
   setAccessToken,
   clearAccessToken,
@@ -17,8 +17,6 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     const initializeAuth = async () => {
       clearLegacyAuthStorage();
-      await fetchCsrfToken();
-
       const restored = await restoreSession();
       if (!restored.success) {
         setLoading(false);

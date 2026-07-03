@@ -42,19 +42,49 @@ const getCookie = (name) => {
 };
 
 let csrfTokenInMemory = null;
+let csrfFetchPromise = null;
+
+const syncCsrfTokenFromCookie = () => {
+  csrfTokenInMemory = getCookie("XSRF-TOKEN") || null;
+  return csrfTokenInMemory;
+};
 
 export const fetchCsrfToken = async () => {
-  try {
-    const response = await client.get("/api/auth/csrf");
-    if (response.data && response.data.csrfToken) {
-      csrfTokenInMemory = response.data.csrfToken;
-      console.log("[CSRF] Fresh token:", csrfTokenInMemory);
-    }
-    return csrfTokenInMemory;
-  } catch (error) {
-    console.error("[API CSRF Fetch Error]", error);
-    return null;
+  const existingCookieToken = syncCsrfTokenFromCookie();
+  if (existingCookieToken) {
+    return existingCookieToken;
   }
+
+  if (csrfFetchPromise) {
+    return csrfFetchPromise;
+  }
+
+  csrfFetchPromise = (async () => {
+    try {
+      await client.get("/api/auth/csrf");
+
+      // Mirror the readable CSRF cookie only. If the browser does not expose
+      // the cookie, do not trust the response body token as a fallback.
+      const freshCookieToken = syncCsrfTokenFromCookie();
+      if (freshCookieToken) {
+        console.log("[CSRF] Fresh token:", freshCookieToken);
+        return freshCookieToken;
+      }
+
+      console.warn(
+        "[CSRF] CSRF cookie missing after fetch; refusing to trust response body token.",
+      );
+      return null;
+    } catch (error) {
+      syncCsrfTokenFromCookie();
+      console.error("[API CSRF Fetch Error]", error);
+      return null;
+    } finally {
+      csrfFetchPromise = null;
+    }
+  })();
+
+  return csrfFetchPromise;
 };
 
 export const restoreSession = async () => {
@@ -101,17 +131,19 @@ client.interceptors.request.use(
 
     // Ensure CSRF cookie exists before any state-changing request
     if (!safeMethods.includes(config.method?.toLowerCase())) {
-      const existingCsrf = getCookie("XSRF-TOKEN");
-      if (!existingCsrf && !csrfTokenInMemory) {
+      const existingCsrf = syncCsrfTokenFromCookie();
+      if (!existingCsrf) {
         await fetchCsrfToken();
       }
     }
 
     // Attach CSRF header for state-changing requests
     if (!safeMethods.includes(config.method?.toLowerCase())) {
-      const csrfToken = getCookie("XSRF-TOKEN") || csrfTokenInMemory;
+      const csrfToken = syncCsrfTokenFromCookie();
       if (csrfToken) {
         config.headers["X-XSRF-TOKEN"] = csrfToken;
+      } else if (config.headers["X-XSRF-TOKEN"]) {
+        delete config.headers["X-XSRF-TOKEN"];
       }
     }
 
