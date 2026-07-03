@@ -3,7 +3,7 @@ import SidebarLayout from "../components/layout/Sidebar";
 import Navbar from "../components/layout/Navbar";
 import { getAccounts } from "../api/accountApi";
 import { getChannelSummary } from "../api/analyticsApi";
-import { ensureAccessToken } from "../api/client";
+import { ensureAccessToken, fetchCsrfToken } from "../api/client";
 import {
   Sparkles,
   Brain,
@@ -218,20 +218,13 @@ export default function AIInsights() {
     });
     saveSessions(updatedSessions);
 
-    const getCookie = (name) => {
-      if (typeof document === "undefined") return null;
-      const value = `; ${document.cookie}`;
-      const parts = value.split(`; ${name}=`);
-      if (parts.length === 2) return parts.pop().split(";").shift();
-      return null;
-    };
-
     // Setup abort controller
     const controller = new AbortController();
     abortControllerRef.current = controller;
 
     try {
       const token = await ensureAccessToken();
+      const csrfToken = await fetchCsrfToken();
       if (!token) throw new Error("Not authenticated");
       const baseURL = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
@@ -240,7 +233,7 @@ export default function AIInsights() {
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
-          "X-XSRF-TOKEN": getCookie("XSRF-TOKEN") || "",
+          "X-XSRF-TOKEN": csrfToken || "",
         },
         credentials: "include",
         body: JSON.stringify({

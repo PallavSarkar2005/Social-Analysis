@@ -1,10 +1,12 @@
 import { generateSecureToken } from "../utils/crypto.js";
 import { getCsrfCookieOptions } from "../utils/cookies.js";
+import * as CsrfSessionRepository from "../repositories/CsrfSessionRepository.js";
 
 export const CSRF_COOKIE_NAME = "XSRF-TOKEN";
 export const CSRF_HEADER_NAMES = ["x-xsrf-token", "x-csrf-token"];
+const CSRF_SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
-export const getCsrfTokenFromRequest = (req) => {
+export const getCsrfSessionIdFromRequest = (req) => {
   const cookies = req.cookies || {};
   return cookies[CSRF_COOKIE_NAME] || null;
 };
@@ -18,25 +20,47 @@ export const getCsrfTokenFromHeaders = (req) => {
 };
 
 /**
- * Ensure a CSRF token exists on the request and in the cookie.
- * Never regenerates an existing token — prevents cookie/header mismatch.
+ * Ensure a CSRF synchronizer token exists for this browser session.
+ * The cookie stores only an opaque session id; the real token stays server-side.
  */
-export const ensureCsrfToken = (req, res) => {
-  const existing = getCsrfTokenFromRequest(req) || req.csrfToken;
-  const csrfToken = existing || generateSecureToken(32);
+const createCsrfSession = async (req, res) => {
+  const sessionId = generateSecureToken(40);
+  const csrfToken = generateSecureToken(32);
+  const expiresAt = new Date(Date.now() + CSRF_SESSION_TTL_MS);
 
-  if (!existing) {
-    res.cookie(CSRF_COOKIE_NAME, csrfToken, getCsrfCookieOptions(req));
-  }
+  await CsrfSessionRepository.create({
+    sessionId,
+    csrfToken,
+    expiresAt,
+  });
 
+  res.cookie(CSRF_COOKIE_NAME, sessionId, getCsrfCookieOptions(req));
   req.csrfToken = csrfToken;
   return csrfToken;
 };
 
+export const ensureCsrfToken = async (req, res) => {
+  if (req.csrfToken) {
+    return req.csrfToken;
+  }
+
+  const sessionId = getCsrfSessionIdFromRequest(req);
+  if (!sessionId) {
+    return createCsrfSession(req, res);
+  }
+
+  const session = await CsrfSessionRepository.findBySessionId(sessionId);
+  if (!session) {
+    return createCsrfSession(req, res);
+  }
+
+  req.csrfToken = session.csrfToken;
+  return session.csrfToken;
+};
+
 export const validateCsrfToken = (req) => {
-  const cookieToken = getCsrfTokenFromRequest(req) || req.csrfToken;
   const headerToken = getCsrfTokenFromHeaders(req);
-  return Boolean(cookieToken && headerToken && cookieToken === headerToken);
+  return Boolean(req.csrfToken && headerToken && req.csrfToken === headerToken);
 };
 
 export const shouldBypassCsrfValidation = (req) => {

@@ -32,29 +32,15 @@ const processQueue = (error) => {
   failedQueue = [];
 };
 
-// Helper to parse cookies on the client side
-const getCookie = (name) => {
-  if (typeof document === "undefined") return null;
-  const value = `; ${document.cookie}`;
-  const parts = value.split(`; ${name}=`);
-  if (parts.length === 2) return parts.pop().split(";").shift();
-  return null;
-};
-
 let csrfTokenInMemory = null;
 let csrfFetchPromise = null;
 
-const syncCsrfTokenFromCookie = () => {
-  csrfTokenInMemory = getCookie("XSRF-TOKEN") || null;
-  return csrfTokenInMemory;
+const clearCsrfToken = () => {
+  csrfTokenInMemory = null;
+  csrfFetchPromise = null;
 };
 
 export const fetchCsrfToken = async () => {
-  const existingCookieToken = syncCsrfTokenFromCookie();
-  if (existingCookieToken) {
-    return existingCookieToken;
-  }
-
   if (csrfTokenInMemory) {
     return csrfTokenInMemory;
   }
@@ -66,13 +52,6 @@ export const fetchCsrfToken = async () => {
   csrfFetchPromise = (async () => {
     try {
       const response = await client.get("/api/auth/csrf");
-
-      const freshCookieToken = syncCsrfTokenFromCookie();
-      if (freshCookieToken) {
-        console.log("[CSRF] Fresh token:", freshCookieToken);
-        return freshCookieToken;
-      }
-
       const responseToken = response.data?.csrfToken || null;
       if (responseToken) {
         csrfTokenInMemory = responseToken;
@@ -83,7 +62,7 @@ export const fetchCsrfToken = async () => {
       console.warn("[CSRF] CSRF token missing after fetch.");
       return null;
     } catch (error) {
-      syncCsrfTokenFromCookie();
+      clearCsrfToken();
       console.error("[API CSRF Fetch Error]", error);
       return null;
     } finally {
@@ -136,17 +115,9 @@ client.interceptors.request.use(
 
     const safeMethods = ["get", "head", "options"];
 
-    // Ensure CSRF cookie exists before any state-changing request
+    // Ensure a synchronizer token exists before any state-changing request.
     if (!safeMethods.includes(config.method?.toLowerCase())) {
-      const existingCsrf = syncCsrfTokenFromCookie();
-      if (!existingCsrf) {
-        await fetchCsrfToken();
-      }
-    }
-
-    // Attach CSRF header for state-changing requests
-    if (!safeMethods.includes(config.method?.toLowerCase())) {
-      const csrfToken = syncCsrfTokenFromCookie();
+      const csrfToken = csrfTokenInMemory || (await fetchCsrfToken());
       if (csrfToken) {
         config.headers["X-XSRF-TOKEN"] = csrfToken;
       } else if (config.headers["X-XSRF-TOKEN"]) {
@@ -165,6 +136,10 @@ client.interceptors.request.use(
 // Response Interceptor
 client.interceptors.response.use(
   (response) => {
+    const url = response.config?.url || "";
+    if (url.includes("/auth/logout") && !url.includes("/auth/logout-other")) {
+      clearCsrfToken();
+    }
     console.log(`[API Response] ${response.status} ${response.config.url}`);
     return response;
   },
