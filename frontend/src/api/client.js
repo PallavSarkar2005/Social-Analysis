@@ -55,25 +55,32 @@ export const fetchCsrfToken = async () => {
     return existingCookieToken;
   }
 
+  if (csrfTokenInMemory) {
+    return csrfTokenInMemory;
+  }
+
   if (csrfFetchPromise) {
     return csrfFetchPromise;
   }
 
   csrfFetchPromise = (async () => {
     try {
-      await client.get("/api/auth/csrf");
+      const response = await client.get("/api/auth/csrf");
 
-      // Mirror the readable CSRF cookie only. If the browser does not expose
-      // the cookie, do not trust the response body token as a fallback.
       const freshCookieToken = syncCsrfTokenFromCookie();
       if (freshCookieToken) {
         console.log("[CSRF] Fresh token:", freshCookieToken);
         return freshCookieToken;
       }
 
-      console.warn(
-        "[CSRF] CSRF cookie missing after fetch; refusing to trust response body token.",
-      );
+      const responseToken = response.data?.csrfToken || null;
+      if (responseToken) {
+        csrfTokenInMemory = responseToken;
+        console.log("[CSRF] Fresh token:", responseToken);
+        return responseToken;
+      }
+
+      console.warn("[CSRF] CSRF token missing after fetch.");
       return null;
     } catch (error) {
       syncCsrfTokenFromCookie();
