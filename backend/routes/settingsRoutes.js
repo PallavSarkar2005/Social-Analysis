@@ -9,11 +9,14 @@ import {
   getAppearance,
   updateAppearance,
 } from "../controllers/settingsController.js";
-import { protect } from "../middleware/authMiddleware.js";
+import { protect, optionalAuth } from "../middleware/authMiddleware.js";
 import { body } from "express-validator";
 import { validateResult } from "../middleware/validationMiddleware.js";
 
 const router = express.Router();
+
+// Public read — guests use defaults; logged-in users get saved prefs (no 401 on boot)
+router.get("/appearance", optionalAuth, getAppearance);
 
 router.use(protect);
 
@@ -47,7 +50,6 @@ router.post(
   updatePassword
 );
 
-router.get("/appearance", getAppearance);
 router.put("/appearance", updateAppearance);
 
 export default router;

@@ -9,6 +9,7 @@
     "build": "echo \"Automated dependency check completed\"",
     "lint": "eslint .",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand",
+    "rebuild-profiles": "node scripts/rebuildProfiles.js",
     "postinstall": "pip install --break-system-packages twscrape twikit || pip install twscrape twikit || true && npx playwright install chromium --with-deps || npx playwright install chromium"
   },
   "keywords": [],

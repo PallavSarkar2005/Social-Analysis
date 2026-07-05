@@ -7,7 +7,7 @@ import {
   getVideoStats,
 } from "../services/youtubeVideoService.js";
 import { syncAllYoutubeChannels } from "../jobs/youtubeSyncJob.js";
-import { getCreatorAnalyticsData } from "./compareController.js";
+import { syncYoutubeAccountTelemetry } from "../services/youtubeAccountSyncService.js";
 
 /*
 ========================================
@@ -27,44 +27,17 @@ export const syncYoutubeChannel = async (req, res, next) => {
       });
     }
 
-    // Fetch comprehensive real-time statistics
-    const analytics = await getCreatorAnalyticsData(account.accountId);
-
-    // Sync back to Account
-    await Account.updateOne(
-      { _id: account._id },
-      {
-        $set: {
-          subscribers: analytics.subscribers,
-          views: analytics.totalViews,
-          videos: analytics.totalVideos,
-          engagement: analytics.engagementRate,
-          lastSynced: new Date(),
-        }
-      }
-    );
-
-    const snapshot = await Snapshot.create({
-      account: account._id,
-      userId: req.user._id,
-      followers: analytics.subscribers,
-      views: analytics.totalViews,
-      videos: analytics.totalVideos,
-      likes: Math.round(analytics.avgLikes * Math.min(analytics.totalVideos || 1, 10)),
-      comments: Math.round(analytics.avgComments * Math.min(analytics.totalVideos || 1, 10)),
-      engagementRate: analytics.engagementRate,
-      averageEngagement: analytics.averageEngagement,
-      party: account.party || "Independent",
-      state: account.state || "Unknown State",
-      name: account.name,
-      profileImage: account.profileImage || analytics.thumbnail || "",
-      capturedAt: new Date(),
+    const result = await syncYoutubeAccountTelemetry(account, {
+      forceRefresh: true,
+      logPrefix: "[Manual Sync]",
     });
 
     res.status(200).json({
       success: true,
-      channel: account.name,
-      snapshot,
+      channel: result.account.name,
+      snapshotCreated: result.snapshotCreated,
+      snapshotSkipped: result.snapshotSkipped,
+      snapshot: result.snapshot,
     });
   } catch (error) {
     next(error);
@@ -78,11 +51,15 @@ Sync All Channels for current user
 */
 export const syncAllChannels = async (req, res, next) => {
   try {
-    await syncAllYoutubeChannels(req.user._id);
+    const summary = await syncAllYoutubeChannels(req.user._id, {
+      reasonLabel: "Manual Sync All",
+      forceRefresh: true,
+    });
 
     res.status(200).json({
       success: true,
       message: "Sync completed for your channels",
+      data: summary,
     });
   } catch (error) {
     next(error);

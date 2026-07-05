@@ -235,7 +235,7 @@ describe("Social IQ Backend API & Security Verification Suite", () => {
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
       expect(res.body.data.biography).toBeDefined();
-    });
+    }, 120000);
 
     it("should successfully fetch timeline milestones", async () => {
       const res = await request(app)

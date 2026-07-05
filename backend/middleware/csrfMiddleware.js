@@ -21,6 +21,17 @@ export const csrfProtection = async (req, res, next) => {
 
     next();
   } catch (error) {
-    next(error);
+    console.error("[CSRF] Middleware error:", error.message);
+    if (error.stack) console.error(error.stack);
+
+    // Never block safe/read-only requests because CSRF setup failed.
+    if (shouldBypassCsrfValidation(req)) {
+      return next();
+    }
+
+    return res.status(503).json({
+      success: false,
+      message: "Security token service temporarily unavailable. Please retry.",
+    });
   }
 };

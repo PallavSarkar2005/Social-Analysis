@@ -1,7 +1,7 @@
-import crypto from "crypto";
+import nodeCrypto from "node:crypto";
 
 export const hashToken = (token) =>
-  crypto.createHash("sha256").update(token).digest("hex");
+  nodeCrypto.createHash("sha256").update(token).digest("hex");
 
 export const generateSecureToken = (bytes = 32) =>
-  crypto.randomBytes(bytes).toString("hex");
+  nodeCrypto.randomBytes(bytes).toString("hex");

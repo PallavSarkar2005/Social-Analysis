@@ -19,6 +19,43 @@ export const getCsrfTokenFromHeaders = (req) => {
   return null;
 };
 
+/** In-memory fallback when MongoDB is temporarily unavailable. */
+const memoryCsrfSessions = new Map();
+
+const shouldUseMemoryCsrf = () =>
+  process.env.CSRF_MEMORY_ONLY === "true" || process.env.NODE_ENV === "development";
+
+const pruneMemorySessions = () => {
+  const now = Date.now();
+  for (const [sessionId, entry] of memoryCsrfSessions) {
+    if (entry.expiresAt <= now) {
+      memoryCsrfSessions.delete(sessionId);
+    }
+  }
+};
+
+const createMemoryCsrfSession = (req, res) => {
+  pruneMemorySessions();
+  const sessionId = generateSecureToken(40);
+  const csrfToken = generateSecureToken(32);
+  memoryCsrfSessions.set(sessionId, {
+    csrfToken,
+    expiresAt: Date.now() + CSRF_SESSION_TTL_MS,
+  });
+  res.cookie(CSRF_COOKIE_NAME, sessionId, getCsrfCookieOptions(req));
+  req.csrfToken = csrfToken;
+  return csrfToken;
+};
+
+const getMemoryCsrfToken = (sessionId) => {
+  const entry = memoryCsrfSessions.get(sessionId);
+  if (!entry || entry.expiresAt <= Date.now()) {
+    memoryCsrfSessions.delete(sessionId);
+    return null;
+  }
+  return entry.csrfToken;
+};
+
 /**
  * Ensure a CSRF synchronizer token exists for this browser session.
  * The cookie stores only an opaque session id; the real token stays server-side.
@@ -28,11 +65,16 @@ const createCsrfSession = async (req, res) => {
   const csrfToken = generateSecureToken(32);
   const expiresAt = new Date(Date.now() + CSRF_SESSION_TTL_MS);
 
-  await CsrfSessionRepository.create({
-    sessionId,
-    csrfToken,
-    expiresAt,
-  });
+  try {
+    await CsrfSessionRepository.create({
+      sessionId,
+      csrfToken,
+      expiresAt,
+    });
+  } catch (dbError) {
+    console.error("[CSRF] Database create failed, using in-memory fallback:", dbError.message);
+    return createMemoryCsrfSession(req, res);
+  }
 
   res.cookie(CSRF_COOKIE_NAME, sessionId, getCsrfCookieOptions(req));
   req.csrfToken = csrfToken;
@@ -45,17 +87,40 @@ export const ensureCsrfToken = async (req, res) => {
   }
 
   const sessionId = getCsrfSessionIdFromRequest(req);
+
+  if (shouldUseMemoryCsrf()) {
+    if (sessionId) {
+      const memoryToken = getMemoryCsrfToken(sessionId);
+      if (memoryToken) {
+        req.csrfToken = memoryToken;
+        return memoryToken;
+      }
+    }
+    return createMemoryCsrfSession(req, res);
+  }
+
   if (!sessionId) {
     return createCsrfSession(req, res);
   }
 
-  const session = await CsrfSessionRepository.findBySessionId(sessionId);
-  if (!session) {
-    return createCsrfSession(req, res);
+  const memoryToken = getMemoryCsrfToken(sessionId);
+  if (memoryToken) {
+    req.csrfToken = memoryToken;
+    return memoryToken;
   }
 
-  req.csrfToken = session.csrfToken;
-  return session.csrfToken;
+  try {
+    const session = await CsrfSessionRepository.findBySessionId(sessionId);
+    if (!session) {
+      return createCsrfSession(req, res);
+    }
+
+    req.csrfToken = session.csrfToken;
+    return session.csrfToken;
+  } catch (dbError) {
+    console.error("[CSRF] Database lookup failed, using in-memory fallback:", dbError.message);
+    return createMemoryCsrfSession(req, res);
+  }
 };
 
 export const validateCsrfToken = (req) => {

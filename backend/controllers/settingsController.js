@@ -243,11 +243,24 @@ export const updateNotificationPreferences = async (req, res, next) => {
   }
 };
 
-// @desc    Get user appearance preferences
+// @desc    Get user appearance preferences (public — returns defaults for guests)
 // @route   GET /api/settings/appearance
-// @access  Private
+// @access  Public (optional auth)
 export const getAppearance = async (req, res, next) => {
   try {
+    if (!req.user) {
+      return res.json({
+        success: true,
+        data: {
+          theme: "dark",
+          accent: "indigo",
+          fontSize: "medium",
+          compact: false,
+          animations: "full",
+        },
+      });
+    }
+
     const user = await User.findById(req.user._id).select("appearancePreferences");
     res.json({
       success: true,

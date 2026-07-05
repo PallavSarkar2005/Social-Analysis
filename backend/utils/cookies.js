@@ -1,6 +1,6 @@
 export const isSecureConnection = (req) =>
-  req.secure ||
-  req.headers["x-forwarded-proto"] === "https" ||
+  req?.secure ||
+  req?.headers?.["x-forwarded-proto"] === "https" ||
   process.env.NODE_ENV === "production";
 
 export const getCookieOptions = (req, overrides = {}) => {

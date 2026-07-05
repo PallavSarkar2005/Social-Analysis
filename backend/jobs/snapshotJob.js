@@ -3,15 +3,24 @@ import Account from "../models/Account.js";
 import Snapshot from "../models/Snapshot.js";
 import axios from "axios";
 import { scrapeXProfile } from "../scrapers/xScraper.js";
-import { getCreatorAnalyticsData } from "../controllers/compareController.js";
+import { syncAllYoutubeChannels } from "./youtubeSyncJob.js";
 
 // Helper to scrape/fetch metrics and save a snapshot
 export const runSnapshotSync = async (frequencyLabel = "Scheduled") => {
+  const startedAt = new Date();
   try {
-    console.log(`[Snapshot Job] Running ${frequencyLabel} snapshot sync...`);
+    console.log(`[Snapshot Job] Running ${frequencyLabel} snapshot sync at ${startedAt.toISOString()}...`);
 
-    const accounts = await Account.find({ isActive: true });
-    console.log(`[Snapshot Job] Syncing ${accounts.length} active accounts...`);
+    const youtubeSummary = await syncAllYoutubeChannels(null, {
+      reasonLabel: `${frequencyLabel} Snapshot Job`,
+      forceRefresh: false,
+      useLock: true,
+    });
+
+    const accounts = await Account.find({ isActive: true, platform: { $ne: "youtube" } });
+    console.log(`[Snapshot Job] Syncing ${accounts.length} non-YouTube active accounts...`);
+    let xSnapshotsCreated = 0;
+    let xFailures = 0;
 
     for (const account of accounts) {
       try {
@@ -24,33 +33,7 @@ export const runSnapshotSync = async (frequencyLabel = "Scheduled") => {
         let averageEngagement = 0;
         let profileImage = account.profileImage || account.thumbnail || "";
 
-        if (account.platform === "youtube") {
-          const analytics = await getCreatorAnalyticsData(account.accountId);
-          if (analytics) {
-            followers = analytics.subscribers;
-            views = analytics.totalViews;
-            videos = analytics.totalVideos;
-            likes = Math.round(analytics.avgLikes * Math.min(analytics.totalVideos || 1, 10));
-            comments = Math.round(analytics.avgComments * Math.min(analytics.totalVideos || 1, 10));
-            engagementRate = analytics.engagementRate;
-            averageEngagement = analytics.averageEngagement;
-            profileImage = account.profileImage || analytics.thumbnail || "";
-
-            // Update Account stats
-            await Account.updateOne(
-              { _id: account._id },
-              {
-                $set: {
-                  subscribers: followers,
-                  views,
-                  videos,
-                  engagement: engagementRate,
-                  lastSynced: new Date(),
-                }
-              }
-            );
-          }
-        } else if (account.platform === "x") {
+        if (account.platform === "x") {
           const profile = await scrapeXProfile(account.accountId);
           if (profile) {
             const parseMetric = (val) => {
@@ -83,15 +66,30 @@ export const runSnapshotSync = async (frequencyLabel = "Scheduled") => {
             profileImage,
             capturedAt: new Date(),
           });
+          xSnapshotsCreated += 1;
           console.log(`[Snapshot Job] Captured snapshot for ${account.name} (${account.platform})`);
         }
       } catch (err) {
+        xFailures += 1;
         console.error(`[Snapshot Job] Failed to sync account ${account.name}:`, err.message);
       }
     }
-    console.log(`[Snapshot Job] Finished ${frequencyLabel} snapshot sync.`);
+    const endedAt = new Date();
+    const runtimeMs = endedAt.getTime() - startedAt.getTime();
+    const totalProcessed = youtubeSummary.accountsProcessed + accounts.length;
+    const totalCreated = youtubeSummary.snapshotsCreated + xSnapshotsCreated;
+    const totalSkipped = youtubeSummary.snapshotsSkipped;
+    const totalFailures = youtubeSummary.apiFailures + xFailures;
+    console.log(
+      `[Snapshot Job] Finished ${frequencyLabel} snapshot sync. Start=${startedAt.toISOString()}, End=${endedAt.toISOString()}, RuntimeMs=${runtimeMs}, RuntimeSeconds=${(runtimeMs / 1000).toFixed(2)}, Processed=${totalProcessed}, Created=${totalCreated}, Skipped=${totalSkipped}, Failures=${totalFailures}; YouTube processed=${youtubeSummary.accountsProcessed}, created=${youtubeSummary.snapshotsCreated}, skipped=${youtubeSummary.snapshotsSkipped}, failures=${youtubeSummary.apiFailures}, executionSkipped=${youtubeSummary.executionSkipped ? "yes" : "no"}; X processed=${accounts.length}, created=${xSnapshotsCreated}, failures=${xFailures}; YouTubeApiRequests=${youtubeSummary.apiUsage?.requestCount ?? 0}, YouTubeApiQuotaCost=${youtubeSummary.apiUsage?.quotaCost ?? 0}, YouTubeApiCachedHits=${youtubeSummary.apiUsage?.cachedHits ?? 0}, YouTubeApiLiveRequests=${youtubeSummary.apiUsage?.liveRequests ?? 0}, YouTubeApiFailures=${youtubeSummary.apiUsage?.failures ?? 0}.`
+    );
   } catch (error) {
-    console.error(`[Snapshot Job] Critical error in runSnapshotSync:`, error);
+    const endedAt = new Date();
+    const runtimeMs = endedAt.getTime() - startedAt.getTime();
+    console.error(
+      `[Snapshot Job] Critical error in runSnapshotSync. Start=${startedAt.toISOString()}, End=${endedAt.toISOString()}, RuntimeMs=${runtimeMs}, RuntimeSeconds=${(runtimeMs / 1000).toFixed(2)}:`,
+      error
+    );
   }
 };
 

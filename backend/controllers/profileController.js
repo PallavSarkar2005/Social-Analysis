@@ -1,10 +1,15 @@
 import OpenAI from "openai";
-import axios from "axios";
 import Account from "../models/Account.js";
 import Snapshot from "../models/Snapshot.js";
+import Content from "../models/Content.js";
 import PoliticalProfile from "../models/PoliticalProfile.js";
+import { sanitizeBiographyForResponse, sanitizeVerifiedFactsForResponse, sanitizeSourcesForResponse } from "../services/politicalProfileEnrichmentService.js";
+import { sanitizeTimelineForResponse } from "../services/politicalTimelineService.js";
+import {
+  buildProfile,
+  refreshNewsIfStale,
+} from "../services/profileBuilderService.js";
 
-// Helper to launch AI Client
 const getAiClient = () => {
   const apiKey = process.env.GROQ_API_KEY || process.env.OPENAI_API_KEY;
   if (!apiKey) {
@@ -18,394 +23,317 @@ const getAiClient = () => {
       }),
       model: "llama-3.3-70b-versatile",
     };
-  } else {
-    return {
-      client: new OpenAI({
-        apiKey: process.env.OPENAI_API_KEY,
-      }),
-      model: "gpt-4o-mini",
-    };
   }
-};
-
-// Helper: Parse Google News RSS XML
-const parseGoogleNewsRss = (xmlString) => {
-  const items = [];
-  const itemRegex = /<item>([\s\S]*?)<\/item>/g;
-  let match;
-  while ((match = itemRegex.exec(xmlString)) !== null && items.length < 8) {
-    const content = match[1];
-    const titleMatch = content.match(/<title>([\s\S]*?)<\/title>/);
-    const linkMatch = content.match(/<link>([\s\S]*?)<\/link>/);
-    const pubDateMatch = content.match(/<pubDate>([\s\S]*?)<\/pubDate>/);
-    const sourceMatch = content.match(/<source[\s\S]*?>([\s\S]*?)<\/source>/);
-
-    let title = titleMatch ? titleMatch[1] : "";
-    let url = linkMatch ? linkMatch[1] : "";
-    let publishedTime = pubDateMatch ? pubDateMatch[1] : "";
-    let source = sourceMatch ? sourceMatch[1] : "News";
-
-    // Clean XML encoding escaping
-    title = title
-      .replace(/&amp;/g, "&")
-      .replace(/&lt;/g, "<")
-      .replace(/&gt;/g, ">")
-      .replace(/&quot;/g, '"')
-      .replace(/&#x27;/g, "'")
-      .replace(/&#x2F;/g, "/");
-
-    // Clean source name suffix from headline (e.g. "Modi speech - Times of India")
-    const cleanTitle = title.replace(/\s+-\s+[^ -]+$/, "").trim();
-
-    items.push({
-      headline: cleanTitle,
-      source,
-      publishedTime: publishedTime ? new Date(publishedTime).toLocaleDateString() : new Date().toLocaleDateString(),
-      url,
-      thumbnail: `https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=120&auto=format&fit=crop&q=60`, // Professional fallback
-      summary: cleanTitle,
-    });
-  }
-  return items;
-};
-
-// Core Research Engine (Uses LLM RAG + Wikipedia knowledge to build a full profile)
-const researchPoliticalLeader = async (account) => {
-  console.log(`[PROFILE RESEARCH] Executing deep research for leader: ${account.name}`);
-  const { client, model } = getAiClient();
-
-  const prompt = `You are a professional political research analyst for an election intelligence platform.
-Analyze and research the following Indian political leader:
-Name: ${account.name}
-Party: ${account.party}
-State: ${account.state}
-
-Provide a complete political intelligence profile in STRICT JSON FORMAT.
-Do not wrap in markdown quotes, return ONLY the raw JSON string.
-
-Schema to follow:
-{
-  "biography": {
-    "fullName": "Full legal name",
-    "dob": "DD-MM-YYYY (or approximate birth year)",
-    "age": age as integer,
-    "gender": "Male" or "Female" or "Other",
-    "state": "${account.state}",
-    "constituency": "Active parliamentary or assembly constituency",
-    "party": "${account.party}",
-    "currentPosition": "Current primary position/office held",
-    "previousPositions": ["array of prior key positions held"],
-    "currentOffice": "Address or office name",
-    "dateJoinedParty": "Year or date joined",
-    "dateFirstElected": "Year or date first elected",
-    "yearsInOffice": years in office as integer,
-    "education": "Highest education qualification",
-    "profession": "Profession before/during politics",
-    "officialWebsite": "URL or empty string",
-    "wikipediaLink": "Wikipedia URL"
-  },
-  "timeline": [
-    { "year": "YYYY", "event": "Key highlight event description" }
-  ],
-  "elections": [
-    {
-      "year": election year,
-      "election": "e.g. Lok Sabha 2019 or Assam Assembly 2021",
-      "constituency": "Constituency name",
-      "party": "Party name",
-      "votes": number of votes (approximate integer if exact unknown),
-      "margin": winning margin (integer),
-      "position": "Winner" or "Runner-up",
-      "votePct": vote percentage as a decimal (e.g. 54.2)
-    }
-  ],
-  "influence": {
-    "nationalReach": score 0-100,
-    "regionalReach": score 0-100,
-    "digitalInfluence": score 0-100,
-    "audienceGrowth": score 0-100,
-    "engagementScore": score 0-100,
-    "visibilityScore": score 0-100,
-    "trustScore": score 0-100,
-    "followerQualityScore": score 0-100,
-    "explanation": "2-sentence summary detailing their political reach and media footprint."
-  },
-  "geographicReach": [
-    { "state": "${account.state}", "concentration": 70, "influenceScore": 85 },
-    { "state": "Delhi", "concentration": 15, "influenceScore": 60 },
-    { "state": "Other States", "concentration": 15, "influenceScore": 40 }
-  ],
-  "aiInsights": [
-    "Insight 1: Primary digital footprint analysis.",
-    "Insight 2: Key content or speech performance trend.",
-    "Insight 3: Election and sentiment summary."
-  ]
-}`;
-
-  try {
-    const response = await client.chat.completions.create({
-      model,
-      messages: [{ role: "user", content: prompt }],
-      temperature: 0.2,
-      response_format: { type: "json_object" },
-    });
-
-    const parsed = JSON.parse(response.choices[0].message.content.trim());
-    console.log(`[PROFILE RESEARCH] Success resolving profile data for ${account.name}`);
-    return parsed;
-  } catch (error) {
-    console.error(`[PROFILE RESEARCH ERROR] Failed to research leader ${account.name}:`, error.message);
-    throw error;
-  }
-};
-
-// News Sentiment Analyzer
-const analyzeNewsSentiment = async (headlines) => {
-  const { client, model } = getAiClient();
-  const prompt = `Analyze the political sentiment of these news headlines:
-${headlines.map((h, i) => `${i+1}. ${h}`).join("\n")}
-
-Respond with ONLY a JSON object:
-{
-  "positive": percentage (integer, e.g. 40),
-  "neutral": percentage (integer, e.g. 45),
-  "negative": percentage (integer, e.g. 15),
-  "keywords": ["array of top 5 keywords"],
-  "trending": ["array of top 3 trending political topics"]
-}`;
-
-  try {
-    const response = await client.chat.completions.create({
-      model,
-      messages: [{ role: "user", content: prompt }],
-      temperature: 0.2,
-      response_format: { type: "json_object" },
-    });
-    return JSON.parse(response.choices[0].message.content.trim());
-  } catch (error) {
-    console.error("[SENTIMENT ANALYSIS ERROR] Fallback used:", error.message);
-    return {
-      positive: 33,
-      neutral: 34,
-      negative: 33,
-      keywords: ["Leader", "Elections", "Party"],
-      trending: ["Policy updates", "Campaign"],
-    };
-  }
+  return {
+    client: new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY,
+    }),
+    model: "gpt-4o-mini",
+  };
 };
 
 // Helper to resolve Account by ID or YouTube Channel ID (accountId)
 const resolveAccount = async (idOrChannelId) => {
   if (!idOrChannelId) return null;
-  // If it matches standard 24-character hexadecimal ObjectId format, search by ID first
   if (idOrChannelId.match(/^[0-9a-fA-F]{24}$/)) {
     const acc = await Account.findById(idOrChannelId);
     if (acc) return acc;
   }
-  // Otherwise, find by the YouTube channel ID (accountId)
   return await Account.findOne({ accountId: idOrChannelId });
 };
 
-// Core Helper: Get or Create Political Profile
+export const getOrCreateProfileForAccount = async (account) => {
+  const result = await buildProfile(account._id);
+  return result.profile;
+};
+
 const getOrCreateProfile = async (accountId) => {
   const account = await resolveAccount(accountId);
   if (!account) return null;
 
   let profile = await PoliticalProfile.findOne({ accountId: account._id });
-  const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
 
-  // If missing or cached for more than 3 days, trigger LLM background crawl/update
-  if (!profile || profile.lastSynced < threeDaysAgo) {
-    try {
-      const data = await researchPoliticalLeader(account);
-      
-      const updateData = {
-        accountId: account._id,
-        biography: data.biography,
-        timeline: data.timeline,
-        elections: data.elections,
-        influence: data.influence,
-        geographicReach: data.geographicReach,
-        aiInsights: data.aiInsights,
-        lastSynced: new Date(),
-      };
-
-      if (!profile) {
-        profile = await PoliticalProfile.create(updateData);
-      } else {
-        profile = await PoliticalProfile.findOneAndUpdate(
-          { accountId: account._id },
-          { $set: updateData },
-          { new: true }
-        );
-      }
-    } catch (err) {
-      console.error("[CRAWL FALLBACK] Failed to update, serving stale profile or default mockup", err.message);
-      if (!profile) {
-        // Create emergency placeholder profile to avoid 404 blockages
-        profile = await PoliticalProfile.create({
-          accountId: account._id,
-          biography: {
-            fullName: account.name,
-            dob: "Unknown",
-            state: account.state,
-            party: account.party,
-            currentPosition: "Political Leader",
-          },
-          timeline: [{ year: new Date().getFullYear().toString(), event: "Tracked in Social IQ analytics" }],
-          elections: [],
-          influence: { nationalReach: 50, regionalReach: 50, digitalInfluence: 50 },
-          lastSynced: new Date(),
-        });
-      }
-    }
+  if (!profile) {
+    const result = await buildProfile(account._id);
+    if (!result.profile) return null;
+    profile = result.profile;
+  } else {
+    // Serve cached profile immediately; refresh stale sections in the background.
+    buildProfile(account._id).catch((err) => {
+      console.warn(
+        `[PROFILE] Background rebuild failed for ${account.name}:`,
+        err.message
+      );
+    });
   }
 
   return { account, profile };
 };
 
+const logProfileEnter = (handler, creatorId) => {
+  console.log(`ENTER ${handler}`);
+  console.log(`[PROFILE API] ENTER ${handler} creatorId=${creatorId}`);
+};
+
+const logProfileSuccess = (handler, creatorId, startedAt) => {
+  console.log(`SUCCESS ${handler}`);
+  console.log(
+    `[PROFILE API] EXIT ${handler} creatorId=${creatorId} duration=${Date.now() - startedAt}ms`
+  );
+};
+
+const logProfileError = (handler, creatorId, error) => {
+  console.error(`FAILED ${handler}`, error);
+  console.error(`[PROFILE API] ERROR ${handler} creatorId=${creatorId}: ${error.message}`);
+  if (error.stack) console.error(error.stack);
+};
+
 // 1. GET /api/profile/:creatorId
 export const getProfile = async (req, res, next) => {
+  const startedAt = Date.now();
+  const { creatorId } = req.params;
+  logProfileEnter("getProfile", creatorId);
   try {
-    const result = await getOrCreateProfile(req.params.creatorId);
+    const result = await getOrCreateProfile(creatorId);
     if (!result) return res.status(404).json({ success: false, message: "Profile not found" });
 
     res.json({
       success: true,
       data: {
         account: result.account,
-        biography: result.profile.biography,
+        biography: sanitizeBiographyForResponse(result.profile.biography),
+        verifiedFacts: sanitizeVerifiedFactsForResponse(result.profile.verifiedFacts),
+        fieldProvenance: result.profile.fieldProvenance || {},
+        timeline: sanitizeTimelineForResponse(result.profile.timeline),
+        sources: sanitizeSourcesForResponse(result.profile.sources),
+        confidenceScore: result.profile.confidenceScore ?? 0,
+        confidenceBreakdown: result.profile.confidenceBreakdown || {},
+        intelligenceOverview: result.profile.intelligenceOverview || [],
+        politicalStatistics: result.profile.politicalStatistics || [],
+        relationships: result.profile.relationships || { nodes: [], edges: [] },
+        fieldConflicts: result.profile.fieldConflicts || [],
+        sectionMeta: result.profile.sectionMeta || {},
+        verificationCatalog: result.profile.verificationCatalog || [],
+        lastVerified: result.profile.lastVerified || result.profile.lastSynced,
         lastSynced: result.profile.lastSynced,
       },
     });
+    logProfileSuccess("getProfile", creatorId, startedAt);
   } catch (error) {
+    logProfileError("getProfile", creatorId, error);
     next(error);
   }
 };
 
 // 2. GET /api/profile/:creatorId/timeline
 export const getTimeline = async (req, res, next) => {
+  const startedAt = Date.now();
+  const { creatorId } = req.params;
+  logProfileEnter("getTimeline", creatorId);
   try {
-    const result = await getOrCreateProfile(req.params.creatorId);
+    const result = await getOrCreateProfile(creatorId);
     if (!result) return res.status(404).json({ success: false, message: "Profile not found" });
 
     res.json({
       success: true,
-      data: result.profile.timeline,
+      data: sanitizeTimelineForResponse(result.profile.timeline),
     });
+    logProfileSuccess("getTimeline", creatorId, startedAt);
   } catch (error) {
+    logProfileError("getTimeline", creatorId, error);
     next(error);
   }
 };
 
+const NEWS_REQUEST_TIMEOUT_MS = 15000;
+
 // 3. GET /api/profile/:creatorId/news
-export const getNews = async (req, res, next) => {
+export const getNews = async (req, res) => {
+  const { creatorId } = req.params;
+  const logPrefix = `[NEWS] creatorId=${creatorId}`;
+  let cachedNews = [];
+  let cachedSentiment = null;
+
+  console.log("ENTER getNews");
+  console.log(`${logPrefix} request start`);
+
   try {
-    const { creatorId } = req.params;
-    const result = await getOrCreateProfile(creatorId);
-    if (!result) return res.status(404).json({ success: false, message: "Profile not found" });
-
-    const { account, profile } = result;
-    const cacheLimit = new Date(Date.now() - 30 * 60 * 1000); // 30 minutes news cache
-
-    // If news cache is stale, crawl fresh RSS feed
-    if (profile.news.length === 0 || profile.lastSynced < cacheLimit) {
-      try {
-        console.log(`[NEWS CRAWL] Scraping Google News RSS for ${account.name}`);
-        const rssUrl = `https://news.google.com/rss/search?hl=en-IN&gl=IN&ceid=IN:en&q=${encodeURIComponent(account.name)}`;
-        const response = await axios.get(rssUrl, { timeout: 10000 });
-        
-        const freshNews = parseGoogleNewsRss(response.data);
-        
-        if (freshNews.length > 0) {
-          const sentiment = await analyzeNewsSentiment(freshNews.map(item => item.headline));
-          
-          profile.news = freshNews;
-          profile.newsSentiment = sentiment;
-          profile.lastSynced = new Date();
-          await profile.save();
-        }
-      } catch (err) {
-        console.error("[NEWS CRAWL ERROR] Serving stored news:", err.message);
-      }
+    const account = await resolveAccount(creatorId);
+    if (!account) {
+      console.log(`${logPrefix} account not found`);
+      return res.status(404).json({ success: false, message: "Profile not found" });
     }
 
-    res.json({
+    const profile = await PoliticalProfile.findOne({ accountId: account._id }).lean();
+    cachedNews = profile?.news ?? [];
+    cachedSentiment = profile?.newsSentiment ?? null;
+    console.log(
+      `${logPrefix} cache lookup newsCount=${cachedNews.length} lastSynced=${profile?.lastSynced ?? "none"}`
+    );
+
+    const refreshedProfile = await Promise.race([
+      refreshNewsIfStale(account, profile, { logPrefix }),
+      new Promise((_, reject) => {
+        setTimeout(
+          () => reject(new Error(`News pipeline timed out after ${NEWS_REQUEST_TIMEOUT_MS}ms`)),
+          NEWS_REQUEST_TIMEOUT_MS
+        );
+      }),
+    ]);
+
+    const safeProfile = refreshedProfile || profile;
+    const news = safeProfile?.news ?? cachedNews;
+    const sentiment = safeProfile?.newsSentiment ?? cachedSentiment;
+
+    console.log(`${logPrefix} final response newsCount=${news?.length ?? 0}`);
+
+    console.log("SUCCESS getNews");
+    return res.json({
       success: true,
       data: {
-        news: profile.news,
-        sentiment: profile.newsSentiment,
+        news: news ?? [],
+        sentiment: sentiment ?? null,
       },
     });
   } catch (error) {
-    next(error);
+    console.error("FAILED getNews", error);
+    console.error(`${logPrefix} pipeline error:`, error.message);
+    if (error.stack) console.error(error.stack);
+
+    console.log(`${logPrefix} returning safe fallback`);
+    return res.json({
+      success: true,
+      data: {
+        news: cachedNews,
+        sentiment: cachedSentiment,
+      },
+    });
   }
 };
 
 // 4. GET /api/profile/:creatorId/charts
 export const getCharts = async (req, res, next) => {
+  console.log("ENTER getCharts");
   try {
     const { creatorId } = req.params;
     const account = await resolveAccount(creatorId);
     if (!account) return res.status(404).json({ success: false, message: "Account not found" });
 
-    // Fetch snapshot history
-    const snapshots = await Snapshot.find({
-      account: account._id,
-      userId: req.user._id,
-    }).sort({ capturedAt: 1 }).lean();
+    const [snapshots, contents] = await Promise.all([
+      Snapshot.find({
+        account: account._id,
+        userId: req.user._id,
+      }).sort({ capturedAt: 1 }).lean(),
+      Content.find({
+        account: account._id,
+        userId: req.user._id,
+      })
+        .select("type")
+        .lean(),
+    ]);
 
-    // Map time-series charts
+    // Build all chart datasets from the same chronologically sorted snapshot history.
     const timeSeries = snapshots.map((s) => ({
+      capturedAt: new Date(s.capturedAt).toISOString(),
       date: new Date(s.capturedAt).toLocaleDateString(),
       subscribers: s.followers,
       views: s.views,
-      engagement: s.engagementRate || 2.5,
+      engagement: s.engagementRate || 0,
     }));
 
-    // Build uploads bar chart (mock distribution over past 6 months based on videoCount)
-    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun"];
-    const avgUploads = Math.max(Math.round(account.videos / 24), 2);
-    const uploadsDistribution = months.map((m) => ({
-      month: m,
-      uploads: Math.round(avgUploads * (0.8 + Math.random() * 0.4)),
-    }));
+    const uploadsByMonth = new Map();
+    for (let i = 1; i < snapshots.length; i++) {
+      const previous = snapshots[i - 1];
+      const current = snapshots[i];
+      const previousVideos = Number(previous.videos || 0);
+      const currentVideos = Number(current.videos || 0);
+      const uploadsDelta = currentVideos - previousVideos;
+
+      if (uploadsDelta <= 0) continue;
+
+      const capturedAt = new Date(current.capturedAt);
+      const monthKey = `${capturedAt.getFullYear()}-${String(capturedAt.getMonth() + 1).padStart(2, "0")}`;
+      const monthLabel = capturedAt.toLocaleDateString("en-US", {
+        month: "short",
+        year: "numeric",
+      });
+
+      if (!uploadsByMonth.has(monthKey)) {
+        uploadsByMonth.set(monthKey, {
+          month: monthLabel,
+          uploads: 0,
+        });
+      }
+
+      uploadsByMonth.get(monthKey).uploads += uploadsDelta;
+    }
+
+    const uploadsDistribution = Array.from(uploadsByMonth.values());
+
+    const contentTypeCounts = new Map();
+    for (const content of contents) {
+      const normalizedType = content.type === "short" ? "Shorts" : content.type === "video" ? "Videos" : null;
+      if (!normalizedType) continue;
+      contentTypeCounts.set(normalizedType, (contentTypeCounts.get(normalizedType) || 0) + 1);
+    }
+
+    const totalContentItems = Array.from(contentTypeCounts.values()).reduce((sum, count) => sum + count, 0);
+    const categories = Array.from(contentTypeCounts.entries())
+      .map(([name, value]) => ({
+        name,
+        value,
+        percentage: totalContentItems > 0 ? Number(((value / totalContentItems) * 100).toFixed(2)) : 0,
+      }))
+      .sort((a, b) => b.value - a.value);
+
+    const contentDistributionMessage = contents.length === 0
+      ? "No synced YouTube content metadata is available for this profile yet."
+      : categories.length === 0
+        ? "Stored YouTube content items do not include distribution metadata yet."
+        : "";
 
     res.json({
       success: true,
       data: {
         timeSeries,
         uploadsDistribution,
-        categories: [
-          { name: "Elections & Campaigns", value: 45 },
-          { name: "Interviews & Press Talks", value: 30 },
-          { name: "Public Welfare Schemes", value: 15 },
-          { name: "Other", value: 10 },
-        ],
+        categories,
+        contentDistributionMessage,
       },
     });
+    console.log("SUCCESS getCharts");
   } catch (error) {
+    console.error("FAILED getCharts", error);
     next(error);
   }
 };
 
 // 5. GET /api/profile/:creatorId/elections
 export const getElections = async (req, res, next) => {
+  console.log("ENTER getElections");
   try {
     const result = await getOrCreateProfile(req.params.creatorId);
     if (!result) return res.status(404).json({ success: false, message: "Profile not found" });
 
+    const elections =
+      result.profile.electionIntelligence?.length > 0
+        ? result.profile.electionIntelligence
+        : result.profile.elections;
+
     res.json({
       success: true,
-      data: result.profile.elections,
+      data: Array.isArray(elections) ? elections : [],
     });
+    console.log("SUCCESS getElections");
   } catch (error) {
+    console.error("FAILED getElections", error);
     next(error);
   }
 };
 
 // 6. GET /api/profile/:creatorId/influence
 export const getInfluence = async (req, res, next) => {
+  console.log("ENTER getInfluence");
   try {
     const result = await getOrCreateProfile(req.params.creatorId);
     if (!result) return res.status(404).json({ success: false, message: "Profile not found" });
@@ -413,32 +341,43 @@ export const getInfluence = async (req, res, next) => {
     res.json({
       success: true,
       data: {
-        influence: result.profile.influence,
-        geographicReach: result.profile.geographicReach,
+        influence: result.profile.influence || {},
+        geographicReach: Array.isArray(result.profile.geographicReach)
+          ? result.profile.geographicReach
+          : [],
       },
     });
+    console.log("SUCCESS getInfluence");
   } catch (error) {
+    console.error("FAILED getInfluence", error);
     next(error);
   }
 };
 
 // 7. GET /api/profile/:creatorId/ai-insights
 export const getAiInsights = async (req, res, next) => {
+  console.log("ENTER getAiInsights");
   try {
     const result = await getOrCreateProfile(req.params.creatorId);
     if (!result) return res.status(404).json({ success: false, message: "Profile not found" });
 
     res.json({
       success: true,
-      data: result.profile.aiInsights,
+      data: {
+        insights: Array.isArray(result.profile.aiInsights) ? result.profile.aiInsights : [],
+        summary: result.profile.aiSummary || {},
+      },
     });
+    console.log("SUCCESS getAiInsights");
   } catch (error) {
+    console.error("FAILED getAiInsights", error);
     next(error);
   }
 };
 
 // 8. GET /api/profile/:creatorId/history
 export const getHistory = async (req, res, next) => {
+  console.log("ENTER getHistory");
   try {
     const { creatorId } = req.params;
     const account = await resolveAccount(creatorId);
@@ -462,13 +401,16 @@ export const getHistory = async (req, res, next) => {
         engagement: s.engagementRate || 0,
       })),
     });
+    console.log("SUCCESS getHistory");
   } catch (error) {
+    console.error("FAILED getHistory", error);
     next(error);
   }
 };
 
 // 9. GET /api/profile/:creatorId/similar
 export const getSimilar = async (req, res, next) => {
+  console.log("ENTER getSimilar");
   try {
     const account = await resolveAccount(req.params.creatorId);
     if (!account) return res.status(404).json({ success: false, message: "Creator not found" });
@@ -498,13 +440,16 @@ export const getSimilar = async (req, res, next) => {
         subscribers: s.subscribers || 0,
       })),
     });
+    console.log("SUCCESS getSimilar");
   } catch (error) {
+    console.error("FAILED getSimilar", error);
     next(error);
   }
 };
 
 // 10. POST /api/profile/:creatorId/chat (SSE Stream context-aware researcher chat)
 export const chatProfile = async (req, res, next) => {
+  console.log("ENTER chatProfile");
   const { creatorId } = req.params;
   const { message, history = [] } = req.body;
   
@@ -578,7 +523,9 @@ ${creatorContext}
 
     res.write("data: [DONE]\n\n");
     res.end();
+    console.log("SUCCESS chatProfile");
   } catch (error) {
+    console.error("FAILED chatProfile", error);
     console.error("[PROFILE CHAT ERROR]", error.message);
     res.write(`data: ${JSON.stringify({ error: "Political Research assistant encountered a problem. Please try again." })}\n\n`);
     res.write("data: [DONE]\n\n");

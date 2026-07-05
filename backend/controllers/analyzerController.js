@@ -3,7 +3,13 @@ import Account from "../models/Account.js";
 import Snapshot from "../models/Snapshot.js";
 import { youtubeGet } from "../utils/youtubeClient.js";
 import { getCreatorAnalyticsData } from "./compareController.js";
+import PoliticalProfile from "../models/PoliticalProfile.js";
 import { resolveOfficialPublicImage } from "../utils/imageResolver.js";
+import {
+  buildRecentVideoRecord,
+  summarizeRecentVideoMetrics,
+  syncRecentYoutubeContent,
+} from "../services/youtubeAccountSyncService.js";
 
 
 /*
@@ -207,42 +213,20 @@ Main Analyzer Controller
 // Coalescing request map
 const activeRequests = new Map();
 
+const resolvePoliticalGroup = (selectedGroup = "Other", selectedParty = "Independent") => {
+  const cleanGroup = (selectedGroup || "").trim() || "Other";
+  const cleanParty = (selectedParty || "").trim() || "Independent";
+  const isFallbackGroup = cleanGroup.toLowerCase() === "other";
+  const isExplicitParty =
+    cleanParty &&
+    !["independent", "other", "unknown state"].includes(cleanParty.toLowerCase());
+
+  return isFallbackGroup && isExplicitParty ? cleanParty : cleanGroup;
+};
+
 const fetchYoutubeData = async (channelId, url, forceRefresh) => {
-  const channelDataPromise = youtubeGet(
-    "getChannelStats",
-    "https://www.googleapis.com/youtube/v3/channels",
-    {
-      part: "snippet,statistics,contentDetails",
-      id: channelId,
-    },
-    forceRefresh
-  );
-  
-  const uploadsPlaylistId = `UU${channelId.substring(2)}`;
-  const recentVideosPromise = youtubeGet(
-    "getChannelVideos",
-    "https://www.googleapis.com/youtube/v3/playlistItems",
-    {
-      playlistId: uploadsPlaylistId,
-      part: "snippet",
-      maxResults: 10,
-    },
-    forceRefresh
-  );
-  
-  const analyticsPromise = getCreatorAnalyticsData(channelId);
-  
-  const [channelDataRes, recentVideosDataRes, analytics] = await Promise.all([
-    channelDataPromise,
-    recentVideosPromise,
-    analyticsPromise
-  ]);
-  
-  return { 
-    channelData: channelDataRes.data, 
-    recentVideosData: recentVideosDataRes.data, 
-    analytics 
-  };
+  const analytics = await getCreatorAnalyticsData(channelId, forceRefresh);
+  return { analytics };
 };
 
 const getCoalescedYoutubeData = (channelId, url, forceRefresh) => {
@@ -292,6 +276,7 @@ export const analyzeYoutubeUrl = async (req, res, next) => {
     const selectedGroup = req.body?.group || "Other";
     const selectedState = req.body?.state || "Unknown State";
     const selectedParty = req.body?.party || "Independent";
+    const resolvedGroup = resolvePoliticalGroup(selectedGroup, selectedParty);
     const forceRefresh = req.body?.forceRefresh === true || req.body?.forceRefresh === "true";
     // profileImage is a URL string like /uploads/filename.jpg — extracted before any further processing
     const submittedProfileImage = (req.body?.profileImage || "").trim();
@@ -450,36 +435,23 @@ export const analyzeYoutubeUrl = async (req, res, next) => {
         videos: cachedAccount.videos || 0,
         engagement: cachedAccount.engagement || 0,
         recentVideos: cachedAccount.recentVideos || [],
+        averageEngagement: 0,
       };
     } else {
       // Refresh cache: Fetch fresh data with coalesced request Map
       console.log(`CACHE MISS: Fetching fresh YouTube data for channelId ${channelId}`);
       const freshData = await getCoalescedYoutubeData(channelId, url, forceRefresh);
-      
-      const channel = freshData.channelData?.items?.[0];
-      if (!channel) {
-        return res.status(404).json({ success: false, message: "Channel details not found on YouTube" });
-      }
-
-      const recentVideosRaw = freshData.recentVideosData?.items || [];
-      const recentVideosItems = recentVideosRaw.map(item => ({
-        id: {
-          kind: "youtube#video",
-          videoId: item.snippet?.resourceId?.videoId
-        },
-        snippet: item.snippet
-      }));
-
-      const youtubeThumbnail = channel.snippet?.thumbnails?.high?.url || channel.snippet?.thumbnails?.medium?.url || "";
+      const recentVideosItems = (freshData.analytics.recentVideos || []).map(buildRecentVideoRecord);
 
       accountData = {
-        title: channel.snippet.title,
-        description: channel.snippet.description || "",
-        thumbnail: youtubeThumbnail,
-        subscribers: Number(channel.statistics.subscriberCount || 0),
-        views: Number(channel.statistics.viewCount || 0),
-        videos: Number(channel.statistics.videoCount || 0),
+        title: freshData.analytics.name,
+        description: freshData.analytics.description || "",
+        thumbnail: freshData.analytics.thumbnail || "",
+        subscribers: Number(freshData.analytics.subscribers || 0),
+        views: Number(freshData.analytics.totalViews || 0),
+        videos: Number(freshData.analytics.totalVideos || 0),
         engagement: freshData.analytics.engagementRate || 0,
+        averageEngagement: freshData.analytics.averageEngagement || 0,
         recentVideos: recentVideosItems,
       };
     }
@@ -508,7 +480,7 @@ export const analyzeYoutubeUrl = async (req, res, next) => {
       engagement: accountData.engagement,
       recentVideos: accountData.recentVideos,
       normalizedUrl: normalizedUrl,
-      group: selectedGroup,
+      group: resolvedGroup,
       state: selectedState,
       party: selectedParty,
       analyzedAt,
@@ -638,6 +610,14 @@ export const analyzeYoutubeUrl = async (req, res, next) => {
     );
     console.log("[DB] Global updateMany propagated to", globalUpdateResult.modifiedCount, "other account(s)");
 
+    const syncedContentCount = await syncRecentYoutubeContent(
+      account,
+      req.user._id,
+      accountData.recentVideos
+    );
+    console.log("[DB] Synced recent YouTube content items:", syncedContentCount);
+
+    const recentVideoMetrics = summarizeRecentVideoMetrics(accountData.recentVideos);
 
     // Create Snapshot record for tracking history
     await Snapshot.create({
@@ -646,14 +626,18 @@ export const analyzeYoutubeUrl = async (req, res, next) => {
       followers: account.subscribers,
       views: account.views,
       videos: account.videos,
-      likes: Math.round((account.engagement / 100) * account.views),
+      likes: recentVideoMetrics.totalLikes,
+      comments: recentVideoMetrics.totalComments,
       engagementRate: account.engagement,
+      averageEngagement: accountData.averageEngagement || recentVideoMetrics.averageEngagement,
       party: selectedParty,
       state: selectedState,
       name: account.name,
       profileImage: account.profileImage || account.thumbnail,
       capturedAt: new Date(),
     });
+
+    const profile = await PoliticalProfile.findOne({ accountId: account._id }).select("_id").lean();
     // Fetch snapshot history
     const history = await Snapshot.find({
       account: account._id,
@@ -684,6 +668,10 @@ export const analyzeYoutubeUrl = async (req, res, next) => {
         totalViews: account.views,
         videoCount: account.videos,
         recentVideos: account.recentVideos,
+        group: account.group,
+        party: account.party,
+        state: account.state,
+        politicalProfileId: profile?._id || null,
         history: history.map((item) => ({
           date: new Date(item.capturedAt).toLocaleDateString(),
           followers: item.followers,

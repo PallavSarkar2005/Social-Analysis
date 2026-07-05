@@ -37,8 +37,16 @@ const politicalProfileSchema = new mongoose.Schema(
 
     timeline: [
       {
+        id: { type: String, default: "" },
         year: { type: String, required: true },
-        event: { type: String, required: true },
+        date: { type: String, default: null },
+        category: { type: String, required: true },
+        title: { type: String, required: true },
+        description: { type: String, default: "" },
+        source: { type: String, default: "" },
+        sourceUrl: { type: String, default: "" },
+        confidence: { type: Number, default: 0 },
+        verifiedBy: { type: [String], default: [] },
       },
     ],
 
@@ -52,8 +60,103 @@ const politicalProfileSchema = new mongoose.Schema(
         margin: { type: Number, default: 0 },
         position: { type: String, default: "Winner" },
         votePct: { type: Number, default: 0 },
+        opponent: { type: String, default: "" },
+        voteShare: { type: Number, default: null },
+        winner: { type: String, default: "" },
+        runnerUp: { type: String, default: "" },
+        turnout: { type: Number, default: null },
+        assets: { type: String, default: "" },
+        liabilities: { type: String, default: "" },
+        criminalCases: { type: Number, default: null },
+        education: { type: String, default: "" },
+        occupation: { type: String, default: "" },
+        affidavitLink: { type: String, default: "" },
+        source: { type: String, default: "" },
       },
     ],
+
+    facts: [
+      {
+        type: { type: String, required: true },
+        title: { type: String, default: "" },
+        description: { type: String, default: "" },
+        value: { type: String, default: "" },
+        date: { type: String, default: null },
+        year: { type: String, default: null },
+        confidence: { type: Number, default: 0 },
+        source: { type: String, default: "" },
+        sourceUrl: { type: String, default: "" },
+        verifiedBy: { type: [String], default: [] },
+      },
+    ],
+
+    verifiedFacts: [
+      {
+        key: { type: String, required: true },
+        label: { type: String, required: true },
+        value: { type: String, required: true },
+        confidence: { type: Number, default: 0 },
+        verifiedBy: { type: [String], default: [] },
+        lastVerified: { type: String, default: null },
+        conflict: { type: Boolean, default: false },
+        alternatives: { type: [mongoose.Schema.Types.Mixed], default: [] },
+      },
+    ],
+
+    fieldProvenance: {
+      type: mongoose.Schema.Types.Mixed,
+      default: {},
+    },
+
+    electionIntelligence: {
+      type: mongoose.Schema.Types.Mixed,
+      default: [],
+    },
+
+    relationships: {
+      nodes: { type: [mongoose.Schema.Types.Mixed], default: [] },
+      edges: { type: [mongoose.Schema.Types.Mixed], default: [] },
+    },
+
+    intelligenceOverview: {
+      type: [mongoose.Schema.Types.Mixed],
+      default: [],
+    },
+
+    confidenceBreakdown: {
+      identity: { type: Number, default: 0 },
+      birth: { type: Number, default: 0 },
+      education: { type: Number, default: 0 },
+      career: { type: Number, default: 0 },
+      electionHistory: { type: Number, default: 0 },
+      biography: { type: Number, default: 0 },
+      overall: { type: Number, default: 0 },
+    },
+
+    aiSummary: {
+      type: mongoose.Schema.Types.Mixed,
+      default: {},
+    },
+
+    fieldConflicts: {
+      type: [mongoose.Schema.Types.Mixed],
+      default: [],
+    },
+
+    politicalStatistics: {
+      type: [mongoose.Schema.Types.Mixed],
+      default: [],
+    },
+
+    sectionMeta: {
+      type: mongoose.Schema.Types.Mixed,
+      default: {},
+    },
+
+    verificationCatalog: {
+      type: [mongoose.Schema.Types.Mixed],
+      default: [],
+    },
 
     influence: {
       nationalReach: { type: Number, default: 0 },
@@ -140,9 +243,79 @@ const politicalProfileSchema = new mongoose.Schema(
       default: [],
     },
 
+    sources: [
+      {
+        name: { type: String, required: true },
+        url: { type: String, default: "" },
+        type: { type: String, default: "scrape" },
+        confidence: { type: Number, default: 0 },
+        fetchedAt: { type: Date, default: Date.now },
+      },
+    ],
+
+    confidenceScore: {
+      type: Number,
+      default: 0,
+    },
+
+    lastVerified: {
+      type: Date,
+      default: null,
+    },
+
     lastSynced: {
       type: Date,
       default: Date.now,
+    },
+
+    builderVersion: {
+      type: Number,
+      default: 0,
+    },
+
+    overviewVersion: {
+      type: Number,
+      default: 0,
+    },
+
+    timelineVersion: {
+      type: Number,
+      default: 0,
+    },
+
+    factsVersion: {
+      type: Number,
+      default: 0,
+    },
+
+    electionVersion: {
+      type: Number,
+      default: 0,
+    },
+
+    relationshipVersion: {
+      type: Number,
+      default: 0,
+    },
+
+    aiVersion: {
+      type: Number,
+      default: 0,
+    },
+
+    influenceVersion: {
+      type: Number,
+      default: 0,
+    },
+
+    reachVersion: {
+      type: Number,
+      default: 0,
+    },
+
+    lastBuiltAt: {
+      type: Date,
+      default: null,
     },
   },
   {

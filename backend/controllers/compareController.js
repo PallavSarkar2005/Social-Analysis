@@ -270,7 +270,7 @@ const getChannelIdByHandleSafe = async (handleOrQuery) => {
   return null;
 };
 
-export const getCreatorAnalyticsData = async (channelId) => {
+export const getCreatorAnalyticsData = async (channelId, forceRefresh = false) => {
   console.log(`\nLOG [getCreatorAnalyticsData] Fetching channel metadata for channelId: ${channelId}`);
 
   // Fetch channel metadata
@@ -280,7 +280,8 @@ export const getCreatorAnalyticsData = async (channelId) => {
     {
       part: "snippet,statistics",
       id: channelId,
-    }
+    },
+    forceRefresh,
   );
 
   if (!channelResponseData || !channelResponseData.items || !channelResponseData.items.length) {
@@ -304,7 +305,8 @@ export const getCreatorAnalyticsData = async (channelId) => {
       order: "date",
       maxResults: 10,
       type: "video",
-    }
+    },
+    forceRefresh,
   );
 
   const searchItems = searchResponseData?.items || [];
@@ -317,6 +319,18 @@ export const getCreatorAnalyticsData = async (channelId) => {
   let averageEngagement = 0;
   let uploadFrequency = "Infrequent";
   let latestUpload = null;
+  let totalLikes = 0;
+  let totalComments = 0;
+  let recentVideos = [];
+
+  const parseDurationToSeconds = (duration = "") => {
+    const match = duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
+    if (!match) return 0;
+    const hours = Number(match[1] || 0);
+    const minutes = Number(match[2] || 0);
+    const seconds = Number(match[3] || 0);
+    return (hours * 3600) + (minutes * 60) + seconds;
+  };
 
   if (videoIds.length > 0) {
     console.log(`\nLOG [getCreatorAnalyticsData] Fetching statistics for recent video IDs: ${videoIds.join(",")}`);
@@ -326,17 +340,18 @@ export const getCreatorAnalyticsData = async (channelId) => {
       "getVideoStatsMultiple",
       "https://www.googleapis.com/youtube/v3/videos",
       {
-        part: "statistics,snippet",
+        part: "statistics,snippet,contentDetails",
         id: videoIds.join(","),
-      }
+      },
+      forceRefresh,
     );
 
     const videoItems = videosResponseData?.items || [];
     averageEngagement = 0;
     if (videoItems.length > 0) {
       const totalViews = videoItems.reduce((sum, item) => sum + Number(item.statistics?.viewCount || 0), 0);
-      const totalLikes = videoItems.reduce((sum, item) => sum + Number(item.statistics?.likeCount || 0), 0);
-      const totalComments = videoItems.reduce((sum, item) => sum + Number(item.statistics?.commentCount || 0), 0);
+      totalLikes = videoItems.reduce((sum, item) => sum + Number(item.statistics?.likeCount || 0), 0);
+      totalComments = videoItems.reduce((sum, item) => sum + Number(item.statistics?.commentCount || 0), 0);
 
       avgViews = totalViews / videoItems.length;
       avgLikes = totalLikes / videoItems.length;
@@ -381,11 +396,22 @@ export const getCreatorAnalyticsData = async (channelId) => {
       } else {
         uploadFrequency = "Weekly";
       }
+
+      recentVideos = videoItems.map((item) => {
+        const durationSeconds = parseDurationToSeconds(item.contentDetails?.duration || "");
+        return {
+          id: item.id,
+          snippet: item.snippet,
+          statistics: item.statistics,
+          type: durationSeconds > 0 && durationSeconds <= 60 ? "short" : "video",
+        };
+      });
     }
   }
 
   return {
     name: snippet.title || "",
+    description: snippet.description || "",
     handle: snippet.customUrl || snippet.title || "",
     thumbnail: snippet.thumbnails?.high?.url || snippet.thumbnails?.medium?.url || "",
     subscribers: Number(statistics.subscriberCount || 0),
@@ -398,6 +424,9 @@ export const getCreatorAnalyticsData = async (channelId) => {
     averageEngagement: Number(averageEngagement.toFixed(2)),
     uploadFrequency,
     latestUpload,
+    totalLikes: Math.round(totalLikes),
+    totalComments: Math.round(totalComments),
+    recentVideos,
     publishedAt: snippet.publishedAt || null,
     lastUpdated: new Date().toISOString(),
   };

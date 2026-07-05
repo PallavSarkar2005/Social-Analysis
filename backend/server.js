@@ -1,4 +1,4 @@
-import dotenv from "dotenv";
+import "./config/preload.js";
 import { validateEnv } from "./config/env.js";
 import { exec } from "child_process";
 import { promisify } from "util";
@@ -9,7 +9,6 @@ const execPromise = promisify(exec);
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-dotenv.config();
 validateEnv();
 console.log("YOUTUBE_API_KEY loaded:", !!process.env.YOUTUBE_API_KEY);
 
@@ -64,6 +63,9 @@ if (process.env.NODE_ENV !== "test") {
 }
 
 const app = express();
+
+// Disable ETag generation to prevent 304 responses on CSRF endpoint
+app.set("etag", false);
 
 app.set("trust proxy", 1);
 
@@ -143,7 +145,7 @@ app.use(
         connectSrc: [
           "'self'",
           "https://social-analysis-smoky.vercel.app",
-          "https://social-analysis-production.up.railway.app",
+          "https://social-analysis-backend.onrender.com",
           "http://localhost:5173",
           "http://localhost:5000",
           "https://api.groq.com",
@@ -162,6 +164,7 @@ app.use(
       action: "deny",
     },
     contentTypeNosniff: true,
+    crossOriginResourcePolicy: { policy: "cross-origin" },
     referrerPolicy: {
       policy: "same-origin",
     },
@@ -170,8 +173,15 @@ app.use(
 
 app.use(csrfProtection);
 
-// Serve static uploads
-app.use("/uploads", express.static(path.join(__dirname, "storage/uploads")));
+// Serve static uploads (allow frontend on :5173 to load images from :5000)
+app.use(
+  "/uploads",
+  (req, res, next) => {
+    res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+    next();
+  },
+  express.static(path.join(__dirname, "storage/uploads"))
+);
 
 // Prevent NoSQL parameter injection attacks
 app.use(mongoSanitizeMiddleware);
@@ -261,7 +271,11 @@ const PORT = process.env.PORT || 5000;
 // Sync YouTube channels hourly
 if (process.env.NODE_ENV !== "test") {
   cron.schedule("0 * * * *", async () => {
-    await syncAllYoutubeChannels();
+    await syncAllYoutubeChannels(null, {
+      reasonLabel: "Hourly Cron",
+      forceRefresh: false,
+      useLock: true,
+    });
   });
 }
 

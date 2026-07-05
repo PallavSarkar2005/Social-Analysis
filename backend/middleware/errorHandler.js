@@ -1,8 +1,8 @@
-import crypto from "crypto";
+import nodeCrypto from "node:crypto";
 
 export const errorHandler = (err, req, res, next) => {
   // Generate a correlation ID for every error — clients display this to users
-  const correlationId = "err-" + crypto.randomBytes(4).toString("hex");
+  const correlationId = "err-" + nodeCrypto.randomBytes(4).toString("hex");
 
   let statusCode = res.statusCode && res.statusCode !== 200 ? res.statusCode : 500;
   let message = err.message || "An unexpected server error occurred";
@@ -60,7 +60,20 @@ export const errorHandler = (err, req, res, next) => {
     message = "Invalid or missing CSRF token. Please refresh and try again.";
   }
 
-  // Structured response — NEVER expose raw stack traces or internal details to clients
+  // MongoDB connectivity / SCRAM auth failures
+  if (
+    err.name === "MongoServerSelectionError" ||
+    err.name === "MongoNetworkError" ||
+    err.name === "MongoRuntimeError" ||
+    (err.message && err.message.includes("getFips"))
+  ) {
+    statusCode = 503;
+    message = "Database temporarily unavailable. Please try again in a moment.";
+  }
+
+  const isDevelopment =
+    process.env.NODE_ENV === "development" || process.env.NODE_ENV === "test";
+
   const response = {
     success: false,
     message,
@@ -71,7 +84,10 @@ export const errorHandler = (err, req, res, next) => {
     response.errors = errors;
   }
 
-  // Log full details server-side only (never sent to frontend)
+  if (isDevelopment && err.stack) {
+    response.stack = err.stack;
+  }
+
   console.error(`[API Error] [${correlationId}] ${statusCode} | ${message}`, {
     url: req.originalUrl,
     method: req.method,
