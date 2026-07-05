@@ -4,6 +4,8 @@ import Navbar from "../components/layout/Navbar";
 import { getAccounts } from "../api/accountApi";
 import { getChannelSummary } from "../api/analyticsApi";
 import { ensureAccessToken, fetchCsrfToken } from "../api/client";
+import { formatIndianTime } from "../utils/dateFormatter";
+import { devError, devWarn } from "../utils/devLog";
 import {
   Sparkles,
   Brain,
@@ -62,7 +64,7 @@ export default function AIInsights() {
                 views += Number(sumRes.data.totalViews || 0);
               }
             } catch (e) {
-              console.warn(`Could not load summary for ${acc.name}`);
+              devWarn(`Could not load summary for ${acc.name}`);
             }
           })
         );
@@ -73,7 +75,7 @@ export default function AIInsights() {
           count: filtered.length,
         });
       } catch (err) {
-        console.error("Failed to load political telemetry dashboard:", err);
+        devError("Failed to load political telemetry dashboard:", err);
       }
     };
 
@@ -124,13 +126,13 @@ export default function AIInsights() {
     const newId = "session_" + Math.random().toString(36).substring(2, 9);
     const newSession = {
       id: newId,
-      title: `Conversation ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
+      title: `Conversation ${formatIndianTime(new Date())}`,
       history: [
         {
           id: "welcome",
           role: "assistant",
           content: "Hello! I am your Social IQ Political Research Assistant. I have indexed the real-time YouTube telemetry database. Ask me about party footprints (e.g. BJP vs Congress), specific leader statistics, state presence, or performance optimizations.",
-          timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+          timestamp: formatIndianTime(new Date()),
         },
       ],
     };
@@ -203,7 +205,7 @@ export default function AIInsights() {
       id: "msg_" + Math.random().toString(36).substring(2, 9),
       role: "user",
       content: textToSend,
-      timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      timestamp: formatIndianTime(new Date()),
     };
 
     const updatedHistory = [...chatHistory, newMsg];
@@ -286,7 +288,7 @@ export default function AIInsights() {
         id: "msg_" + Math.random().toString(36).substring(2, 9),
         role: "assistant",
         content: fullResponseText,
-        timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        timestamp: formatIndianTime(new Date()),
       };
 
       const finalHistory = [...updatedHistory, assistantMsg];
@@ -302,7 +304,7 @@ export default function AIInsights() {
       saveSessions(finalSessions);
     } catch (err) {
       if (err.name === "AbortError") return;
-      console.error(err);
+      devError(err);
       setAiOffline(true);
       toast.error("AI service is temporarily offline.");
     } finally {
@@ -340,7 +342,7 @@ Loaded pre-saved political telemetry analysis reports from local indexed storage
 #### 🎯 Actionable Optimization
 1. Structure candidate profiles to include short-form briefs (under 2 minutes) to increase click rates.
 2. Publish updates around **5:30 PM IST** to align with peak telemetry viewer traffic.`,
-      timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      timestamp: formatIndianTime(new Date()),
     };
 
     const finalHistory = [...chatHistory, mockMsg];

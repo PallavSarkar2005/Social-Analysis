@@ -10,6 +10,8 @@ import FollowerChart from "../components/charts/FollowerChart";
 import client from "../api/client";
 import toast from "react-hot-toast";
 import LeaderAvatar from "../components/common/LeaderAvatar";
+import { formatIndianDate } from "../utils/dateFormatter";
+import { devError } from "../utils/devLog";
 
 // High-end micro-interaction animation variants
 const containerVariants = {
@@ -64,24 +66,7 @@ function Analyzer() {
   const [photoFile, setPhotoFile] = useState(null);
   const [photoPreview, setPhotoPreview] = useState(null);
 
-  const [queryParams, setQueryParams] = useState({
-    url: "",
-    group: "Other",
-    force: false,
-    state: "",
-    party: "",
-    profileImage: "",
-    timestamp: 0,
-  });
-
-  const { data: result, isLoading: loading, error: queryError } = useAnalyzer(
-    queryParams.url,
-    queryParams.group,
-    queryParams.force,
-    queryParams.state,
-    queryParams.party,
-    queryParams.profileImage
-  );
+  const { data: result, isLoading: loading, error: queryError, analyze, reset } = useAnalyzer();
 
   const [error, setError] = useState("");
   const displayError = queryError?.response?.data?.message || queryError?.message || error;
@@ -113,10 +98,11 @@ function Analyzer() {
     setPhotoPreview(null);
   };
 
-  const handleAnalyze = async (targetUrl = url, force = false) => {
+  const handleAnalyze = async (targetUrl = url, force = true) => {
     setError("");
     setInsights("");
     setChannelInsights("");
+    reset();
 
     const cleanTarget = targetUrl.trim();
     if (!cleanTarget) {
@@ -141,18 +127,17 @@ function Analyzer() {
         }
       }
 
-      setQueryParams({
-        url: cleanTarget,
+      await analyze({
+        searchUrl: cleanTarget,
         group,
         force,
         state: state || "Unknown State",
         party: party || "Independent",
         profileImage: profileImageUrl,
-        timestamp: Date.now(),
       });
     } catch (err) {
-      console.error(err);
-      setError(err.message || "Failed to trigger analysis");
+      devError(err);
+      setError(err.response?.data?.message || err.message || "Failed to trigger analysis");
     }
   };
 
@@ -182,7 +167,7 @@ function Analyzer() {
       });
       setInsights(response.insights);
     } catch (err) {
-      console.error(err);
+      devError(err);
       const msg = err.response?.data?.message || err.message || "Failed to generate AI insights.";
       setInsights(`Error: ${msg}`);
     } finally {
@@ -202,7 +187,7 @@ function Analyzer() {
       });
       setChannelInsights(response.insights);
     } catch (error) {
-      console.error(error);
+      devError(error);
       const msg = error.response?.data?.message || error.message || "Failed to generate channel insights.";
       setChannelInsights(`Error: ${msg}`);
     } finally {
@@ -630,9 +615,7 @@ function Analyzer() {
                             {video.snippet.title}
                           </h4>
                           <p className="text-[11px] text-slate-500 font-medium">
-                            {new Date(
-                              video.snippet.publishedAt,
-                            ).toLocaleDateString()}
+                            {formatIndianDate(video.snippet.publishedAt)}
                           </p>
                         </div>
                       </div>

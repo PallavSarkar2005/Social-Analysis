@@ -3,6 +3,8 @@ import { useBillingStatus, useInvoices, useCancelSubscription } from "../../hook
 import client from "../../api/client";
 import { CreditCard, CheckCircle, AlertTriangle, RefreshCw, Download, Calendar, Sparkles, ArrowRight, TrendingUp, FileText, Shield } from "lucide-react";
 import toast from "react-hot-toast";
+import { formatIndianDate } from "../../utils/dateFormatter";
+import { devError } from "../../utils/devLog";
 
 export default function Billing({ user }) {
   const { data: billingData, isLoading: loadingStatus, refetch: refetchStatus } = useBillingStatus();
@@ -87,7 +89,7 @@ export default function Billing({ user }) {
       const rzp = new window.Razorpay(options);
       rzp.open();
     } catch (err) {
-      console.error(err);
+      devError(err);
       toast.error(err.message || "Checkout failed", { id: "checkout" });
       setPaymentLoading(false);
     }
@@ -297,7 +299,7 @@ export default function Billing({ user }) {
                   <div>
                     <span className="font-bold text-white block">#{inv.invoiceNumber}</span>
                     <span className="text-[10px] text-slate-400">
-                      Paid on: {new Date(inv.paidAt).toLocaleDateString()}
+                      Paid on: {formatIndianDate(inv.paidAt)}
                     </span>
                   </div>
                 </div>

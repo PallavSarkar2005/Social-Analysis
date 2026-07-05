@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useParams, Link } from "react-router-dom";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   User, Calendar, MapPin, Award, Shield, Clock, ExternalLink, Globe,
@@ -8,15 +8,27 @@ import {
   ChevronRight, Sparkles, TrendingUp, Users, Eye, Video, BarChart2,
   PieChart as PieIcon, ThumbsUp, MessageSquare, AlertCircle, Bot
 } from "lucide-react";
-import client, { ensureAccessToken } from "../api/client";
+import { ensureAccessToken } from "../api/client";
 import Sidebar from "../components/layout/Sidebar";
 import LeaderAvatar from "../components/common/LeaderAvatar";
 import IndiaMap from "../components/common/IndiaMap";
 import {
-  getProfileBiography, getProfileTimeline, getProfileNews,
+  getProfileBiography, getProfileNews,
   getProfileCharts, getProfileElections, getProfileInfluence,
   getProfileAiInsights, getProfileSimilar
 } from "../api/profileApi";
+import VerifiedProfileCard from "../components/profile/VerifiedProfileCard";
+import PoliticalTimelinePanel from "../components/profile/PoliticalTimelinePanel";
+import SourceVerificationPanel from "../components/profile/SourceVerificationPanel";
+import ElectionIntelligencePanel from "../components/profile/ElectionIntelligencePanel";
+import ConfidenceBreakdown from "../components/profile/ConfidenceBreakdown";
+import PoliticalStatisticsPanel from "../components/profile/PoliticalStatisticsPanel";
+import RelationshipIntelligencePanel from "../components/profile/RelationshipIntelligencePanel";
+import SectionFreshnessBar from "../components/profile/SectionFreshnessBar";
+import AISummaryPanel from "../components/profile/AISummaryPanel";
+import WidgetErrorBoundary from "../components/WidgetErrorBoundary";
+import { isVerifiedValue, safeArray } from "../utils/profileFacts";
+import { formatIndianDate } from "../utils/dateFormatter";
 import {
   ResponsiveContainer, LineChart, Line, BarChart, Bar,
   XAxis, YAxis, Tooltip, PieChart, Pie, Cell, Legend
@@ -26,7 +38,6 @@ const SENTIMENT_COLORS = ["#10b981", "#64748b", "#ef4444"]; // Positive (green),
 
 export default function PoliticalProfile() {
   const { creatorId } = useParams();
-  const queryClient = useQueryClient();
   const chatEndRef = useRef(null);
 
   // AI Chat States
@@ -42,48 +53,49 @@ export default function PoliticalProfile() {
     queryKey: ["profile-bio", creatorId],
     queryFn: () => getProfileBiography(creatorId),
     staleTime: 5 * 60 * 1000,
-  });
-
-  const { data: timelineData, isLoading: timelineLoading } = useQuery({
-    queryKey: ["profile-timeline", creatorId],
-    queryFn: () => getProfileTimeline(creatorId),
-    staleTime: 10 * 60 * 1000,
+    retry: 1,
   });
 
   const { data: newsData, isLoading: newsLoading } = useQuery({
     queryKey: ["profile-news", creatorId],
     queryFn: () => getProfileNews(creatorId),
-    staleTime: 15 * 60 * 1000, // Cache news for 15 mins
+    staleTime: 15 * 60 * 1000,
+    retry: 1,
   });
 
   const { data: chartsData, isLoading: chartsLoading } = useQuery({
     queryKey: ["profile-charts", creatorId],
     queryFn: () => getProfileCharts(creatorId),
     staleTime: 5 * 60 * 1000,
+    retry: 1,
   });
 
   const { data: electionsData, isLoading: electionsLoading } = useQuery({
     queryKey: ["profile-elections", creatorId],
     queryFn: () => getProfileElections(creatorId),
     staleTime: 10 * 60 * 1000,
+    retry: 1,
   });
 
   const { data: influenceData, isLoading: influenceLoading } = useQuery({
     queryKey: ["profile-influence", creatorId],
     queryFn: () => getProfileInfluence(creatorId),
     staleTime: 10 * 60 * 1000,
+    retry: 1,
   });
 
   const { data: aiInsightsData } = useQuery({
     queryKey: ["profile-ai-insights", creatorId],
     queryFn: () => getProfileAiInsights(creatorId),
     staleTime: 10 * 60 * 1000,
+    retry: 1,
   });
 
   const { data: similarData } = useQuery({
     queryKey: ["profile-similar", creatorId],
     queryFn: () => getProfileSimilar(creatorId),
     staleTime: 10 * 60 * 1000,
+    retry: 1,
   });
 
   // Auto-scroll chat window
@@ -170,6 +182,29 @@ export default function PoliticalProfile() {
     }
   };
 
+  const profilePayload = bioData?.data;
+  const biography = profilePayload?.biography ?? {};
+  const account = profilePayload?.account ?? {};
+  const profileTimeline = safeArray(profilePayload?.timeline);
+  const verifiedFacts = safeArray(profilePayload?.verifiedFacts);
+  const fieldProvenance = profilePayload?.fieldProvenance ?? {};
+  const confidenceBreakdown = profilePayload?.confidenceBreakdown ?? {};
+  const politicalStatistics = safeArray(profilePayload?.politicalStatistics);
+  const rawRelationships = profilePayload?.relationships ?? {};
+  const relationships = {
+    nodes: safeArray(rawRelationships.nodes),
+    edges: safeArray(rawRelationships.edges),
+  };
+  const sectionMeta = profilePayload?.sectionMeta ?? {};
+  const verificationCatalog = safeArray(profilePayload?.verificationCatalog);
+  const sources = safeArray(profilePayload?.sources);
+  const confidenceScore = profilePayload?.confidenceScore ?? 0;
+  const lastVerified = profilePayload?.lastVerified;
+  const lastSynced = profilePayload?.lastSynced;
+
+  const aiInsights = safeArray(aiInsightsData?.data?.insights);
+  const aiSummary = aiInsightsData?.data?.summary || {};
+
   if (bioLoading) {
     return (
       <div className="flex h-screen w-screen items-center justify-center bg-[#090a0f] text-slate-100 flex-col space-y-4">
@@ -179,7 +214,7 @@ export default function PoliticalProfile() {
     );
   }
 
-  if (bioError || !bioData?.data) {
+  if (bioError || !profilePayload) {
     return (
       <div className="flex min-h-screen bg-[#090a0f] text-slate-100 items-center justify-center">
         <div className="text-center p-8 rounded-2xl bg-white/[0.01] border border-white/[0.06] max-w-md space-y-4">
@@ -194,7 +229,23 @@ export default function PoliticalProfile() {
     );
   }
 
-  const { account, biography, lastSynced } = bioData.data;
+  const verifiedAt = lastVerified || lastSynced;
+  const timeSeries = safeArray(chartsData?.data?.timeSeries);
+  const uploadsDistribution = safeArray(chartsData?.data?.uploadsDistribution);
+  const categories = safeArray(chartsData?.data?.categories);
+  const similarLeaders = safeArray(similarData?.data);
+  const newsItems = safeArray(newsData?.data?.news);
+  const elections = safeArray(electionsData?.data);
+  const sentimentKeywords = safeArray(newsData?.data?.sentiment?.keywords);
+  const geographicReach = safeArray(influenceData?.data?.geographicReach);
+
+  const contentDistributionMessage =
+    chartsData?.data?.contentDistributionMessage ||
+    "No YouTube content distribution data is available for this profile.";
+  const hasGrowthSeries = timeSeries.length > 0;
+  const hasSingleGrowthPoint = timeSeries.length === 1;
+  const hasUploadsDistribution = uploadsDistribution.length > 0;
+  const hasCategories = categories.length > 0;
 
   // Pie chart news data mapping
   const sentimentDistribution = newsData?.data?.sentiment
@@ -247,18 +298,24 @@ export default function PoliticalProfile() {
                 {biography.fullName || account.name}
               </h2>
               <div className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 uppercase tracking-wider">
-                <Shield className="w-3 h-3" /> Verified Profile
+                <Shield className="w-3 h-3" /> {confidenceScore > 0 ? `Verified (${confidenceScore}%)` : "Profile Pending"}
               </div>
             </div>
 
             <p className="text-sm text-indigo-400 font-semibold leading-normal">
-              {biography.currentPosition || "Political Leader"}
+              {biography.currentPosition || biography.currentOffice || null}
             </p>
 
             <div className="flex flex-wrap items-center justify-center md:justify-start gap-x-4 gap-y-2 text-xs text-slate-400 pt-1 font-sans">
-              <span className="flex items-center gap-1"><MapPin className="w-3.5 h-3.5 text-slate-500" /> {biography.state || account.state}</span>
-              <span className="flex items-center gap-1"><Award className="w-3.5 h-3.5 text-slate-500" /> {biography.party || account.party}</span>
-              <span className="flex items-center gap-1"><Clock className="w-3.5 h-3.5 text-slate-500" /> Updated {new Date(lastSynced).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+              {isVerifiedValue(biography.state || account.state) && (
+                <span className="flex items-center gap-1"><MapPin className="w-3.5 h-3.5 text-slate-500" /> {biography.state || account.state}</span>
+              )}
+              {isVerifiedValue(biography.party || account.party) && (
+                <span className="flex items-center gap-1"><Award className="w-3.5 h-3.5 text-slate-500" /> {biography.party || account.party}</span>
+              )}
+              {verifiedAt && (
+                <span className="flex items-center gap-1"><Clock className="w-3.5 h-3.5 text-slate-500" /> Updated {formatIndianDate(verifiedAt)}</span>
+              )}
             </div>
           </div>
 
@@ -341,50 +398,65 @@ export default function PoliticalProfile() {
                   ))}
                 </div>
 
-                {/* AI Brief Summary */}
-                <div className="bg-[#121318]/20 border border-white/[0.06] rounded-2xl p-6 text-left space-y-4">
-                  <div className="flex items-center gap-2">
-                    <Sparkles className="w-4 h-4 text-indigo-400" />
-                    <h3 className="text-sm font-bold text-white uppercase tracking-wider">AI Political Footprint Analysis</h3>
-                  </div>
-                  <ul className="space-y-2.5 text-xs text-slate-300">
-                    {aiInsightsData?.data?.map((insight, idx) => (
-                      <li key={idx} className="flex items-start gap-2">
-                        <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 shrink-0 mt-1.5" />
-                        <span>{insight}</span>
-                      </li>
-                    ))}
-                    {(!aiInsightsData?.data || aiInsightsData.data.length === 0) && (
-                      <li className="text-slate-500 italic">No AI insights generated for this leader yet.</li>
-                    )}
-                  </ul>
-                </div>
+                <WidgetErrorBoundary name="PoliticalStatisticsPanel">
+                  <PoliticalStatisticsPanel statistics={politicalStatistics} sectionMeta={sectionMeta} />
+                </WidgetErrorBoundary>
 
-                {/* Key Biography Fields */}
+                <WidgetErrorBoundary name="AISummaryPanel">
+                  <AISummaryPanel summary={aiSummary} insights={aiInsights} sectionMeta={sectionMeta} />
+                </WidgetErrorBoundary>
+
+                {/* Key Biography Fields — verified only */}
+                {[
+                  { label: "Constituency", val: biography.constituency },
+                  { label: "Years in Office", val: biography.yearsInOffice != null ? `${biography.yearsInOffice} years` : null },
+                  { label: "Age", val: biography.age ? `${biography.age} years` : null },
+                  { label: "Education", val: biography.education },
+                  { label: "Profession", val: biography.profession },
+                  { label: "First Elected", val: biography.dateFirstElected },
+                ].filter((item) => isVerifiedValue(item.val)).length > 0 && (
                 <div className="bg-[#121318]/20 border border-white/[0.06] rounded-2xl p-6 text-left space-y-4">
                   <h3 className="text-sm font-bold text-white uppercase tracking-wider">Quick Profile Metrics</h3>
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
                     {[
                       { label: "Constituency", val: biography.constituency },
-                      { label: "Years in Office", val: `${biography.yearsInOffice} years` },
-                      { label: "Age", val: biography.age || "N/A" },
+                      { label: "Years in Office", val: biography.yearsInOffice != null ? `${biography.yearsInOffice} years` : null },
+                      { label: "Age", val: biography.age ? `${biography.age} years` : null },
                       { label: "Education", val: biography.education },
                       { label: "Profession", val: biography.profession },
                       { label: "First Elected", val: biography.dateFirstElected },
-                    ].map((item, idx) => (
+                    ].filter((item) => isVerifiedValue(item.val)).map((item, idx) => (
                       <div key={idx} className="space-y-1">
                         <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{item.label}</span>
-                        <p className="text-xs font-semibold text-slate-200">{item.val || "N/A"}</p>
+                        <p className="text-xs font-semibold text-slate-200">{item.val}</p>
                       </div>
                     ))}
                   </div>
                 </div>
+                )}
               </div>
 
               {/* Sidebar items */}
               <div className="space-y-6">
-                
-                {/* Mini Influence Score Widget */}
+
+                <WidgetErrorBoundary name="ConfidenceBreakdown">
+                  <ConfidenceBreakdown breakdown={confidenceBreakdown} />
+                </WidgetErrorBoundary>
+
+                <WidgetErrorBoundary name="SourceVerificationPanel">
+                  <SourceVerificationPanel
+                    sources={sources}
+                    verificationCatalog={verificationCatalog}
+                    lastVerified={verifiedAt}
+                  />
+                </WidgetErrorBoundary>
+
+                <WidgetErrorBoundary name="RelationshipIntelligencePanel">
+                  <RelationshipIntelligencePanel
+                    relationships={relationships}
+                    sectionMeta={sectionMeta}
+                  />
+                </WidgetErrorBoundary>
                 {influenceData?.data?.influence && (
                   <div className="bg-gradient-to-br from-indigo-950/20 to-purple-950/20 border border-white/[0.06] rounded-2xl p-6 text-left space-y-4">
                     <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Political Reach Index</h4>
@@ -402,7 +474,7 @@ export default function PoliticalProfile() {
                 <div className="bg-[#121318]/20 border border-white/[0.06] rounded-2xl p-6 text-left space-y-4">
                   <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Similar Political Figures</h4>
                   <div className="space-y-3">
-                    {similarData?.data?.map((item) => (
+                    {similarLeaders.map((item) => (
                       <Link
                         key={item._id}
                         to={`/profile/${item._id}`}
@@ -416,7 +488,7 @@ export default function PoliticalProfile() {
                         <ChevronRight className="w-3.5 h-3.5 text-slate-500 ml-auto" />
                       </Link>
                     ))}
-                    {(!similarData?.data || similarData.data.length === 0) && (
+                    {similarLeaders.length === 0 && (
                       <p className="text-xs text-slate-500 italic">No similar political leaders matched.</p>
                     )}
                   </div>
@@ -428,64 +500,29 @@ export default function PoliticalProfile() {
 
           {/* 2. TIMELINE & BIO TAB */}
           {activeTab === "timeline" && (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-              
-              {/* Detailed Biography Sheet */}
-              <div className="bg-[#121318]/20 border border-white/[0.06] rounded-2xl p-6 text-left space-y-6">
-                <div>
-                  <h3 className="text-sm font-bold text-white uppercase tracking-wider">Political & Personal Background</h3>
-                  <p className="text-xs text-slate-400 mt-1">Verified background logs and credentials</p>
-                </div>
-
-                <div className="space-y-4 divide-y divide-white/[0.04] text-xs">
-                  {[
-                    { label: "Legal Name", val: biography.fullName || account.name, icon: User },
-                    { label: "Date of Birth", val: biography.dob, icon: Calendar },
-                    { label: "Constituency", val: biography.constituency, icon: MapPin },
-                    { label: "Current Office", val: biography.currentOffice, icon: Briefcase },
-                    { label: "Education Level", val: biography.education, icon: GraduationCap },
-                    { label: "Prior Career", val: biography.profession, icon: Briefcase },
-                    { label: "Joined Party", val: biography.dateJoinedParty, icon: Award },
-                  ].map((field, idx) => (
-                    <div key={idx} className="flex justify-between items-center py-3 first:pt-0">
-                      <span className="text-slate-400 flex items-center gap-2">
-                        <field.icon className="w-4 h-4 text-slate-500" />
-                        {field.label}
-                      </span>
-                      <span className="font-semibold text-slate-100">{field.val || "N/A"}</span>
-                    </div>
-                  ))}
-                </div>
+            <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-5">
+              <div className="lg:col-span-2 space-y-4">
+                <SectionFreshnessBar meta={sectionMeta.facts} label="Verified Facts" />
+                <VerifiedProfileCard
+                  biography={biography}
+                  account={account}
+                  verifiedFacts={verifiedFacts}
+                  fieldProvenance={fieldProvenance}
+                  confidenceScore={confidenceScore}
+                  confidenceBreakdown={confidenceBreakdown}
+                  verifiedAt={verifiedAt}
+                  sources={sources}
+                />
               </div>
 
-              {/* Interactive Timeline */}
-              <div className="bg-[#121318]/20 border border-white/[0.06] rounded-2xl p-6 text-left space-y-6">
-                <div>
-                  <h3 className="text-sm font-bold text-white uppercase tracking-wider">Milestones & History</h3>
-                  <p className="text-xs text-slate-400 mt-1">Timeline of key political events</p>
-                </div>
-
-                <div className="relative pl-6 border-l border-white/[0.08] space-y-6 font-sans">
-                  {timelineData?.data?.map((event, idx) => (
-                    <div key={idx} className="relative">
-                      {/* Timeline dot */}
-                      <div className="absolute -left-[30px] top-1.5 w-2 h-2 rounded-full bg-indigo-500 ring-4 ring-[#090a0f]" />
-                      <div className="space-y-1">
-                        <span className="text-[10px] font-extrabold text-indigo-400 tracking-wider bg-indigo-500/10 px-2 py-0.5 rounded-md">
-                          {event.year}
-                        </span>
-                        <p className="text-xs text-slate-200 mt-1 leading-relaxed">
-                          {event.event}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                  {(!timelineData?.data || timelineData.data.length === 0) && (
-                    <p className="text-xs text-slate-500 italic">No timeline data available for this leader.</p>
-                  )}
-                </div>
+              <div className="lg:col-span-3 space-y-4">
+                <SectionFreshnessBar meta={sectionMeta.timeline} label="Timeline" />
+                <PoliticalTimelinePanel
+                  events={profileTimeline}
+                  isLoading={bioLoading}
+                  sources={sources}
+                />
               </div>
-
             </div>
           )}
 
@@ -500,44 +537,87 @@ export default function PoliticalProfile() {
                 <div className="bg-[#121318]/20 border border-white/[0.06] rounded-2xl p-6 space-y-4">
                   <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest text-left">Subscriber Growth Over Time</h4>
                   <div className="h-[220px]">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={chartsData?.data?.timeSeries}>
-                        <XAxis dataKey="date" stroke="rgba(255,255,255,0.3)" fontSize={10} />
-                        <YAxis stroke="rgba(255,255,255,0.3)" fontSize={10} />
-                        <Tooltip contentStyle={{ backgroundColor: "#161822", borderColor: "rgba(255,255,255,0.08)" }} />
-                        <Line type="monotone" dataKey="subscribers" stroke="#6366f1" strokeWidth={2} dot={false} />
-                      </LineChart>
-                    </ResponsiveContainer>
+                    {hasGrowthSeries ? (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={timeSeries}>
+                          <XAxis dataKey="date" stroke="rgba(255,255,255,0.3)" fontSize={10} />
+                          <YAxis stroke="rgba(255,255,255,0.3)" fontSize={10} />
+                          <Tooltip contentStyle={{ backgroundColor: "#161822", borderColor: "rgba(255,255,255,0.08)" }} />
+                          <Line
+                            type="monotone"
+                            dataKey="subscribers"
+                            stroke="#6366f1"
+                            strokeWidth={2}
+                            dot={hasSingleGrowthPoint ? { r: 4, fill: "#6366f1", strokeWidth: 0 } : false}
+                          />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <ChartEmptyState
+                        title="No subscriber trend yet"
+                        message="No stored YouTube snapshots are available for this profile yet."
+                      />
+                    )}
                   </div>
+                  {hasSingleGrowthPoint && (
+                    <p className="text-[11px] text-slate-500">
+                      Historical trend will build as more analyses are collected.
+                    </p>
+                  )}
                 </div>
 
                 {/* Views Growth Chart */}
                 <div className="bg-[#121318]/20 border border-white/[0.06] rounded-2xl p-6 space-y-4">
-                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest text-left">View Milestones Trend</h4>
+                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest text-left">Views Growth Over Time</h4>
                   <div className="h-[220px]">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={chartsData?.data?.timeSeries}>
-                        <XAxis dataKey="date" stroke="rgba(255,255,255,0.3)" fontSize={10} />
-                        <YAxis stroke="rgba(255,255,255,0.3)" fontSize={10} />
-                        <Tooltip contentStyle={{ backgroundColor: "#161822", borderColor: "rgba(255,255,255,0.08)" }} />
-                        <Line type="monotone" dataKey="views" stroke="#a855f7" strokeWidth={2} dot={false} />
-                      </LineChart>
-                    </ResponsiveContainer>
+                    {hasGrowthSeries ? (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={timeSeries}>
+                          <XAxis dataKey="date" stroke="rgba(255,255,255,0.3)" fontSize={10} />
+                          <YAxis stroke="rgba(255,255,255,0.3)" fontSize={10} />
+                          <Tooltip contentStyle={{ backgroundColor: "#161822", borderColor: "rgba(255,255,255,0.08)" }} />
+                          <Line
+                            type="monotone"
+                            dataKey="views"
+                            stroke="#a855f7"
+                            strokeWidth={2}
+                            dot={hasSingleGrowthPoint ? { r: 4, fill: "#a855f7", strokeWidth: 0 } : false}
+                          />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <ChartEmptyState
+                        title="No view trend yet"
+                        message="No stored YouTube snapshots are available for this profile yet."
+                      />
+                    )}
                   </div>
+                  {hasSingleGrowthPoint && (
+                    <p className="text-[11px] text-slate-500">
+                      Historical trend will build as more analyses are collected.
+                    </p>
+                  )}
                 </div>
 
                 {/* Monthly Uploads Distribution */}
                 <div className="bg-[#121318]/20 border border-white/[0.06] rounded-2xl p-6 space-y-4">
                   <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest text-left">Monthly Upload Frequency</h4>
                   <div className="h-[220px]">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={chartsData?.data?.uploadsDistribution}>
-                        <XAxis dataKey="month" stroke="rgba(255,255,255,0.3)" fontSize={10} />
-                        <YAxis stroke="rgba(255,255,255,0.3)" fontSize={10} />
-                        <Tooltip contentStyle={{ backgroundColor: "#161822", borderColor: "rgba(255,255,255,0.08)" }} />
-                        <Bar dataKey="uploads" fill="#4f46e5" radius={[4, 4, 0, 0]} />
-                      </BarChart>
-                    </ResponsiveContainer>
+                    {hasUploadsDistribution ? (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={uploadsDistribution}>
+                          <XAxis dataKey="month" stroke="rgba(255,255,255,0.3)" fontSize={10} />
+                          <YAxis stroke="rgba(255,255,255,0.3)" fontSize={10} />
+                          <Tooltip contentStyle={{ backgroundColor: "#161822", borderColor: "rgba(255,255,255,0.08)" }} />
+                          <Bar dataKey="uploads" fill="#4f46e5" radius={[4, 4, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <ChartEmptyState
+                        title="No upload cadence yet"
+                        message="Run another analysis later to calculate upload frequency."
+                      />
+                    )}
                   </div>
                 </div>
 
@@ -545,23 +625,30 @@ export default function PoliticalProfile() {
                 <div className="bg-[#121318]/20 border border-white/[0.06] rounded-2xl p-6 space-y-4">
                   <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest text-left">Content Distribution</h4>
                   <div className="h-[220px] flex items-center justify-center">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie
-                          data={chartsData?.data?.categories}
-                          innerRadius={60}
-                          outerRadius={80}
-                          paddingAngle={5}
-                          dataKey="value"
-                        >
-                          {chartsData?.data?.categories?.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={["#6366f1", "#8b5cf6", "#a855f7", "#64748b"][index % 4]} />
-                          ))}
-                        </Pie>
-                        <Tooltip />
-                        <Legend wrapperStyle={{ fontSize: 10 }} />
-                      </PieChart>
-                    </ResponsiveContainer>
+                    {hasCategories ? (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie
+                            data={categories}
+                            innerRadius={60}
+                            outerRadius={80}
+                            paddingAngle={5}
+                            dataKey="value"
+                          >
+                            {categories.map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={["#6366f1", "#8b5cf6", "#a855f7", "#64748b"][index % 4]} />
+                            ))}
+                          </Pie>
+                          <Tooltip />
+                          <Legend wrapperStyle={{ fontSize: 10 }} />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <ChartEmptyState
+                        title="No content breakdown available"
+                        message={contentDistributionMessage}
+                      />
+                    )}
                   </div>
                 </div>
 
@@ -608,7 +695,7 @@ export default function PoliticalProfile() {
               {/* Geographic Map Widget */}
               <div className="space-y-6">
                 <IndiaMap
-                  data={influenceData?.data?.geographicReach}
+                  data={geographicReach}
                   activeState={biography.state}
                 />
               </div>
@@ -628,7 +715,7 @@ export default function PoliticalProfile() {
                 </div>
 
                 <div className="space-y-4">
-                  {newsData?.data?.news?.map((item, idx) => (
+                  {newsItems.map((item, idx) => (
                     <a
                       key={idx}
                       href={item.url}
@@ -651,7 +738,7 @@ export default function PoliticalProfile() {
                     </a>
                   ))}
 
-                  {(!newsData?.data?.news || newsData.data.news.length === 0) && (
+                  {newsItems.length === 0 && (
                     <p className="text-xs text-slate-500 italic">No recent news crawled for this political profile.</p>
                   )}
                 </div>
@@ -706,7 +793,7 @@ export default function PoliticalProfile() {
                   <div className="bg-[#121318]/20 border border-white/[0.06] rounded-2xl p-6 text-left space-y-4">
                     <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Trending Topics & Keywords</h4>
                     <div className="flex flex-wrap gap-2">
-                      {newsData.data.sentiment.keywords?.map((word, idx) => (
+                      {sentimentKeywords.map((word, idx) => (
                         <span key={idx} className="text-[10px] bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-2 py-1 rounded-lg">
                           {word}
                         </span>
@@ -722,54 +809,20 @@ export default function PoliticalProfile() {
 
           {/* 6. ELECTION HISTORY TAB */}
           {activeTab === "elections" && (
-            <div className="bg-[#121318]/20 border border-white/[0.06] rounded-2xl p-6 text-left space-y-6">
+            <div className="space-y-4">
+              <SectionFreshnessBar meta={sectionMeta.elections} label="Elections" />
               <div>
-                <h3 className="text-sm font-bold text-white uppercase tracking-wider">Election & Ballot History</h3>
-                <p className="text-xs text-slate-400 mt-1">Official state and assembly vote registry logs</p>
+                <h3 className="text-sm font-bold text-white uppercase tracking-wider">Election Intelligence</h3>
+                <p className="text-xs text-slate-400 mt-1">
+                  Verified electoral records from affidavits and commission sources
+                </p>
               </div>
-
-              <div className="overflow-x-auto">
-                <table className="w-full text-xs text-left divide-y divide-white/[0.06]">
-                  <thead>
-                    <tr className="text-slate-400 uppercase text-[9px] tracking-wider">
-                      <th className="pb-3 font-bold">Election</th>
-                      <th className="pb-3 font-bold">Year</th>
-                      <th className="pb-3 font-bold">Constituency</th>
-                      <th className="pb-3 font-bold">Party</th>
-                      <th className="pb-3 font-bold">Votes</th>
-                      <th className="pb-3 font-bold">Margin</th>
-                      <th className="pb-3 font-bold">Vote %</th>
-                      <th className="pb-3 font-bold text-right">Result</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-white/[0.04]">
-                    {electionsData?.data?.map((row, idx) => (
-                      <tr key={idx} className="text-slate-200">
-                        <td className="py-3.5 font-bold flex items-center gap-1.5">
-                          <Trophy className="w-3.5 h-3.5 text-slate-500" />
-                          {row.election}
-                        </td>
-                        <td className="py-3.5">{row.year}</td>
-                        <td className="py-3.5">{row.constituency}</td>
-                        <td className="py-3.5">{row.party}</td>
-                        <td className="py-3.5">{row.votes?.toLocaleString() || "N/A"}</td>
-                        <td className="py-3.5">+{row.margin?.toLocaleString() || "N/A"}</td>
-                        <td className="py-3.5 font-semibold text-indigo-400">{row.votePct}%</td>
-                        <td className="py-3.5 text-right">
-                          <span className={`inline-flex px-2 py-0.5 rounded text-[10px] font-extrabold uppercase tracking-wider ${row.position === "Winner" ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/25" : "bg-slate-800 text-slate-400"}`}>
-                            {row.position}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                    {(!electionsData?.data || electionsData.data.length === 0) && (
-                      <tr>
-                        <td colSpan="8" className="py-6 text-center text-slate-500 italic">No election history records mapped.</td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
+              <WidgetErrorBoundary name="ElectionIntelligencePanel">
+                <ElectionIntelligencePanel
+                  elections={elections}
+                  isLoading={electionsLoading}
+                />
+              </WidgetErrorBoundary>
             </div>
           )}
 
@@ -837,6 +890,15 @@ export default function PoliticalProfile() {
         </div>
 
       </div>
+    </div>
+  );
+}
+
+function ChartEmptyState({ title, message }) {
+  return (
+    <div className="h-full flex flex-col items-center justify-center text-center rounded-xl border border-white/[0.04] border-dashed bg-white/[0.01] px-6">
+      <p className="text-xs font-semibold text-slate-400">{title}</p>
+      <p className="mt-2 text-[11px] leading-relaxed text-slate-500 max-w-xs">{message}</p>
     </div>
   );
 }

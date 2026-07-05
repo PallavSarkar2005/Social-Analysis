@@ -3,7 +3,8 @@ import Sidebar from "../components/layout/Sidebar";
 import Navbar from "../components/layout/Navbar";
 import { useReports } from "../hooks/useQueries";
 import { useDebounce } from "../hooks/useDebounce";
-import { triggerDownload } from "../api/exportApi";
+import { formatIndianDate, formatIndianDateTime } from "../utils/dateFormatter";
+import { devError } from "../utils/devLog";
 import {
   FileText,
   Search,
@@ -36,7 +37,7 @@ export default function Reports() {
       toast.success("Report deleted successfully");
       if (selectedReport?._id === id) setSelectedReport(null);
     } catch (err) {
-      console.error(err);
+      devError(err);
       toast.error("Failed to delete report.");
     }
   };
@@ -50,7 +51,7 @@ export default function Reports() {
       
       toast.success("File downloaded successfully", { id: "export" });
     } catch (err) {
-      console.error(err);
+      devError(err);
       toast.error("Failed to export report.", { id: "export" });
     } finally {
       setExportingId("");
@@ -186,7 +187,7 @@ export default function Reports() {
                         
                         <span className="text-[10px] text-slate-500 flex items-center gap-1">
                           <Calendar size={12} />
-                          {new Date(rep.createdAt).toLocaleDateString()}
+                          {formatIndianDate(rep.createdAt)}
                         </span>
                       </div>
 
@@ -299,7 +300,7 @@ export default function Reports() {
                   {/* Modal Footer */}
                   <div className="p-4 border-t border-white/[0.06] bg-black/10 flex justify-between items-center">
                     <span className="text-[10px] text-slate-500 font-mono">
-                      Captured: {new Date(selectedReport.createdAt).toLocaleString()}
+                      Captured: {formatIndianDateTime(selectedReport.createdAt)}
                     </span>
                     <button
                       onClick={() => handleDownload(selectedReport._id, selectedReport.title, "pdf")}

@@ -1,6 +1,7 @@
 import React from "react";
 import { Laptop, Smartphone, HelpCircle, LogOut, CheckCircle2, Clock, Globe } from "lucide-react";
 import toast from "react-hot-toast";
+import { formatIndianDateTime } from "../../utils/dateFormatter";
 
 export default function Sessions({ sessions, onRevokeSession, loadingSessions }) {
   const getDeviceIcon = (device) => {
@@ -65,7 +66,7 @@ export default function Sessions({ sessions, onRevokeSession, loadingSessions })
                   </div>
                   <p className="text-[10px] text-slate-400 flex items-center gap-3">
                     <span className="flex items-center gap-1"><Globe size={10} /> IP: {sess.ipAddress}</span>
-                    <span className="flex items-center gap-1"><Clock size={10} /> Logged in: {new Date(sess.loggedInAt).toLocaleString()}</span>
+                    <span className="flex items-center gap-1"><Clock size={10} /> Logged in: {formatIndianDateTime(sess.loggedInAt)}</span>
                   </p>
                 </div>
               </div>

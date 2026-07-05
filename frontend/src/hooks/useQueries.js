@@ -20,6 +20,7 @@ import { syncAllChannels } from "../api/youtubeApi";
 import { getNotifications, markAsRead, markAllAsRead } from "../api/notificationApi";
 import { getReports, deleteReport as apiDeleteReport } from "../api/reportApi";
 import { getCompetitors, addCompetitor, deleteCompetitor } from "../api/competitorApi";
+import { devWarn } from "../utils/devLog";
 import { getBillingStatus, cancelSubscription as apiCancelSubscription, getInvoices } from "../api/billingApi";
 
 // 1. Dashboard Hook
@@ -234,41 +235,53 @@ export const useParty = (groupName) => {
   });
 };
 
-// 5. Analyzer Hook (With stale duration cache strategy + cache busting after save)
-export const useAnalyzer = (searchUrl, group = "Other", force = false, state = "Unknown State", party = "Independent", profileImage = "") => {
+// 5. Analyzer Hook (action-driven; every click must hit backend)
+export const useAnalyzer = () => {
   const queryClient = useQueryClient();
 
-  return useQuery({
-    queryKey: ["analyzer", searchUrl, group, force, state, party, profileImage],
-    queryFn: async () => {
-      if (!searchUrl) return null;
-      const result = await analyzeYoutubeUrl(searchUrl, group, force, state, party, profileImage);
-
-      // After a successful analysis, force a hard refetch on ALL currently mounted
-      // party/group pages so images appear immediately without waiting for poll interval
+  const mutation = useMutation({
+    mutationFn: async ({
+      searchUrl,
+      group = "Other",
+      force = true,
+      state = "Unknown State",
+      party = "Independent",
+      profileImage = "",
+    }) => {
+      return analyzeYoutubeUrl(searchUrl, group, force, state, party, profileImage);
+    },
+    onSuccess: async (result) => {
       await queryClient.refetchQueries({
         predicate: (q) => q.queryKey[0]?.toString().startsWith("party"),
-        type: "active",   // Only refetch queries that are currently being observed
+        type: "active",
       });
-      // Also mark inactive (unmounted) party queries as stale so they refetch on next mount
+
       queryClient.invalidateQueries({
         predicate: (q) => q.queryKey[0]?.toString().startsWith("party"),
         type: "inactive",
       });
 
-      // Invalidate all other downstream caches
       queryClient.invalidateQueries({ queryKey: ["accounts"] });
       queryClient.invalidateQueries({ queryKey: ["trackedNodes"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
       queryClient.invalidateQueries({ queryKey: ["compare-accounts"] });
       queryClient.invalidateQueries({ queryKey: ["reports"] });
-
-      return result;
+      queryClient.invalidateQueries({
+        predicate: (q) => q.queryKey[0]?.toString().startsWith("profile-"),
+      });
+      queryClient.invalidateQueries({
+        predicate: (q) => q.queryKey[0] === "snapshots",
+      });
     },
-    enabled: !!searchUrl,
-    staleTime: 5 * 60 * 1000,
-    gcTime: 10 * 60 * 1000,
   });
+
+  return {
+    data: mutation.data,
+    isLoading: mutation.isPending,
+    error: mutation.error,
+    analyze: mutation.mutateAsync,
+    reset: mutation.reset,
+  };
 };
 
 // 6. Comparison Hook
@@ -292,7 +305,7 @@ export const useSnapshots = (accountId) => {
       const [histRes, forecastRes] = await Promise.all([
         getChannelHistory(accountId),
         getForecast(accountId).catch((err) => {
-          console.warn("Forecast failed, might not have enough historical snapshots yet:", err);
+          devWarn("Forecast failed, might not have enough historical snapshots yet:", err);
           return { success: true, data: { hasEnoughData: false } };
         })
       ]);

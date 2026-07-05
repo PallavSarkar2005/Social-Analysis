@@ -5,6 +5,7 @@ import {
   clearAccessToken,
   notifyAuthFailure,
 } from "./authToken.js";
+import { devError, devWarn } from "../utils/devLog.js";
 
 // Load environment variables dynamically, falling back to localhost:5000 in development
 const baseURL = import.meta.env.VITE_API_URL || "http://localhost:5000";
@@ -55,15 +56,14 @@ export const fetchCsrfToken = async () => {
       const responseToken = response.data?.csrfToken || null;
       if (responseToken) {
         csrfTokenInMemory = responseToken;
-        console.log("[CSRF] Fresh token:", responseToken);
         return responseToken;
       }
 
-      console.warn("[CSRF] CSRF token missing after fetch.");
+      devWarn("[CSRF] CSRF token missing after fetch.");
       return null;
     } catch (error) {
       clearCsrfToken();
-      console.error("[API CSRF Fetch Error]", error);
+      devError("[API CSRF Fetch Error]", error);
       return null;
     } finally {
       csrfFetchPromise = null;
@@ -103,11 +103,6 @@ export const ensureAccessToken = async () => {
 // Request Interceptor
 client.interceptors.request.use(
   async (config) => {
-    console.log(
-      `[API Request] ${config.method.toUpperCase()} ${config.url}`,
-      config.data || "",
-    );
-
     const token = getAccessToken();
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
@@ -128,7 +123,7 @@ client.interceptors.request.use(
     return config;
   },
   (error) => {
-    console.error("[API Request Error]", error);
+    devError("[API Request Error]", error);
     return Promise.reject(error);
   },
 );
@@ -140,13 +135,12 @@ client.interceptors.response.use(
     if (url.includes("/auth/logout") && !url.includes("/auth/logout-other")) {
       clearCsrfToken();
     }
-    console.log(`[API Response] ${response.status} ${response.config.url}`);
     return response;
   },
   async (error) => {
     const originalRequest = error.config;
 
-    console.error("[API Response Error]", {
+    devError("[API Response Error]", {
       url: originalRequest?.url,
       status: error.response?.status,
       message: error.response?.data?.message || error.message,
@@ -211,7 +205,9 @@ client.interceptors.response.use(
     const skipRedirect =
       url.includes("/auth/") ||
       url.includes("/csrf") ||
+      url.includes("/settings/appearance") ||
       url.includes("/activity/log") ||
+      url.includes("/api/profile/") ||
       originalRequest?._skipErrorRedirect;
 
     if (!skipRedirect && typeof window !== "undefined") {

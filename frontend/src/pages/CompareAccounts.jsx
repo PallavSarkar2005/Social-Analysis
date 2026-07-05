@@ -6,6 +6,7 @@ import Navbar from "../components/layout/Navbar";
 import { getCompareAccounts } from "../api/analyticsApi";
 
 import CompareChart from "../components/charts/CompareChart";
+import { devError } from "../utils/devLog";
 
 export default function CompareAccounts() {
   const [accounts, setAccounts] =
@@ -22,7 +23,7 @@ export default function CompareAccounts() {
 
         setAccounts(response.data);
       } catch (error) {
-        console.error(error);
+        devError(error);
       } finally {
         setLoading(false);
       }

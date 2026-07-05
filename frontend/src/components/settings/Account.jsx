@@ -1,5 +1,6 @@
 import React from "react";
 import { User, Calendar, Key, Shield, Layers, BadgeAlert, MailCheck, HardDrive, Cpu, Sparkles } from "lucide-react";
+import { formatIndianDate } from "../../utils/dateFormatter";
 
 export default function Account({ user }) {
   const accountStats = [
@@ -11,7 +12,7 @@ export default function Account({ user }) {
     },
     {
       title: "Member Since",
-      value: user?.createdAt ? new Date(user.createdAt).toLocaleDateString("en-US", { month: "short", year: "numeric", day: "numeric" }) : "June 2026",
+      value: user?.createdAt ? formatIndianDate(user.createdAt) : "June 2026",
       desc: "Date of first registration",
       icon: <Calendar className="text-emerald-400" size={18} />,
     },

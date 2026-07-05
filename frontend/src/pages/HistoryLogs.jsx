@@ -8,6 +8,7 @@ import {
   Tv, Heart, MessageSquare
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { formatIndianDateTime } from "../utils/dateFormatter";
 import {
   AreaChart, Area, BarChart, Bar,
   LineChart, Line, XAxis, YAxis,
@@ -90,7 +91,7 @@ export default function HistoryLogs() {
       engChange,
       avgEngChange,
       growthPct,
-      compareDate: new Date(comparison.capturedAt).toLocaleString(),
+      compareDate: formatIndianDateTime(comparison.capturedAt),
     };
   }, [history, timeframe]);
 

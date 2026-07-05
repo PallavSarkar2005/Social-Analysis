@@ -9,8 +9,6 @@ import {
 } from "recharts";
 
 export default function GrowthChart({ data = [] }) {
-  console.log("GrowthChart Data:", data);
-
   return (
     <div className="space-y-4 bg-transparent">
       {data.length === 0 ? (

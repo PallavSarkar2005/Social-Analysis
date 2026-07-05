@@ -1,4 +1,5 @@
 import { motion } from "framer-motion";
+import { formatIndianDate } from "../../utils/dateFormatter";
 
 export default function RecentVideosGrid({ videos }) {
   if (!videos?.length) return null;
@@ -30,7 +31,7 @@ export default function RecentVideosGrid({ videos }) {
                   {video.snippet?.title || video.title}
                 </h4>
                 <p className="text-[10px] text-slate-500 font-medium font-mono">
-                  {new Date(video.snippet?.publishedAt || video.publishedAt).toLocaleDateString()}
+                  {formatIndianDate(video.snippet?.publishedAt || video.publishedAt)}
                 </p>
               </div>
             </motion.div>

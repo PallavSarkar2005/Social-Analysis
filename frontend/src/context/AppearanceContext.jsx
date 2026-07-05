@@ -10,6 +10,7 @@
 import { createContext, useContext, useEffect, useCallback, useReducer, useRef } from "react";
 import client from "../api/client";
 import toast from "react-hot-toast";
+import { devWarn } from "../utils/devLog";
 
 // ── Defaults ────────────────────────────────────────────────────────────────
 const DEFAULTS = {
@@ -96,7 +97,7 @@ export function AppearanceProvider({ children }) {
     } catch (err) {
       // 401 = not logged in — use localStorage only
       if (err?.response?.status !== 401) {
-        console.warn("[AppearanceContext] Could not load appearance from server:", err.message);
+        devWarn("[AppearanceContext] Could not load appearance from server:", err.message);
       }
     }
   }, []);

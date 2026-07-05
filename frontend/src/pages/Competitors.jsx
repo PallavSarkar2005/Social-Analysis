@@ -3,6 +3,7 @@ import Sidebar from "../components/layout/Sidebar";
 import Navbar from "../components/layout/Navbar";
 import { useCompetitors } from "../hooks/useQueries";
 import { useDebounce } from "../hooks/useDebounce";
+import { devError } from "../utils/devLog";
 import {
   Trophy,
   Plus,
@@ -70,7 +71,7 @@ export default function Competitors() {
       toast.success("Competitor successfully added and synced!", { id: "addComp" });
       setUrlOrHandle("");
     } catch (err) {
-      console.error(err);
+      devError(err);
       toast.error(
         err?.response?.data?.message || "Failed to add competitor. Ensure URL or handle is valid.",
         { id: "addComp" }
@@ -86,7 +87,7 @@ export default function Competitors() {
       await deleteCompetitor(id);
       toast.success("Competitor removed successfully", { id: "remComp" });
     } catch (err) {
-      console.error(err);
+      devError(err);
       toast.error("Failed to remove competitor.", { id: "remComp" });
     }
   };

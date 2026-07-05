@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import Sidebar from "../components/layout/Sidebar";
 import Navbar from "../components/layout/Navbar";
 import { useDashboard } from "../hooks/useQueries";
+import { devError } from "../utils/devLog";
 import {
   Users,
   Eye,
@@ -49,7 +50,7 @@ export default function Dashboard() {
       await syncAll();
       toast.success("All channels synced successfully!", { id: "sync" });
     } catch (error) {
-      console.error(error);
+      devError(error);
       toast.error("Batch sync request failed.", { id: "sync" });
     }
   };
@@ -282,7 +283,7 @@ export default function Dashboard() {
                       <div className="p-5 bg-[#171923]/45 border border-white/[0.05] hover:border-orange-500/30 hover:bg-orange-950/5 hover:shadow-orange-500/[0.04] hover:shadow-2xl rounded-2xl flex flex-col justify-between h-44 transition duration-300 relative overflow-hidden select-none cursor-pointer">
                         <div className="flex items-start justify-between">
                           <div>
-                            <h4 className="text-sm font-bold text-white group-hover:text-orange-400 transition-colors">BJP Group</h4>
+                            <h4 className="text-sm font-bold text-white group-hover:text-orange-400 transition-colors">BJP</h4>
                             <p className="text-[10px] text-orange-400/90 font-bold mt-1">
                               {getGroupCount("BJP")} {getGroupCount("BJP") === 1 ? "Account" : "Accounts"}
                             </p>
@@ -303,7 +304,7 @@ export default function Dashboard() {
                       <div className="p-5 bg-[#171923]/45 border border-white/[0.05] hover:border-cyan-500/30 hover:bg-cyan-950/5 hover:shadow-cyan-500/[0.04] hover:shadow-2xl rounded-2xl flex flex-col justify-between h-44 transition duration-300 relative overflow-hidden select-none cursor-pointer">
                         <div className="flex items-start justify-between">
                           <div>
-                            <h4 className="text-sm font-bold text-white group-hover:text-cyan-400 transition-colors">Congress Group</h4>
+                            <h4 className="text-sm font-bold text-white group-hover:text-cyan-400 transition-colors">Congress</h4>
                             <p className="text-[10px] text-cyan-400/90 font-bold mt-1">
                               {getGroupCount("Congress")} {getGroupCount("Congress") === 1 ? "Account" : "Accounts"}
                             </p>
@@ -324,7 +325,7 @@ export default function Dashboard() {
                       <div className="p-5 bg-[#171923]/45 border border-white/[0.05] hover:border-indigo-500/30 hover:bg-indigo-950/5 hover:shadow-indigo-500/[0.04] hover:shadow-2xl rounded-2xl flex flex-col justify-between h-44 transition duration-300 relative overflow-hidden select-none cursor-pointer">
                         <div className="flex items-start justify-between">
                           <div>
-                            <h4 className="text-sm font-bold text-white group-hover:text-indigo-400 transition-colors">Other Group</h4>
+                            <h4 className="text-sm font-bold text-white group-hover:text-indigo-400 transition-colors">Other</h4>
                             <p className="text-[10px] text-indigo-400/90 font-bold mt-1">
                               {getGroupCount("Other")} {getGroupCount("Other") === 1 ? "Account" : "Accounts"}
                             </p>

@@ -3,6 +3,8 @@ import Sidebar from "../components/layout/Sidebar";
 import Navbar from "../components/layout/Navbar";
 import { useBillingStatus, useInvoices, useCancelSubscription } from "../hooks/useQueries";
 import { useAuth } from "../context/AuthContext";
+import { formatIndianDate } from "../utils/dateFormatter";
+import { devError } from "../utils/devLog";
 import client from "../api/client";
 import {
   CreditCard,
@@ -86,7 +88,7 @@ export default function Billing() {
               throw new Error(verifyRes.data.message || "Verification failed");
             }
           } catch (verifyErr) {
-            console.error(verifyErr);
+            devError(verifyErr);
             toast.error("Signature verification failed. Contact support.", { id: "verify" });
           }
         },
@@ -102,7 +104,7 @@ export default function Billing() {
       const rzpInstance = new window.Razorpay(options);
       rzpInstance.open();
     } catch (err) {
-      console.error(err);
+      devError(err);
       toast.error(err.response?.data?.message || err.message || "Checkout initialization aborted");
     } finally {
       setPaymentLoading(false);
@@ -116,7 +118,7 @@ export default function Billing() {
       await cancelSub.mutateAsync();
       toast.success("Auto-renewal disabled successfully.", { id: "cancel-sub" });
     } catch (err) {
-      console.error(err);
+      devError(err);
       toast.error("Failed to cancel subscription.", { id: "cancel-sub" });
     }
   };
@@ -155,7 +157,7 @@ export default function Billing() {
             <div>
               <strong>Issued By:</strong><br>
               SocialIQ SaaS Platform Inc.<br>
-              Date: ${new Date(invoice.issuedAt).toLocaleDateString()}<br>
+              Date: ${formatIndianDate(invoice.issuedAt)}<br>
             </div>
           </div>
           <table>
@@ -252,11 +254,7 @@ export default function Billing() {
                     <div className="text-left sm:text-right space-y-1 bg-white/[0.02] border border-white/[0.04] rounded-2xl p-4">
                       <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest block">Cycle Expiry Date</span>
                       <span className="text-sm font-bold text-slate-200 block">
-                        {new Date(status.currentPeriodEnd).toLocaleDateString(undefined, {
-                          year: "numeric",
-                          month: "long",
-                          day: "numeric",
-                        })}
+                        {formatIndianDate(status.currentPeriodEnd)}
                       </span>
                       {status.cancelAtPeriodEnd ? (
                         <span className="text-[9px] font-bold text-rose-400 bg-rose-500/10 px-2 py-0.5 rounded block text-center">
@@ -380,7 +378,7 @@ export default function Billing() {
                               <td className="p-4">
                                 <span className="flex items-center gap-1.5">
                                   <Calendar size={12} className="text-slate-500" />
-                                  {new Date(inv.issuedAt).toLocaleDateString()}
+                                  {formatIndianDate(inv.issuedAt)}
                                 </span>
                               </td>
                               <td className="p-4 font-mono font-bold text-slate-200">

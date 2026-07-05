@@ -24,27 +24,36 @@ export default function Login() {
       setRememberMe(true);
     }
 
+    let script = null;
+    let cancelled = false;
+
     // Load Google Identity Services script
-    const script = document.createElement("script");
+    script = document.createElement("script");
     script.src = "https://accounts.google.com/gsi/client";
     script.async = true;
     script.defer = true;
     document.body.appendChild(script);
     script.onload = () => {
-      if (window.google) {
-        window.google.accounts.id.initialize({
-          client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID || "placeholder-client-id.apps.googleusercontent.com",
-          callback: handleGoogleLoginResponse,
-        });
-        window.google.accounts.id.renderButton(
-          document.getElementById("google-signin-btn"),
-          { theme: "dark", size: "large", width: "100%" }
-        );
-      }
+      if (cancelled || !window.google) return;
+      const btn = document.getElementById("google-signin-btn");
+      if (!btn) return;
+
+      window.google.accounts.id.initialize({
+        client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID || "placeholder-client-id.apps.googleusercontent.com",
+        callback: handleGoogleLoginResponse,
+      });
+      window.google.accounts.id.renderButton(btn, {
+        theme: "dark",
+        size: "large",
+        width: btn.offsetWidth || 320,
+      });
     };
 
     return () => {
-      document.body.removeChild(script);
+      cancelled = true;
+      if (script?.parentNode) {
+        script.parentNode.removeChild(script);
+      }
     };
   }, [isAuthenticated, navigate]);
 

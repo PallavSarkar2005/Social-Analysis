@@ -16,7 +16,7 @@ const classifyApiError = (error) => {
   const message = (error?.message || '').toLowerCase();
 
   if (!navigator.onLine) return '/error/offline';
-  if (status === 401) return '/error/401';
+  // 401 is normal before login — handled by AuthContext, not a fatal error page
   if (status === 403) return '/error/403';
   if (status === 404) return '/error/404';
   if (status === 503 || status === 504) return '/error/network';
@@ -45,6 +45,10 @@ const queryClient = new QueryClient({
 
 // Wire global error handler into queryClient after construction
 queryClient.getQueryCache().config.onError = (error) => {
+  const status = error?.status || error?.response?.status;
+  // Ignore expected auth states and client-side cancellations
+  if (!status || status < 500) return;
+
   const path = classifyApiError(error);
   if (path && window.location.pathname !== path) {
     // Store the error for correlation ID display on error pages
@@ -69,9 +73,12 @@ queryClient.getMutationCache().config.onError = (error) => {
   }
 };
 
-// Global uncaught promise rejection handler
+// Global uncaught promise rejection handler — only redirect for hard failures
 window.addEventListener('unhandledrejection', (event) => {
   const error = event.reason;
+  const status = error?.status || error?.response?.status;
+  if (!status || status < 500) return;
+
   const path = classifyApiError(error);
   if (path && window.location.pathname !== path) {
     event.preventDefault();

@@ -6,6 +6,7 @@ import { useDebounce } from "../hooks/useDebounce";
 import { syncYoutubeChannel, syncChannelContent } from "../api/youtubeApi";
 import { motion, AnimatePresence } from "framer-motion";
 import toast, { Toaster } from "react-hot-toast";
+import { devError } from "../utils/devLog";
 import PartyLogo from "../components/common/PartyLogo";
 
 import { Users, Plus, Trash2, RefreshCw, Layers, ShieldCheck, Globe, Link2, Key, Search } from "lucide-react";
@@ -53,7 +54,7 @@ export default function Accounts() {
       await updateAccountGroup({ id, group: newGroup });
       toast.success("Group updated successfully!", { id: `group-${id}` });
     } catch (err) {
-      console.error(err);
+      devError(err);
       toast.error("Failed to update group.", { id: `group-${id}` });
     }
   };
@@ -77,7 +78,7 @@ export default function Accounts() {
         party: "",
       });
     } catch (error) {
-      console.error(error);
+      devError(error);
       toast.error(error?.response?.data?.message || "Failed to index social node.");
     }
   };
@@ -89,7 +90,7 @@ export default function Accounts() {
       await apiDeleteAccount(id);
       toast.success("Account untracked successfully.", { id: `delete-${id}` });
     } catch (error) {
-      console.error(error);
+      devError(error);
       toast.error("Deletion request failed.", { id: `delete-${id}` });
     }
   };
@@ -105,7 +106,7 @@ export default function Accounts() {
       toast.success(`Node "${name}" successfully synchronized!`, { id: "sync" });
       refetch();
     } catch (err) {
-      console.error(err);
+      devError(err);
       toast.error(`Sync failed for "${name}". Verify API key limits.`, { id: "sync" });
     } finally {
       setSyncingId("");
@@ -283,7 +284,7 @@ export default function Accounts() {
                                       await apiUpdatePartyState({ id: acc._id, state: val });
                                       toast.success(`State updated for "${acc.name}"`);
                                     } catch (err) {
-                                      console.error(err);
+                                      devError(err);
                                       toast.error("Failed to update state.");
                                     }
                                   }
@@ -304,7 +305,7 @@ export default function Accounts() {
                                         await apiUpdatePartyState({ id: acc._id, party: val });
                                         toast.success(`Party updated for "${acc.name}"`);
                                       } catch (err) {
-                                        console.error(err);
+                                        devError(err);
                                         toast.error("Failed to update party.");
                                       }
                                     }

@@ -5,6 +5,7 @@ import { MapPin, TrendingUp, TrendingDown, Clock, Activity } from "lucide-react"
 import LeaderAvatar from "./LeaderAvatar";
 import PartyBadge from "./PartyBadge";
 import MetricItem from "./MetricItem";
+import { formatIndianDate } from "../../utils/dateFormatter";
 
 /**
  * CreatorCard component
@@ -16,7 +17,7 @@ import MetricItem from "./MetricItem";
  */
 export default function CreatorCard({ creator, theme, actions }) {
   const growth = creator.growth || 0;
-  const lastSyncDate = creator.lastSync ? new Date(creator.lastSync).toLocaleDateString() : "N/A";
+  const lastSyncDate = creator.lastSync ? formatIndianDate(creator.lastSync) : "N/A";
   const navigate = useNavigate();
 
   const handleCardClick = (e) => {

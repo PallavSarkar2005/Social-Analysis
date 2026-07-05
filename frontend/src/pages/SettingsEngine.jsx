@@ -5,6 +5,7 @@ import { useAuth } from "../context/AuthContext";
 import { Settings } from "lucide-react";
 import toast, { Toaster } from "react-hot-toast";
 import client from "../api/client";
+import { devError } from "../utils/devLog";
 import SettingsLayout from "../components/settings/SettingsLayout";
 
 export default function SettingsEngine() {
@@ -57,7 +58,7 @@ export default function SettingsEngine() {
         });
       }
     } catch (err) {
-      console.error("Error loading email schedule:", err);
+      devError("Error loading email schedule:", err);
     } finally {
       setLoadingSchedule(false);
     }
@@ -69,7 +70,7 @@ export default function SettingsEngine() {
         setNotificationPrefs(prefsRes.data.data);
       }
     } catch (err) {
-      console.error("Error loading notification preferences:", err);
+      devError("Error loading notification preferences:", err);
     } finally {
       setLoadingPrefs(false);
     }
@@ -87,7 +88,7 @@ export default function SettingsEngine() {
         setSessions(res.data.data);
       }
     } catch (err) {
-      console.error("Error fetching sessions:", err);
+      devError("Error fetching sessions:", err);
       toast.error("Failed to load active login sessions.");
     } finally {
       setLoadingSessions(false);
@@ -197,7 +198,7 @@ export default function SettingsEngine() {
         }
       }
     } catch (err) {
-      console.error("Error revoking session:", err);
+      devError("Error revoking session:", err);
       const msg = err.response?.data?.message || "Failed to revoke session.";
       toast.error(msg);
     }

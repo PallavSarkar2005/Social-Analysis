@@ -7,6 +7,7 @@ import {
   setAuthFailureHandler,
   clearLegacyAuthStorage,
 } from "../api/authToken";
+import { devWarn } from "../utils/devLog";
 
 const AuthContext = createContext();
 
@@ -149,7 +150,7 @@ export const AuthProvider = ({ children }) => {
     try {
       await client.post("/api/auth/logout");
     } catch (err) {
-      console.warn("Server-side logout warning:", err);
+      devWarn("Server-side logout warning:", err);
     }
     clearAccessToken();
     setUser(null);

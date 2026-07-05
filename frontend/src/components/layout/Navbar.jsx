@@ -3,6 +3,8 @@ import { Bell, Sparkles, LogOut, CheckCheck, RefreshCw, Search } from "lucide-re
 import { motion, AnimatePresence } from "framer-motion";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext.jsx";
+import { formatIndianDate, formatIndianTime } from "../../utils/dateFormatter";
+import { devError, devWarn } from "../../utils/devLog";
 import { getNotifications, markAsRead, markAllAsRead } from "../../api/notificationApi";
 import client from "../../api/client";
 import toast from "react-hot-toast";
@@ -53,7 +55,7 @@ export default function Navbar() {
         setSearchResults(res.data.data);
       }
     } catch (err) {
-      console.warn("Failed search execution", err);
+      devWarn("Failed search execution", err);
     } finally {
       setSearching(false);
     }
@@ -67,7 +69,7 @@ export default function Navbar() {
         setUnreadCount(res.unreadCount || 0);
       }
     } catch (e) {
-      console.warn("Failed to load notifications:", e);
+      devWarn("Failed to load notifications:", e);
     }
   };
 
@@ -109,7 +111,7 @@ export default function Navbar() {
       await markAsRead(id);
       await fetchNotifications();
     } catch (e) {
-      console.error(e);
+      devError(e);
     }
   };
 
@@ -119,7 +121,7 @@ export default function Navbar() {
       toast.success("All notifications marked as read");
       await fetchNotifications();
     } catch (e) {
-      console.error(e);
+      devError(e);
       toast.error("Failed to mark notifications read.");
     }
   };
@@ -275,7 +277,7 @@ export default function Navbar() {
                       >
                         <span className="font-medium">{hist.accountName}</span>
                         <span className="text-[9px] text-slate-500 font-mono">
-                          {new Date(hist.capturedAt).toLocaleDateString()}
+                          {formatIndianDate(hist.capturedAt)}
                         </span>
                       </button>
                     ))}
@@ -390,11 +392,7 @@ export default function Navbar() {
                             {notif.message}
                           </p>
                           <span className="text-[9px] text-slate-500 mt-2 block font-mono">
-                            {new Date(notif.createdAt).toLocaleDateString()} at{" "}
-                            {new Date(notif.createdAt).toLocaleTimeString([], {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })}
+                            {formatIndianDate(notif.createdAt)} at {formatIndianTime(notif.createdAt)}
                           </span>
                         </div>
                       </div>

@@ -2,6 +2,8 @@ import { useState, useEffect } from "react";
 import Sidebar from "../components/layout/Sidebar";
 import Navbar from "../components/layout/Navbar";
 import { getActivityLogs } from "../api/activityApi";
+import { formatIndianDateTime } from "../utils/dateFormatter";
+import { devError } from "../utils/devLog";
 import {
   History,
   Search,
@@ -26,7 +28,7 @@ export default function Activity() {
       const res = await getActivityLogs();
       setLogs(res.data || []);
     } catch (err) {
-      console.error(err);
+      devError(err);
       toast.error("Failed to load audit logs history.");
     } finally {
       setLoading(false);
@@ -157,7 +159,7 @@ export default function Activity() {
                         <td className="px-6 py-4 text-right text-slate-400 font-medium font-mono">
                           <span className="inline-flex items-center gap-1">
                             <Clock size={12} />
-                            {new Date(log.createdAt).toLocaleString()}
+                            {formatIndianDateTime(log.createdAt)}
                           </span>
                         </td>
                       </tr>

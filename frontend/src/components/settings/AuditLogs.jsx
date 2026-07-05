@@ -2,6 +2,8 @@ import React, { useState, useEffect } from "react";
 import { Clock, Filter, AlertCircle, RefreshCw, Layers, ShieldCheck, Cpu } from "lucide-react";
 import client from "../../api/client";
 import toast from "react-hot-toast";
+import { devError } from "../../utils/devLog";
+import { formatIndianDateTime } from "../../utils/dateFormatter";
 
 export default function AuditLogs() {
   const [logs, setLogs] = useState([]);
@@ -17,7 +19,7 @@ export default function AuditLogs() {
         setLogs(res.data.data);
       }
     } catch (err) {
-      console.error("Error loading activity logs:", err);
+      devError("Error loading activity logs:", err);
       toast.error("Failed to load audit logs.");
     } finally {
       setLoading(false);
@@ -125,7 +127,7 @@ export default function AuditLogs() {
                       {log.severity || "info"}
                     </span>
                     <span className="text-[10px] text-slate-500 ml-auto font-medium">
-                      {new Date(log.createdAt).toLocaleString()}
+                      {formatIndianDateTime(log.createdAt)}
                     </span>
                   </div>
 

@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Key, Plus, Copy, Trash2, Eye, EyeOff, ShieldCheck, Calendar, Clock, Lock } from "lucide-react";
 import toast from "react-hot-toast";
+import { formatIndianDate } from "../../utils/dateFormatter";
 
 export default function APIKeys() {
   const [keysList, setKeysList] = useState([
@@ -61,7 +62,7 @@ export default function APIKeys() {
       token: generatedToken,
       permissions: newKeyPermissions,
       lastUsed: "Never",
-      expiry: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
+      expiry: formatIndianDate(Date.now() + 365 * 24 * 60 * 60 * 1000),
       revealed: true, // Reveal immediately on creation
     };
 

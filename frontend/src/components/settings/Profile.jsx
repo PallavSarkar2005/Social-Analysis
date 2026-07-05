@@ -1,6 +1,7 @@
 import React, { useState, useRef } from "react";
 import { Sparkles, Upload, RotateCcw, Save, Trash2, Globe, Clock, ShieldCheck, Mail, MapPin } from "lucide-react";
 import toast from "react-hot-toast";
+import { formatIndianDateTime } from "../../utils/dateFormatter";
 
 export default function Profile({ user, onUpdateProfile }) {
   const [formData, setFormData] = useState({
@@ -320,7 +321,7 @@ export default function Profile({ user, onUpdateProfile }) {
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4 border-t border-white/[0.06] pt-6">
           <div className="flex items-center gap-2 text-slate-500 text-[10px] sm:text-xs">
             <Clock size={12} />
-            <span>Last updated: {user?.updatedAt ? new Date(user.updatedAt).toLocaleString() : "Just now"}</span>
+            <span>Last updated: {user?.updatedAt ? formatIndianDateTime(user.updatedAt) : "Just now"}</span>
           </div>
 
           <div className="flex items-center gap-3 w-full sm:w-auto">
