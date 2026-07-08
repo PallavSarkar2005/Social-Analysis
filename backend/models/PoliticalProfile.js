@@ -317,11 +317,70 @@ const politicalProfileSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+
+    profileSchemaVersion: {
+      type: Number,
+      default: 0,
+    },
+
+    profileEngineVersion: {
+      type: Number,
+      default: 0,
+    },
+
+    moduleVersion: {
+      type: Number,
+      default: 0,
+    },
+
+    moduleVersions: {
+      type: mongoose.Schema.Types.Mixed,
+      default: {},
+    },
+
+    moduleMeta: {
+      type: mongoose.Schema.Types.Mixed,
+      default: {},
+    },
+
+    newsVersion: {
+      type: Number,
+      default: 0,
+    },
+
+    syncStatus: {
+      type: String,
+      default: "pending",
+    },
+
+    syncProgress: {
+      type: mongoose.Schema.Types.Mixed,
+      default: {},
+    },
+
+    syncTrigger: {
+      type: String,
+      default: null,
+    },
+
+    lastSyncAttemptAt: {
+      type: Date,
+      default: null,
+    },
+
+    lastSyncCompletedAt: {
+      type: Date,
+      default: null,
+    },
   },
   {
     timestamps: true,
   }
 );
+
+politicalProfileSchema.index({ syncStatus: 1, lastSyncAttemptAt: 1 });
+politicalProfileSchema.index({ profileSchemaVersion: 1 });
+politicalProfileSchema.index({ builderVersion: 1 });
 
 const PoliticalProfile = mongoose.model("PoliticalProfile", politicalProfileSchema);
 

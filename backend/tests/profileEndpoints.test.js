@@ -107,6 +107,10 @@ describe("Political Profile Endpoint Integration", () => {
           aiVersion: 3,
           influenceVersion: 1,
           reachVersion: 1,
+          newsVersion: 1,
+          profileSchemaVersion: 1,
+          profileEngineVersion: 2,
+          moduleVersion: 1,
           lastSynced: new Date(),
           ...overrides,
         },
@@ -125,6 +129,8 @@ describe("Political Profile Endpoint Integration", () => {
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
       expect(res.body.data.biography).toBeDefined();
+      expect(res.body.data.modules).toBeDefined();
+      expect(res.body.data.syncStatus).toBeDefined();
       expect(Array.isArray(res.body.data.timeline)).toBe(true);
       expect(Array.isArray(res.body.data.verifiedFacts)).toBe(true);
       expect(res.body.data.relationships).toEqual(
@@ -228,15 +234,17 @@ describe("Political Profile Endpoint Integration", () => {
     );
 
     it(
-      "GET profile returns 200 on first access without stored profile",
+      "GET profile returns 200 building shell on first access without stored profile",
       async () => {
         await PoliticalProfile.deleteOne({ accountId: bareAccountId });
         const res = await authGet(`/api/profile/${bareAccountId}`);
         expectNot500(res.status);
         expect(res.status).toBe(200);
         expect(res.body.success).toBe(true);
+        expect(res.body.data.building).toBe(true);
+        expect(res.body.data.syncStatus).toBe("building");
       },
-      120000
+      30000
     );
   });
 });

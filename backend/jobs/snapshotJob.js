@@ -4,6 +4,8 @@ import Snapshot from "../models/Snapshot.js";
 import axios from "axios";
 import { scrapeXProfile } from "../scrapers/xScraper.js";
 import { syncAllYoutubeChannels } from "./youtubeSyncJob.js";
+import { syncAllProfileAccounts } from "../services/profileBuilderService.js";
+import { validateAllProfileIdentities } from "../services/profileIdentityValidationService.js";
 
 // Helper to scrape/fetch metrics and save a snapshot
 export const runSnapshotSync = async (frequencyLabel = "Scheduled") => {
@@ -16,6 +18,21 @@ export const runSnapshotSync = async (frequencyLabel = "Scheduled") => {
       forceRefresh: false,
       useLock: true,
     });
+
+    const identityReport = await validateAllProfileIdentities({
+      repair: true,
+      logPrefix: `[Snapshot Job:${frequencyLabel}] Identity Validation`,
+    });
+    console.log(
+      `[Snapshot Job] Identity validation: checked=${identityReport.profilesChecked} repaired=${identityReport.profilesRepaired} failed=${identityReport.profilesFailed} manualReview=${identityReport.profilesManualReview} rebuildsScheduled=${identityReport.rebuildsScheduled}`
+    );
+
+    const profileUpgradeSummary = await syncAllProfileAccounts({
+      logPrefix: `[Snapshot Job:${frequencyLabel}] Profile Upgrade`,
+    });
+    console.log(
+      `[Snapshot Job] Profile upgrade summary: processed=${profileUpgradeSummary.processed} updated=${profileUpgradeSummary.updated} migrated=${profileUpgradeSummary.migrated} skipped=${profileUpgradeSummary.skipped}`
+    );
 
     const accounts = await Account.find({ isActive: true, platform: { $ne: "youtube" } });
     console.log(`[Snapshot Job] Syncing ${accounts.length} non-YouTube active accounts...`);

@@ -5,10 +5,8 @@ import Content from "../models/Content.js";
 import PoliticalProfile from "../models/PoliticalProfile.js";
 import { sanitizeBiographyForResponse, sanitizeVerifiedFactsForResponse, sanitizeSourcesForResponse } from "../services/politicalProfileEnrichmentService.js";
 import { sanitizeTimelineForResponse } from "../services/politicalTimelineService.js";
-import {
-  buildProfile,
-  refreshNewsIfStale,
-} from "../services/profileBuilderService.js";
+import { scheduleProfileSync } from "../services/profileBuilderService.js";
+import { deriveModules, deriveModuleDataFlags, buildModuleMetaFromLegacy } from "../services/sectionMetaService.js";
 
 const getAiClient = () => {
   const apiKey = process.env.GROQ_API_KEY || process.env.OPENAI_API_KEY;
@@ -43,31 +41,76 @@ const resolveAccount = async (idOrChannelId) => {
 };
 
 export const getOrCreateProfileForAccount = async (account) => {
-  const result = await buildProfile(account._id);
-  return result.profile;
+  scheduleProfileSync(account._id, { trigger: "on_demand" });
+  return PoliticalProfile.findOne({ accountId: account._id }).lean();
 };
 
-const getOrCreateProfile = async (accountId) => {
-  const account = await resolveAccount(accountId);
+const buildAccountShellBiography = (account) => ({
+  fullName: account.name || null,
+  state: account.state || null,
+  party: account.party || null,
+  constituency: null,
+  currentPosition: null,
+});
+
+const buildProfileReadResponse = (account, profile) => {
+  const moduleMeta =
+    profile?.moduleMeta && Object.keys(profile.moduleMeta).length > 0
+      ? profile.moduleMeta
+      : profile
+        ? buildModuleMetaFromLegacy(profile, { account })
+        : {};
+  const modules = deriveModules(moduleMeta);
+  const moduleData = deriveModuleDataFlags(moduleMeta);
+  const syncStatus = profile?.syncStatus || (profile ? "ready" : "pending");
+  const building = !profile || syncStatus === "pending" || syncStatus === "building";
+
+  return {
+    account,
+    syncStatus: building ? "building" : syncStatus,
+    syncProgress: profile?.syncProgress || {
+      completed: 0,
+      total: 0,
+      currentSection: null,
+    },
+    modules,
+    moduleMeta,
+    moduleData,
+    biography: profile
+      ? sanitizeBiographyForResponse(profile.biography)
+      : buildAccountShellBiography(account),
+    verifiedFacts: profile
+      ? sanitizeVerifiedFactsForResponse(profile.verifiedFacts)
+      : [],
+    fieldProvenance: profile?.fieldProvenance || {},
+    timeline: profile ? sanitizeTimelineForResponse(profile.timeline) : [],
+    sources: profile ? sanitizeSourcesForResponse(profile.sources) : [],
+    confidenceScore: profile?.confidenceScore ?? 0,
+    confidenceBreakdown: profile?.confidenceBreakdown || {},
+    intelligenceOverview: profile?.intelligenceOverview || [],
+    politicalStatistics: profile?.politicalStatistics || [],
+    relationships: profile?.relationships || { nodes: [], edges: [] },
+    fieldConflicts: profile?.fieldConflicts || [],
+    sectionMeta: profile?.sectionMeta || {},
+    verificationCatalog: profile?.verificationCatalog || [],
+    lastVerified: profile?.lastVerified || profile?.lastSynced || null,
+    lastSynced: profile?.lastSynced || null,
+    profileSchemaVersion: profile?.profileSchemaVersion ?? 0,
+    profileEngineVersion: profile?.profileEngineVersion ?? 0,
+    moduleVersion: profile?.moduleVersion ?? 0,
+    builderVersion: profile?.builderVersion ?? 0,
+    building,
+  };
+};
+
+const loadProfileForRead = async (creatorId) => {
+  const account = await resolveAccount(creatorId);
   if (!account) return null;
 
-  let profile = await PoliticalProfile.findOne({ accountId: account._id });
+  const profile = await PoliticalProfile.findOne({ accountId: account._id }).lean();
+  scheduleProfileSync(account._id, { trigger: "on_demand" });
 
-  if (!profile) {
-    const result = await buildProfile(account._id);
-    if (!result.profile) return null;
-    profile = result.profile;
-  } else {
-    // Serve cached profile immediately; refresh stale sections in the background.
-    buildProfile(account._id).catch((err) => {
-      console.warn(
-        `[PROFILE] Background rebuild failed for ${account.name}:`,
-        err.message
-      );
-    });
-  }
-
-  return { account, profile };
+  return buildProfileReadResponse(account, profile);
 };
 
 const logProfileEnter = (handler, creatorId) => {
@@ -94,29 +137,12 @@ export const getProfile = async (req, res, next) => {
   const { creatorId } = req.params;
   logProfileEnter("getProfile", creatorId);
   try {
-    const result = await getOrCreateProfile(creatorId);
+    const result = await loadProfileForRead(creatorId);
     if (!result) return res.status(404).json({ success: false, message: "Profile not found" });
 
     res.json({
       success: true,
-      data: {
-        account: result.account,
-        biography: sanitizeBiographyForResponse(result.profile.biography),
-        verifiedFacts: sanitizeVerifiedFactsForResponse(result.profile.verifiedFacts),
-        fieldProvenance: result.profile.fieldProvenance || {},
-        timeline: sanitizeTimelineForResponse(result.profile.timeline),
-        sources: sanitizeSourcesForResponse(result.profile.sources),
-        confidenceScore: result.profile.confidenceScore ?? 0,
-        confidenceBreakdown: result.profile.confidenceBreakdown || {},
-        intelligenceOverview: result.profile.intelligenceOverview || [],
-        politicalStatistics: result.profile.politicalStatistics || [],
-        relationships: result.profile.relationships || { nodes: [], edges: [] },
-        fieldConflicts: result.profile.fieldConflicts || [],
-        sectionMeta: result.profile.sectionMeta || {},
-        verificationCatalog: result.profile.verificationCatalog || [],
-        lastVerified: result.profile.lastVerified || result.profile.lastSynced,
-        lastSynced: result.profile.lastSynced,
-      },
+      data: result,
     });
     logProfileSuccess("getProfile", creatorId, startedAt);
   } catch (error) {
@@ -131,12 +157,12 @@ export const getTimeline = async (req, res, next) => {
   const { creatorId } = req.params;
   logProfileEnter("getTimeline", creatorId);
   try {
-    const result = await getOrCreateProfile(creatorId);
+    const result = await loadProfileForRead(creatorId);
     if (!result) return res.status(404).json({ success: false, message: "Profile not found" });
 
     res.json({
       success: true,
-      data: sanitizeTimelineForResponse(result.profile.timeline),
+      data: result.timeline,
     });
     logProfileSuccess("getTimeline", creatorId, startedAt);
   } catch (error) {
@@ -145,67 +171,42 @@ export const getTimeline = async (req, res, next) => {
   }
 };
 
-const NEWS_REQUEST_TIMEOUT_MS = 15000;
-
 // 3. GET /api/profile/:creatorId/news
 export const getNews = async (req, res) => {
   const { creatorId } = req.params;
   const logPrefix = `[NEWS] creatorId=${creatorId}`;
-  let cachedNews = [];
-  let cachedSentiment = null;
 
   console.log("ENTER getNews");
-  console.log(`${logPrefix} request start`);
+  console.log(`${logPrefix} read-only request`);
 
   try {
     const account = await resolveAccount(creatorId);
     if (!account) {
-      console.log(`${logPrefix} account not found`);
       return res.status(404).json({ success: false, message: "Profile not found" });
     }
 
-    const profile = await PoliticalProfile.findOne({ accountId: account._id }).lean();
-    cachedNews = profile?.news ?? [];
-    cachedSentiment = profile?.newsSentiment ?? null;
-    console.log(
-      `${logPrefix} cache lookup newsCount=${cachedNews.length} lastSynced=${profile?.lastSynced ?? "none"}`
-    );
+    const profile = await PoliticalProfile.findOne({ accountId: account._id })
+      .select("news newsSentiment syncStatus moduleMeta")
+      .lean();
 
-    const refreshedProfile = await Promise.race([
-      refreshNewsIfStale(account, profile, { logPrefix }),
-      new Promise((_, reject) => {
-        setTimeout(
-          () => reject(new Error(`News pipeline timed out after ${NEWS_REQUEST_TIMEOUT_MS}ms`)),
-          NEWS_REQUEST_TIMEOUT_MS
-        );
-      }),
-    ]);
+    scheduleProfileSync(account._id, { trigger: "on_demand", logPrefix });
 
-    const safeProfile = refreshedProfile || profile;
-    const news = safeProfile?.news ?? cachedNews;
-    const sentiment = safeProfile?.newsSentiment ?? cachedSentiment;
-
-    console.log(`${logPrefix} final response newsCount=${news?.length ?? 0}`);
-
-    console.log("SUCCESS getNews");
     return res.json({
       success: true,
       data: {
-        news: news ?? [],
-        sentiment: sentiment ?? null,
+        news: profile?.news ?? [],
+        sentiment: profile?.newsSentiment ?? null,
+        syncStatus: profile?.syncStatus || "pending",
+        modules: deriveModules(profile?.moduleMeta || {}),
       },
     });
   } catch (error) {
     console.error("FAILED getNews", error);
-    console.error(`${logPrefix} pipeline error:`, error.message);
-    if (error.stack) console.error(error.stack);
-
-    console.log(`${logPrefix} returning safe fallback`);
     return res.json({
       success: true,
       data: {
-        news: cachedNews,
-        sentiment: cachedSentiment,
+        news: [],
+        sentiment: null,
       },
     });
   }
@@ -312,13 +313,17 @@ export const getCharts = async (req, res, next) => {
 export const getElections = async (req, res, next) => {
   console.log("ENTER getElections");
   try {
-    const result = await getOrCreateProfile(req.params.creatorId);
+    const result = await loadProfileForRead(req.params.creatorId);
     if (!result) return res.status(404).json({ success: false, message: "Profile not found" });
 
+    const profile = await PoliticalProfile.findOne({ accountId: result.account._id })
+      .select("elections electionIntelligence")
+      .lean();
+
     const elections =
-      result.profile.electionIntelligence?.length > 0
-        ? result.profile.electionIntelligence
-        : result.profile.elections;
+      profile?.electionIntelligence?.length > 0
+        ? profile.electionIntelligence
+        : profile?.elections;
 
     res.json({
       success: true,
@@ -335,15 +340,19 @@ export const getElections = async (req, res, next) => {
 export const getInfluence = async (req, res, next) => {
   console.log("ENTER getInfluence");
   try {
-    const result = await getOrCreateProfile(req.params.creatorId);
+    const result = await loadProfileForRead(req.params.creatorId);
     if (!result) return res.status(404).json({ success: false, message: "Profile not found" });
+
+    const profile = await PoliticalProfile.findOne({ accountId: result.account._id })
+      .select("influence geographicReach")
+      .lean();
 
     res.json({
       success: true,
       data: {
-        influence: result.profile.influence || {},
-        geographicReach: Array.isArray(result.profile.geographicReach)
-          ? result.profile.geographicReach
+        influence: profile?.influence || {},
+        geographicReach: Array.isArray(profile?.geographicReach)
+          ? profile.geographicReach
           : [],
       },
     });
@@ -358,14 +367,18 @@ export const getInfluence = async (req, res, next) => {
 export const getAiInsights = async (req, res, next) => {
   console.log("ENTER getAiInsights");
   try {
-    const result = await getOrCreateProfile(req.params.creatorId);
+    const result = await loadProfileForRead(req.params.creatorId);
     if (!result) return res.status(404).json({ success: false, message: "Profile not found" });
+
+    const profile = await PoliticalProfile.findOne({ accountId: result.account._id })
+      .select("aiInsights aiSummary")
+      .lean();
 
     res.json({
       success: true,
       data: {
-        insights: Array.isArray(result.profile.aiInsights) ? result.profile.aiInsights : [],
-        summary: result.profile.aiSummary || {},
+        insights: Array.isArray(profile?.aiInsights) ? profile.aiInsights : [],
+        summary: profile?.aiSummary || {},
       },
     });
     console.log("SUCCESS getAiInsights");
@@ -463,14 +476,16 @@ export const chatProfile = async (req, res, next) => {
   res.setHeader("Connection", "keep-alive");
 
   try {
-    const result = await getOrCreateProfile(creatorId);
+    const result = await loadProfileForRead(creatorId);
     if (!result) {
       res.write(`data: ${JSON.stringify({ error: "Profile not found" })}\n\n`);
       res.write("data: [DONE]\n\n");
       return res.end();
     }
 
-    const { account, profile } = result;
+    const { account } = result;
+    const profile =
+      (await PoliticalProfile.findOne({ accountId: account._id }).lean()) || {};
 
     // Fetch snapshot timeline
     const snapshots = await Snapshot.find({ account: account._id, userId: req.user._id })

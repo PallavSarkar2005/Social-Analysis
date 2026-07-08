@@ -4,7 +4,13 @@ import Account from "../models/Account.js";
 import Snapshot from "../models/Snapshot.js";
 import PoliticalProfile from "../models/PoliticalProfile.js";
 import PROFILE_BUILDER_VERSIONS, {
-  PROFILE_VERSION_FIELDS,
+  SECTION_VERSION_KEY,
+  applyVersionStamp,
+  buildModuleVersionsSnapshot,
+  getOutdatedSections,
+  getProfileUpgradePlan,
+  getStoredVersion,
+  needsSchemaMigration,
 } from "../config/profileBuilderVersion.js";
 import {
   enrichPoliticalProfile,
@@ -14,19 +20,14 @@ import { buildIntelligenceTimeline } from "./politicalTimelineService.js";
 import { buildIntelligenceOverview } from "./overviewEngine.js";
 import { generateAiPoliticalSummary } from "./aiPoliticalSummaryService.js";
 import { buildRelationshipGraph } from "./relationshipGraphService.js";
+import {
+  buildElectionIntelligence,
+  toLegacyElections,
+} from "./electionIntelligenceService.js";
+import { buildModuleMeta, buildModuleMetaFromLegacy } from "./sectionMetaService.js";
+import { resolveEnrichmentIdentity, resolveAccountParty } from "../providers/shared/politicalIdentityUtils.js";
 
-const SECTIONS = ["overview", "facts", "timeline", "elections", "relationships", "ai", "influence", "reach"];
-
-const SECTION_VERSION_KEY = {
-  overview: "overviewVersion",
-  facts: "factsVersion",
-  timeline: "timelineVersion",
-  elections: "electionVersion",
-  relationships: "relationshipVersion",
-  ai: "aiVersion",
-  influence: "influenceVersion",
-  reach: "reachVersion",
-};
+export { getOutdatedSections, getProfileUpgradePlan, isProfileOutdated } from "../config/profileBuilderVersion.js";
 
 const getAiClient = () => {
   const apiKey = process.env.GROQ_API_KEY || process.env.OPENAI_API_KEY;
@@ -182,39 +183,6 @@ export const fetchNewsForAccount = async (account, { logPrefix = "[NEWS]" } = {}
   }
 
   return { news: freshNews, newsSentiment: sentiment };
-};
-
-const getStoredVersion = (profile, field) => profile?.[field] ?? 0;
-
-export const isProfileOutdated = (profile) => {
-  if (!profile) return true;
-  if (
-    getStoredVersion(profile, "builderVersion") <
-    PROFILE_BUILDER_VERSIONS.builderVersion
-  ) {
-    return true;
-  }
-  return PROFILE_VERSION_FIELDS.some(
-    (field) =>
-      field !== "builderVersion" &&
-      getStoredVersion(profile, field) < PROFILE_BUILDER_VERSIONS[field]
-  );
-};
-
-export const getOutdatedSections = (profile, { force = false } = {}) => {
-  if (force || !profile) return [...SECTIONS];
-  if (
-    getStoredVersion(profile, "builderVersion") <
-    PROFILE_BUILDER_VERSIONS.builderVersion
-  ) {
-    return [...SECTIONS];
-  }
-
-  return SECTIONS.filter(
-    (section) =>
-      getStoredVersion(profile, SECTION_VERSION_KEY[section]) <
-      PROFILE_BUILDER_VERSIONS[SECTION_VERSION_KEY[section]]
-  );
 };
 
 const clampScore = (value, max = 100) =>
@@ -464,18 +432,58 @@ const buildAiInsightsSection = async (account, profile) => {
   return { aiInsights: insights, aiSummary: summary };
 };
 
-const applyVersionFields = (sectionsBuilt) => {
-  const versions = {
-    builderVersion: PROFILE_BUILDER_VERSIONS.builderVersion,
-    lastBuiltAt: new Date(),
-  };
-
-  for (const section of sectionsBuilt) {
-    versions[SECTION_VERSION_KEY[section]] =
-      PROFILE_BUILDER_VERSIONS[SECTION_VERSION_KEY[section]];
+const rebuildElectionsFromStored = (profile, overviewData = null) => {
+  if (overviewData?.electionIntelligence?.length || overviewData?.elections?.length) {
+    return buildElectionsSection(overviewData, profile);
   }
 
-  return versions;
+  const providerElections = [];
+  if (Array.isArray(profile?.elections) && profile.elections.length > 0) {
+    providerElections.push(profile.elections);
+  }
+  if (Array.isArray(profile?.electionIntelligence) && profile.electionIntelligence.length > 0) {
+    providerElections.push(profile.electionIntelligence);
+  }
+
+  const electionIntelligence = buildElectionIntelligence(
+    providerElections,
+    profile?.biography ?? {},
+    profile?.sources ?? []
+  );
+
+  return {
+    elections: toLegacyElections(electionIntelligence),
+    electionIntelligence,
+  };
+};
+
+const buildSchemaMigrationPayload = (profile, account, snapshots = []) => {
+  const moduleMeta = buildModuleMetaFromLegacy(profile || {}, {
+    account,
+    snapshotCount: snapshots.length,
+  });
+
+  return {
+    profileSchemaVersion: PROFILE_BUILDER_VERSIONS.profileSchemaVersion,
+    profileEngineVersion: PROFILE_BUILDER_VERSIONS.profileEngineVersion,
+    moduleVersion: PROFILE_BUILDER_VERSIONS.moduleVersion,
+    moduleMeta,
+    moduleVersions: {
+      ...(profile?.moduleVersions || {}),
+      ...buildModuleVersionsSnapshot(
+        Object.keys(SECTION_VERSION_KEY).filter((key) => {
+          const versionKey = SECTION_VERSION_KEY[key];
+          return (profile?.[versionKey] ?? 0) >= (PROFILE_BUILDER_VERSIONS[versionKey] ?? 0);
+        })
+      ),
+    },
+  };
+};
+
+const resolveSyncStatus = (sectionErrors, sectionsBuilt) => {
+  if (sectionErrors.length > 0 && sectionsBuilt.length === 0) return "failed";
+  if (sectionErrors.length > 0) return "partial";
+  return "ready";
 };
 
 const syncAccountBiographyFields = (profile, account) => ({
@@ -574,6 +582,7 @@ const applyOverviewCoreFields = (updatePayload, biographySync, overviewData) => 
     ...(overviewData?.biography || {}),
   };
   updatePayload.elections = overviewData?.elections ?? [];
+  updatePayload.electionIntelligence = overviewData?.electionIntelligence ?? [];
   updatePayload.sources = overviewData?.sources ?? [];
   updatePayload.confidenceScore = overviewData?.confidenceScore ?? 0;
   updatePayload.confidenceBreakdown = overviewData?.confidenceBreakdown ?? {};
@@ -593,7 +602,7 @@ const buildLocks = new Map();
 
 const runBuildProfile = async (
   accountId,
-  { logPrefix = "[PROFILE BUILDER]", force = false } = {}
+  { logPrefix = "[PROFILE BUILDER]", force = false, trigger = "manual" } = {}
 ) => {
   const account = await resolveAccountById(accountId);
   if (!account) {
@@ -602,31 +611,117 @@ const runBuildProfile = async (
 
   const accountIdStr = String(account._id);
   let profile = await PoliticalProfile.findOne({ accountId: account._id });
-  const outdatedSections = getOutdatedSections(profile, { force });
+  const { snapshots } = await loadBuildContext(account);
+  const upgradePlan = getProfileUpgradePlan(profile, { force });
+  const outdatedSections = [...upgradePlan.outdatedSections];
 
-  if (outdatedSections.length === 0) {
+  if (!upgradePlan.needsWork) {
+    const versionStamp = {};
+    if (getStoredVersion(profile, "builderVersion") < PROFILE_BUILDER_VERSIONS.builderVersion) {
+      versionStamp.builderVersion = PROFILE_BUILDER_VERSIONS.builderVersion;
+    }
     profile = await PoliticalProfile.findOneAndUpdate(
       { accountId: account._id },
-      { $set: { ...syncAccountBiographyFields(profile, account), lastSynced: new Date() } },
+      {
+        $set: {
+          ...syncAccountBiographyFields(profile, account),
+          ...versionStamp,
+          lastSynced: new Date(),
+          syncStatus: profile?.syncStatus === "building" ? "ready" : profile?.syncStatus || "ready",
+        },
+      },
       { new: true }
     );
-    return { success: true, action: "skipped", profile, account };
+    return { success: true, action: versionStamp.builderVersion ? "stamped" : "skipped", profile, account, upgradePlan };
+  }
+
+  const buildStartedAt = Date.now();
+  const migrationOnly =
+    outdatedSections.length === 0 &&
+    (upgradePlan.schemaMigration ||
+      upgradePlan.engineMigration ||
+      getStoredVersion(profile, "builderVersion") < PROFILE_BUILDER_VERSIONS.builderVersion);
+
+  if (migrationOnly) {
+    const migrationPayload = {
+      ...buildSchemaMigrationPayload(profile, account, snapshots),
+      builderVersion: PROFILE_BUILDER_VERSIONS.builderVersion,
+    };
+    profile = await PoliticalProfile.findOneAndUpdate(
+      { accountId: account._id },
+      {
+        $set: {
+          ...migrationPayload,
+          syncStatus: "ready",
+          syncTrigger: trigger,
+          lastSyncCompletedAt: new Date(),
+          lastSyncAttemptAt: new Date(),
+        },
+      },
+      { new: true, upsert: !profile }
+    );
+    return {
+      success: true,
+      action: "migrated",
+      profile,
+      account,
+      sectionsBuilt: [],
+      sectionErrors: [],
+      upgradePlan,
+    };
   }
 
   console.log(
-    `${logPrefix} Build start accountId=${accountIdStr} name="${account.name}" sections=[${outdatedSections.join(", ")}]`
+    `${logPrefix} Upgrade start accountId=${accountIdStr} name="${account.name}" sections=[${outdatedSections.join(", ")}]`
   );
-  const buildStartedAt = Date.now();
 
-  const { snapshots } = await loadBuildContext(account);
+  await PoliticalProfile.findOneAndUpdate(
+    { accountId: account._id },
+    {
+      $set: {
+        syncStatus: "building",
+        syncTrigger: trigger,
+        lastSyncAttemptAt: new Date(),
+        syncProgress: {
+          completed: 0,
+          total: outdatedSections.length,
+          currentSection: outdatedSections[0] || null,
+          startedAt: new Date().toISOString(),
+        },
+      },
+    },
+    { upsert: !profile }
+  );
+
+  profile = await PoliticalProfile.findOne({ accountId: account._id });
+
   const biographySync = syncAccountBiographyFields(profile, account);
-  const updatePayload = {
-    ...biographySync,
-    lastSynced: new Date(),
-  };
+  const updatePayload = { ...biographySync, lastSynced: new Date() };
   const sectionsBuilt = [];
   const sectionErrors = [];
   let overviewData = null;
+  let completedSections = 0;
+
+  const bumpProgress = async (currentSection) => {
+    completedSections += 1;
+    await PoliticalProfile.findOneAndUpdate(
+      { accountId: account._id },
+      {
+        $set: {
+          syncProgress: {
+            completed: completedSections,
+            total: outdatedSections.length,
+            currentSection,
+            startedAt: new Date(buildStartedAt).toISOString(),
+          },
+        },
+      }
+    );
+  };
+
+  if (upgradePlan.schemaMigration) {
+    Object.assign(updatePayload, buildSchemaMigrationPayload(profile, account, snapshots));
+  }
 
   if (outdatedSections.includes("overview")) {
     const overviewResult = await runBuildSection(
@@ -642,42 +737,27 @@ const runBuildProfile = async (
     overviewData = overviewResult.data;
     applyOverviewCoreFields(updatePayload, biographySync, overviewData);
 
-    const timelineResult = await runBuildSection(
-      "buildTimeline",
-      accountIdStr,
-      logPrefix,
-      () => buildTimelineSection(profile, overviewData),
-      { timeline: [] }
-    );
-    if (!timelineResult.success) {
-      sectionErrors.push({ section: "buildTimeline", error: timelineResult.error });
+    const correctedState =
+      overviewData?.biography?.state || resolveEnrichmentIdentity(account).state;
+    const partyResolution = resolveAccountParty({
+      ...account.toObject?.() || account,
+      biographyParty: overviewData?.biography?.party,
+    });
+    const accountRepairs = {};
+    if (
+      correctedState &&
+      correctedState !== "Unknown State" &&
+      correctedState !== account.state
+    ) {
+      accountRepairs.state = correctedState;
     }
-    updatePayload.timeline =
-      timelineResult.data.timeline ?? overviewData?.timeline ?? [];
-
-    const electionResult = await runBuildSection(
-      "buildElectionIntelligence",
-      accountIdStr,
-      logPrefix,
-      () => buildElectionsSection(overviewData, profile),
-      { elections: [], electionIntelligence: [] }
-    );
-    if (!electionResult.success) {
-      sectionErrors.push({ section: "buildElectionIntelligence", error: electionResult.error });
+    if (partyResolution.corrected && partyResolution.party !== account.party) {
+      accountRepairs.party = partyResolution.party;
     }
-    Object.assign(updatePayload, electionResult.data);
-
-    const relationshipResult = await runBuildSection(
-      "buildRelationshipGraph",
-      accountIdStr,
-      logPrefix,
-      () => buildRelationshipsSection(overviewData, profile),
-      { relationships: { nodes: [], edges: [] } }
-    );
-    if (!relationshipResult.success) {
-      sectionErrors.push({ section: "buildRelationshipGraph", error: relationshipResult.error });
+    if (Object.keys(accountRepairs).length > 0) {
+      await Account.findByIdAndUpdate(account._id, { $set: accountRepairs });
+      Object.assign(account, accountRepairs);
     }
-    Object.assign(updatePayload, relationshipResult.data);
 
     const statisticsResult = await runBuildSection(
       "buildPoliticalStatistics",
@@ -691,22 +771,8 @@ const runBuildProfile = async (
     }
     Object.assign(updatePayload, statisticsResult.data);
 
-    try {
-      const newsData = await fetchNewsForAccount(account);
-      if (newsData) {
-        updatePayload.news = newsData.news;
-        updatePayload.newsSentiment = newsData.newsSentiment;
-      }
-    } catch (newsError) {
-      console.warn(
-        `${logPrefix} [buildNews] FAILED accountId=${accountIdStr} error: ${newsError.message}`
-      );
-      if (newsError.stack) {
-        console.warn(newsError.stack);
-      }
-    }
-
-    sectionsBuilt.push("overview", "facts", "timeline", "elections", "relationships");
+    sectionsBuilt.push("overview", "facts");
+    await bumpProgress("overview");
   }
 
   if (outdatedSections.includes("facts") && !sectionsBuilt.includes("facts")) {
@@ -730,12 +796,10 @@ const runBuildProfile = async (
     }
     Object.assign(updatePayload, factsResult.data);
     sectionsBuilt.push("facts");
+    await bumpProgress("facts");
   }
 
-  if (
-    outdatedSections.includes("timeline") &&
-    !sectionsBuilt.includes("timeline")
-  ) {
+  if (outdatedSections.includes("timeline")) {
     const timelineResult = await runBuildSection(
       "buildTimeline",
       accountIdStr,
@@ -746,16 +810,21 @@ const runBuildProfile = async (
     if (!timelineResult.success) {
       sectionErrors.push({ section: "buildTimeline", error: timelineResult.error });
     }
-    updatePayload.timeline = timelineResult.data.timeline ?? [];
+    updatePayload.timeline = timelineResult.data.timeline ?? overviewData?.timeline ?? profile?.timeline ?? [];
     sectionsBuilt.push("timeline");
+    await bumpProgress("timeline");
   }
 
-  if (outdatedSections.includes("elections") && !sectionsBuilt.includes("elections")) {
+  if (outdatedSections.includes("elections")) {
     const electionResult = await runBuildSection(
       "buildElectionIntelligence",
       accountIdStr,
       logPrefix,
-      () => buildElectionsSection(overviewData, profile),
+      () =>
+        rebuildElectionsFromStored(
+          { ...(profile?.toObject?.() || profile || {}), ...updatePayload },
+          overviewData
+        ),
       { elections: [], electionIntelligence: [] }
     );
     if (!electionResult.success) {
@@ -763,14 +832,19 @@ const runBuildProfile = async (
     }
     Object.assign(updatePayload, electionResult.data);
     sectionsBuilt.push("elections");
+    await bumpProgress("elections");
   }
 
-  if (outdatedSections.includes("relationships") && !sectionsBuilt.includes("relationships")) {
+  if (outdatedSections.includes("relationships")) {
     const relationshipResult = await runBuildSection(
       "buildRelationshipGraph",
       accountIdStr,
       logPrefix,
-      () => buildRelationshipsSection(overviewData, profile),
+      () =>
+        buildRelationshipsSection(overviewData, {
+          ...(profile?.toObject?.() || profile || {}),
+          ...updatePayload,
+        }),
       { relationships: { nodes: [], edges: [] } }
     );
     if (!relationshipResult.success) {
@@ -778,6 +852,35 @@ const runBuildProfile = async (
     }
     Object.assign(updatePayload, relationshipResult.data);
     sectionsBuilt.push("relationships");
+    await bumpProgress("relationships");
+  }
+
+  if (outdatedSections.includes("news")) {
+    const newsResult = await runBuildSection(
+      "buildNews",
+      accountIdStr,
+      logPrefix,
+      async () => {
+        const newsData = await fetchNewsForAccount(account, { logPrefix });
+        if (!newsData) {
+          return {
+            news: profile?.news ?? [],
+            newsSentiment: profile?.newsSentiment ?? null,
+          };
+        }
+        return newsData;
+      },
+      { news: profile?.news ?? [], newsSentiment: profile?.newsSentiment ?? null }
+    );
+    if (!newsResult.success) {
+      sectionErrors.push({ section: "buildNews", error: newsResult.error });
+    }
+    if (newsResult.data?.news) {
+      updatePayload.news = newsResult.data.news;
+      updatePayload.newsSentiment = newsResult.data.newsSentiment;
+    }
+    sectionsBuilt.push("news");
+    await bumpProgress("news");
   }
 
   if (outdatedSections.includes("influence")) {
@@ -793,6 +896,7 @@ const runBuildProfile = async (
     }
     Object.assign(updatePayload, influenceResult.data);
     sectionsBuilt.push("influence");
+    await bumpProgress("influence");
   }
 
   if (outdatedSections.includes("reach")) {
@@ -808,6 +912,7 @@ const runBuildProfile = async (
     }
     Object.assign(updatePayload, reachResult.data);
     sectionsBuilt.push("reach");
+    await bumpProgress("reach");
   }
 
   if (outdatedSections.includes("ai")) {
@@ -825,9 +930,38 @@ const runBuildProfile = async (
     updatePayload.aiInsights = aiResult.data.aiInsights ?? [];
     updatePayload.aiSummary = aiResult.data.aiSummary ?? {};
     sectionsBuilt.push("ai");
+    await bumpProgress("ai");
   }
 
-  Object.assign(updatePayload, applyVersionFields(sectionsBuilt));
+  const uniqueSectionsBuilt = [...new Set(sectionsBuilt)];
+  Object.assign(updatePayload, applyVersionStamp(uniqueSectionsBuilt));
+  updatePayload.moduleVersions = {
+    ...(profile?.moduleVersions || {}),
+    ...buildModuleVersionsSnapshot(uniqueSectionsBuilt),
+  };
+
+  const workingForMeta = { ...(profile?.toObject?.() || profile || {}), ...updatePayload };
+  updatePayload.moduleMeta = buildModuleMeta({
+    profile: workingForMeta,
+    account,
+    snapshotCount: snapshots.length,
+  });
+  updatePayload.syncStatus = resolveSyncStatus(sectionErrors, uniqueSectionsBuilt);
+  updatePayload.syncTrigger = trigger;
+  updatePayload.lastSyncCompletedAt = new Date();
+  updatePayload.lastSyncAttemptAt = new Date();
+  updatePayload.syncProgress = {
+    completed: outdatedSections.length,
+    total: outdatedSections.length,
+    currentSection: null,
+    finishedAt: new Date().toISOString(),
+  };
+
+  if (upgradePlan.schemaMigration || needsSchemaMigration(profile)) {
+    updatePayload.profileSchemaVersion = PROFILE_BUILDER_VERSIONS.profileSchemaVersion;
+    updatePayload.profileEngineVersion = PROFILE_BUILDER_VERSIONS.profileEngineVersion;
+    updatePayload.moduleVersion = PROFILE_BUILDER_VERSIONS.moduleVersion;
+  }
 
   try {
     if (!profile) {
@@ -854,15 +988,19 @@ const runBuildProfile = async (
       }
     }
     sectionErrors.push({ section: "databasePersist", error: persistError });
+    await PoliticalProfile.findOneAndUpdate(
+      { accountId: account._id },
+      { $set: { syncStatus: "failed", lastSyncAttemptAt: new Date() } }
+    );
   }
 
   if (sectionErrors.length > 0) {
     console.warn(
-      `${logPrefix} Build completed with ${sectionErrors.length} section error(s) accountId=${accountIdStr} sections=[${sectionErrors.map((e) => e.section).join(", ")}] duration=${formatDuration(Date.now() - buildStartedAt)}`
+      `${logPrefix} Upgrade completed with ${sectionErrors.length} section error(s) accountId=${accountIdStr} sections=[${sectionErrors.map((e) => e.section).join(", ")}] duration=${formatDuration(Date.now() - buildStartedAt)}`
     );
   } else {
     console.log(
-      `${logPrefix} Built ${account.name} accountId=${accountIdStr} sections=[${sectionsBuilt.join(", ")}] duration=${formatDuration(Date.now() - buildStartedAt)}`
+      `${logPrefix} Upgraded ${account.name} accountId=${accountIdStr} sections=[${uniqueSectionsBuilt.join(", ")}] duration=${formatDuration(Date.now() - buildStartedAt)}`
     );
   }
 
@@ -871,9 +1009,104 @@ const runBuildProfile = async (
     action: sectionErrors.length === 0 ? "updated" : "partial",
     profile,
     account,
-    sectionsBuilt,
+    sectionsBuilt: uniqueSectionsBuilt,
     sectionErrors,
+    upgradePlan,
   };
+};
+
+/**
+ * Queue-ready sync entry point. Cron, on-demand, and future workers call this.
+ */
+export const syncProfileAccount = (accountId, options = {}) =>
+  buildProfile(accountId, {
+    logPrefix: "[PROFILE SYNC]",
+    trigger: "cron",
+    ...options,
+  });
+
+const scheduledSyncKeys = new Set();
+
+/**
+ * Non-blocking background upgrade — safe to call on every API read.
+ */
+export const scheduleProfileSync = (accountId, options = {}) => {
+  const key = String(accountId);
+  if (scheduledSyncKeys.has(key)) return;
+  scheduledSyncKeys.add(key);
+
+  setImmediate(() => {
+    scheduledSyncKeys.delete(key);
+    syncProfileAccount(accountId, {
+      trigger: "on_demand",
+      logPrefix: "[PROFILE SYNC]",
+      ...options,
+    }).catch((err) => {
+      console.warn(`[PROFILE SYNC] Background upgrade failed for ${key}:`, err.message);
+    });
+  });
+};
+
+/**
+ * Version-aware upgrade pass for all accounts with stored profiles and active accounts.
+ */
+export const syncAllProfileAccounts = async ({
+  logPrefix = "[PROFILE UPGRADE]",
+  force = false,
+} = {}) => {
+  const startedAt = Date.now();
+  const [profiles, activeAccounts] = await Promise.all([
+    PoliticalProfile.find({}).select("accountId").lean(),
+    Account.find({ isActive: true, platform: "youtube" }).select("_id").lean(),
+  ]);
+
+  const accountIds = new Set([
+    ...profiles.map((p) => String(p.accountId)),
+    ...activeAccounts.map((a) => String(a._id)),
+  ]);
+
+  const stats = {
+    processed: 0,
+    updated: 0,
+    migrated: 0,
+    skipped: 0,
+    partial: 0,
+    failed: 0,
+    total: accountIds.size,
+  };
+
+  console.log(`${logPrefix} Starting version-aware upgrade for ${stats.total} accounts...`);
+
+  for (const accountId of accountIds) {
+    stats.processed += 1;
+    try {
+      const result = await syncProfileAccount(accountId, { logPrefix, force, trigger: "cron" });
+
+      if (result.reason === "account_not_found") {
+        stats.failed += 1;
+      } else if (result.action === "migrated") {
+        stats.migrated += 1;
+      } else if (result.action === "updated") {
+        stats.updated += 1;
+      } else if (result.action === "partial") {
+        stats.partial += 1;
+      } else if (result.action === "skipped") {
+        stats.skipped += 1;
+      } else {
+        stats.failed += 1;
+      }
+    } catch (error) {
+      stats.failed += 1;
+      console.error(`${logPrefix} Failed account ${accountId}:`, error.message);
+    }
+  }
+
+  const runtimeMs = Date.now() - startedAt;
+  console.log(
+    `${logPrefix} Complete — processed=${stats.processed} updated=${stats.updated} migrated=${stats.migrated} partial=${stats.partial} skipped=${stats.skipped} failed=${stats.failed} total=${stats.total} runtime=${runtimeMs}ms`
+  );
+
+  return { ...stats, runtimeMs };
 };
 
 /**
@@ -902,105 +1135,19 @@ export const rebuildProfile = (accountId, options = {}) =>
   buildProfile(accountId, { ...options, force: true });
 
 /**
- * Rebuild every stored PoliticalProfile. Logs aggregate progress statistics.
+ * Upgrade every stored profile using version-aware incremental sync.
+ * Pass force: true only for administrative full rebuilds.
  */
-export const rebuildAllProfiles = async ({ logPrefix = "[PROFILE REBUILD]" } = {}) => {
-  const startedAt = Date.now();
-  const profiles = await PoliticalProfile.find({}).select("accountId").lean();
-
-  const stats = {
-    processed: 0,
-    updated: 0,
-    skipped: 0,
-    failed: 0,
-    total: profiles.length,
-  };
-
-  console.log(`${logPrefix} Starting rebuild for ${stats.total} profiles...`);
-
-  for (const entry of profiles) {
-    stats.processed += 1;
-    try {
-      const result = await buildProfile(entry.accountId, {
-        logPrefix,
-        force: true,
-      });
-
-      if (result.reason === "account_not_found") {
-        stats.failed += 1;
-      } else if (result.action === "updated" || result.action === "partial") {
-        stats.updated += 1;
-      } else if (result.action === "skipped") {
-        stats.skipped += 1;
-      } else if (result.action === "failed") {
-        stats.failed += 1;
-      } else if (result.success) {
-        stats.updated += 1;
-      }
-    } catch (error) {
-      stats.failed += 1;
-      console.error(`${logPrefix} Failed profile ${entry.accountId}:`, error.message);
-    }
-  }
-
-  const runtimeMs = Date.now() - startedAt;
-  console.log(
-    `${logPrefix} Complete — processed=${stats.processed} updated=${stats.updated} skipped=${stats.skipped} failed=${stats.failed} total=${stats.total} runtime=${runtimeMs}ms`
-  );
-
-  return { ...stats, runtimeMs };
-};
+export const rebuildAllProfiles = async ({
+  logPrefix = "[PROFILE UPGRADE]",
+  force = false,
+} = {}) => syncAllProfileAccounts({ logPrefix, force });
 
 /**
- * Refresh news if the stored cache is older than 30 minutes.
- * Used by the news endpoint without duplicating crawl logic.
+ * @deprecated Request path must not refresh news. Schedules background sync instead.
  */
 export const refreshNewsIfStale = async (account, profile, { logPrefix = "[NEWS]" } = {}) => {
-  const cacheLimit = new Date(Date.now() - 30 * 60 * 1000);
-  console.log(
-    `${logPrefix} cache lookup newsCount=${profile?.news?.length ?? 0} lastSynced=${profile?.lastSynced ?? "none"}`
-  );
-
-  if (profile?.news?.length > 0 && profile?.lastSynced >= cacheLimit) {
-    console.log(`${logPrefix} cache hit`);
-    return profile;
-  }
-
-  console.log(`${logPrefix} cache miss — refreshing`);
-  try {
-    const newsData = await fetchNewsForAccount(account, { logPrefix });
-    if (!newsData) {
-      console.log(`${logPrefix} no fresh news — reusing cached profile`);
-      return profile;
-    }
-
-    console.log(`${logPrefix} database update start`);
-    const updated = await PoliticalProfile.findOneAndUpdate(
-      { accountId: account._id },
-      {
-        $set: {
-          news: newsData.news,
-          newsSentiment: newsData.newsSentiment,
-          lastSynced: new Date(),
-        },
-      },
-      { new: true }
-    );
-    console.log(`${logPrefix} database update done found=${Boolean(updated)}`);
-
-    if (!updated) {
-      console.warn(`${logPrefix} database update returned null — using fetched news in-memory`);
-      return {
-        ...(profile?.toObject?.() || profile || {}),
-        news: newsData.news,
-        newsSentiment: newsData.newsSentiment,
-      };
-    }
-
-    return updated;
-  } catch (error) {
-    console.error(`${logPrefix} refresh failed:`, error.message);
-    if (error.stack) console.error(error.stack);
-    return profile;
-  }
+  console.log(`${logPrefix} read-only — scheduling background news sync`);
+  scheduleProfileSync(account._id, { logPrefix, trigger: "news" });
+  return profile;
 };

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useParams, Link } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   User, Calendar, MapPin, Award, Shield, Clock, ExternalLink, Globe,
@@ -36,9 +36,21 @@ import {
 
 const SENTIMENT_COLORS = ["#10b981", "#64748b", "#ef4444"]; // Positive (green), Neutral (slate), Negative (red)
 
+const PROFILE_TABS = [
+  { id: "overview", label: "Overview", moduleKey: "overview", always: true },
+  { id: "timeline", label: "Timeline & Bio", moduleKey: "timeline" },
+  { id: "charts", label: "Telemetry & Charts", moduleKey: "youtube" },
+  { id: "influence", label: "Influence & Mapping", moduleKey: "influence" },
+  { id: "news", label: "News & Sentiment", moduleKey: "news" },
+  { id: "elections", label: "Election History", moduleKey: "elections" },
+  { id: "chat", label: "AI Chat Assistant", always: true },
+];
+
 export default function PoliticalProfile() {
   const { creatorId } = useParams();
   const chatEndRef = useRef(null);
+  const queryClient = useQueryClient();
+  const prevSyncStatusRef = useRef(null);
 
   // AI Chat States
   const [chatMessage, setChatMessage] = useState("");
@@ -48,19 +60,29 @@ export default function PoliticalProfile() {
   // Tab State
   const [activeTab, setActiveTab] = useState("overview");
 
-  // React Queries (Lazy-loaded, independent caches)
+  // Shell profile — always loaded first; polls while background sync runs
   const { data: bioData, isLoading: bioLoading, error: bioError } = useQuery({
     queryKey: ["profile-bio", creatorId],
     queryFn: () => getProfileBiography(creatorId),
     staleTime: 5 * 60 * 1000,
     retry: 1,
+    refetchInterval: (query) => {
+      const payload = query.state.data?.data;
+      const building =
+        payload?.building ||
+        payload?.syncStatus === "building" ||
+        payload?.syncStatus === "pending";
+      return building ? 8000 : false;
+    },
   });
+
 
   const { data: newsData, isLoading: newsLoading } = useQuery({
     queryKey: ["profile-news", creatorId],
     queryFn: () => getProfileNews(creatorId),
     staleTime: 15 * 60 * 1000,
     retry: 1,
+    enabled: activeTab === "news",
   });
 
   const { data: chartsData, isLoading: chartsLoading } = useQuery({
@@ -68,6 +90,7 @@ export default function PoliticalProfile() {
     queryFn: () => getProfileCharts(creatorId),
     staleTime: 5 * 60 * 1000,
     retry: 1,
+    enabled: activeTab === "charts",
   });
 
   const { data: electionsData, isLoading: electionsLoading } = useQuery({
@@ -75,6 +98,7 @@ export default function PoliticalProfile() {
     queryFn: () => getProfileElections(creatorId),
     staleTime: 10 * 60 * 1000,
     retry: 1,
+    enabled: activeTab === "elections",
   });
 
   const { data: influenceData, isLoading: influenceLoading } = useQuery({
@@ -82,6 +106,7 @@ export default function PoliticalProfile() {
     queryFn: () => getProfileInfluence(creatorId),
     staleTime: 10 * 60 * 1000,
     retry: 1,
+    enabled: activeTab === "influence" || activeTab === "overview",
   });
 
   const { data: aiInsightsData } = useQuery({
@@ -89,6 +114,7 @@ export default function PoliticalProfile() {
     queryFn: () => getProfileAiInsights(creatorId),
     staleTime: 10 * 60 * 1000,
     retry: 1,
+    enabled: activeTab === "overview",
   });
 
   const { data: similarData } = useQuery({
@@ -96,6 +122,7 @@ export default function PoliticalProfile() {
     queryFn: () => getProfileSimilar(creatorId),
     staleTime: 10 * 60 * 1000,
     retry: 1,
+    enabled: activeTab === "overview",
   });
 
   // Auto-scroll chat window
@@ -196,11 +223,32 @@ export default function PoliticalProfile() {
     edges: safeArray(rawRelationships.edges),
   };
   const sectionMeta = profilePayload?.sectionMeta ?? {};
+  const moduleMeta = profilePayload?.moduleMeta ?? {};
+  const moduleData = profilePayload?.moduleData ?? {};
   const verificationCatalog = safeArray(profilePayload?.verificationCatalog);
   const sources = safeArray(profilePayload?.sources);
   const confidenceScore = profilePayload?.confidenceScore ?? 0;
   const lastVerified = profilePayload?.lastVerified;
   const lastSynced = profilePayload?.lastSynced;
+  const syncStatus = profilePayload?.syncStatus;
+  const syncProgress = profilePayload?.syncProgress ?? {};
+  const isBuilding =
+    profilePayload?.building ||
+    syncStatus === "building" ||
+    syncStatus === "pending";
+
+  // Refetch tab data when background sync finishes so MongoDB updates appear live
+  useEffect(() => {
+    const prev = prevSyncStatusRef.current;
+    if ((prev === "building" || prev === "pending") && syncStatus === "ready") {
+      queryClient.invalidateQueries({ queryKey: ["profile-elections", creatorId] });
+      queryClient.invalidateQueries({ queryKey: ["profile-news", creatorId] });
+      queryClient.invalidateQueries({ queryKey: ["profile-charts", creatorId] });
+      queryClient.invalidateQueries({ queryKey: ["profile-influence", creatorId] });
+      queryClient.invalidateQueries({ queryKey: ["profile-ai-insights", creatorId] });
+    }
+    prevSyncStatusRef.current = syncStatus;
+  }, [syncStatus, creatorId, queryClient]);
 
   const aiInsights = safeArray(aiInsightsData?.data?.insights);
   const aiSummary = aiInsightsData?.data?.summary || {};
@@ -282,6 +330,25 @@ export default function PoliticalProfile() {
           </div>
         </div>
 
+        {isBuilding && (
+          <div className="flex items-center gap-3 rounded-xl border border-indigo-500/25 bg-indigo-500/5 px-4 py-3">
+            <div className="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-indigo-500/30 border-t-indigo-500" />
+            <div className="text-left">
+              <p className="text-xs font-semibold text-indigo-300">
+                Building political intelligence profile…
+              </p>
+              {syncProgress?.total > 0 && (
+                <p className="text-[10px] text-slate-500 mt-0.5">
+                  {syncProgress.completed ?? 0}/{syncProgress.total} modules
+                  {syncProgress.currentSection
+                    ? ` · syncing ${syncProgress.currentSection}`
+                    : ""}
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* SECTION 1: HERO HEADER */}
         <div className="bg-[#121318]/40 backdrop-blur-md rounded-2xl border border-white/[0.06] p-6 shadow-2xl flex flex-col md:flex-row items-center gap-6 relative overflow-hidden">
           <div className="absolute top-0 right-0 w-64 h-64 rounded-full bg-indigo-500/5 blur-[80px] pointer-events-none" />
@@ -343,17 +410,9 @@ export default function PoliticalProfile() {
           </div>
         </div>
 
-        {/* Tab switchers */}
-        <div className="flex border-b border-white/[0.06] gap-6 text-sm">
-          {[
-            { id: "overview", label: "Overview" },
-            { id: "timeline", label: "Timeline & Bio" },
-            { id: "charts", label: "Telemetry & Charts" },
-            { id: "influence", label: "Influence & Mapping" },
-            { id: "news", label: "News & Sentiment" },
-            { id: "elections", label: "Election History" },
-            { id: "chat", label: "AI Chat Assistant" },
-          ].map((tab) => (
+        {/* Tab switchers — all modules available; data loads when tab opens */}
+        <div className="flex border-b border-white/[0.06] gap-6 text-sm overflow-x-auto">
+          {PROFILE_TABS.map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
@@ -502,7 +561,7 @@ export default function PoliticalProfile() {
           {activeTab === "timeline" && (
             <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-5">
               <div className="lg:col-span-2 space-y-4">
-                <SectionFreshnessBar meta={sectionMeta.facts} label="Verified Facts" />
+                <SectionFreshnessBar meta={moduleMeta.facts || sectionMeta.facts} label="Verified Facts" />
                 <VerifiedProfileCard
                   biography={biography}
                   account={account}
@@ -516,7 +575,7 @@ export default function PoliticalProfile() {
               </div>
 
               <div className="lg:col-span-3 space-y-4">
-                <SectionFreshnessBar meta={sectionMeta.timeline} label="Timeline" />
+                <SectionFreshnessBar meta={moduleMeta.timeline || sectionMeta.timeline} label="Timeline" />
                 <PoliticalTimelinePanel
                   events={profileTimeline}
                   isLoading={bioLoading}
@@ -810,7 +869,19 @@ export default function PoliticalProfile() {
           {/* 6. ELECTION HISTORY TAB */}
           {activeTab === "elections" && (
             <div className="space-y-4">
-              <SectionFreshnessBar meta={sectionMeta.elections} label="Elections" />
+              <SectionFreshnessBar meta={moduleMeta.elections || sectionMeta.elections} label="Elections" />
+              {isBuilding && !moduleData.elections && (
+                <div className="flex items-center gap-2 rounded-lg border border-indigo-500/20 bg-indigo-500/5 px-3 py-2 text-[11px] text-indigo-300">
+                  <div className="h-3 w-3 animate-spin rounded-full border-2 border-indigo-500/30 border-t-indigo-500" />
+                  Syncing election data from public sources into MongoDB…
+                  {syncProgress?.currentSection === "elections" && " (elections in progress)"}
+                </div>
+              )}
+              {moduleData.elections && elections.length > 0 && (
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-emerald-400">
+                  {elections.length} verified record{elections.length !== 1 ? "s" : ""} from database
+                </p>
+              )}
               <div>
                 <h3 className="text-sm font-bold text-white uppercase tracking-wider">Election Intelligence</h3>
                 <p className="text-xs text-slate-400 mt-1">

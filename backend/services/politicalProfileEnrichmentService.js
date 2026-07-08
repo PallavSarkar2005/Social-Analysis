@@ -25,6 +25,7 @@ import {
   toLegacyElections,
 } from "./electionIntelligenceService.js";
 import { buildRelationshipGraph } from "./relationshipGraphService.js";
+import { resolveEnrichmentIdentity } from "../providers/shared/politicalIdentityUtils.js";
 
 const CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
@@ -47,13 +48,7 @@ const PROVIDER_REGISTRY = [
   { key: "partyWebsite", fn: fetchPartyWebsiteProfile },
 ];
 
-export const resolvePoliticianIdentity = (account) => ({
-  name: account.name?.trim() || "",
-  party: account.party?.trim() || "",
-  state: account.state?.trim() || "",
-  accountId: account._id,
-  platform: account.platform || "",
-});
+export const resolvePoliticianIdentity = (account) => resolveEnrichmentIdentity(account);
 
 const getSuccessfulDataMap = (providerResults) => {
   const map = {};

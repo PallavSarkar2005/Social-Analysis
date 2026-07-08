@@ -10,6 +10,7 @@ import {
   summarizeRecentVideoMetrics,
   syncRecentYoutubeContent,
 } from "../services/youtubeAccountSyncService.js";
+import { resolveAccountState } from "../providers/shared/politicalIdentityUtils.js";
 
 
 /*
@@ -464,6 +465,11 @@ export const analyzeYoutubeUrl = async (req, res, next) => {
 
     const analyzedAt = isDataCached ? (cachedAccount.analyzedAt || new Date()) : new Date();
     const cacheExpiresAt = isDataCached ? (cachedAccount.cacheExpiresAt || new Date()) : new Date(Date.now() + 3 * 60 * 1000);
+    const resolvedState = resolveAccountState({
+      description: accountData.description,
+      selectedState,
+      recentVideos: accountData.recentVideos,
+    });
 
     const updateFields = {
       name: accountData.title,
@@ -481,7 +487,7 @@ export const analyzeYoutubeUrl = async (req, res, next) => {
       recentVideos: accountData.recentVideos,
       normalizedUrl: normalizedUrl,
       group: resolvedGroup,
-      state: selectedState,
+      state: resolvedState,
       party: selectedParty,
       analyzedAt,
       cacheExpiresAt,
@@ -631,7 +637,7 @@ export const analyzeYoutubeUrl = async (req, res, next) => {
       engagementRate: account.engagement,
       averageEngagement: accountData.averageEngagement || recentVideoMetrics.averageEngagement,
       party: selectedParty,
-      state: selectedState,
+      state: resolvedState,
       name: account.name,
       profileImage: account.profileImage || account.thumbnail,
       capturedAt: new Date(),
