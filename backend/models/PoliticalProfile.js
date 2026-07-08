@@ -39,16 +39,31 @@ const politicalProfileSchema = new mongoose.Schema(
       {
         id: { type: String, default: "" },
         year: { type: String, required: true },
+        yearEnd: { type: String, default: null },
+        yearLabel: { type: String, default: "" },
         date: { type: String, default: null },
         category: { type: String, required: true },
         title: { type: String, required: true },
+        narrative: { type: String, default: "" },
         description: { type: String, default: "" },
         source: { type: String, default: "" },
         sourceUrl: { type: String, default: "" },
         confidence: { type: Number, default: 0 },
         verifiedBy: { type: [String], default: [] },
+        importance: { type: Number, default: null },
+        chapter: { type: String, default: "" },
+        filters: { type: [String], default: [] },
+        durationYears: { type: Number, default: null },
+        evidence: { type: mongoose.Schema.Types.Mixed, default: null },
+        related: { type: mongoose.Schema.Types.Mixed, default: null },
+        details: { type: mongoose.Schema.Types.Mixed, default: null },
       },
     ],
+
+    timelineIntelligence: {
+      type: mongoose.Schema.Types.Mixed,
+      default: {},
+    },
 
     elections: [
       {

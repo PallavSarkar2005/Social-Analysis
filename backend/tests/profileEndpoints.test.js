@@ -43,31 +43,29 @@ describe("Political Profile Endpoint Integration", () => {
       currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
     });
 
-    const accountRes = await request(app)
-      .post("/api/accounts")
-      .set("Authorization", `Bearer ${token}`)
-      .send({
-        name: "Profile Test Leader",
-        platform: "youtube",
-        accountId: `UC_PROFILE_TEST_${Date.now()}`,
-        profileUrl: "https://www.youtube.com/channel/UC_PROFILE_TEST",
-        state: "Delhi",
-        party: "Independent",
-      });
-    accountId = accountRes.body.data._id;
+    const account = await Account.create({
+      userId,
+      createdBy: userId,
+      name: "Profile Test Leader",
+      platform: "youtube",
+      accountId: `UC_PROFILE_TEST_${Date.now()}`,
+      profileUrl: "https://www.youtube.com/channel/UC_PROFILE_TEST",
+      state: "Delhi",
+      party: "Independent",
+    });
+    accountId = account._id.toString();
 
-    const bareAccountRes = await request(app)
-      .post("/api/accounts")
-      .set("Authorization", `Bearer ${token}`)
-      .send({
-        name: "Bare Profile Leader",
-        platform: "youtube",
-        accountId: `UC_BARE_${Date.now()}`,
-        profileUrl: "https://www.youtube.com/channel/UC_BARE",
-        state: "Maharashtra",
-        party: "Independent",
-      });
-    bareAccountId = bareAccountRes.body.data._id;
+    const bareAccount = await Account.create({
+      userId,
+      createdBy: userId,
+      name: "Bare Profile Leader",
+      platform: "youtube",
+      accountId: `UC_BARE_${Date.now()}`,
+      profileUrl: "https://www.youtube.com/channel/UC_BARE",
+      state: "Maharashtra",
+      party: "Independent",
+    });
+    bareAccountId = bareAccount._id.toString();
   }, 60000);
 
   afterAll(async () => {
@@ -100,7 +98,7 @@ describe("Political Profile Endpoint Integration", () => {
           geographicReach: [],
           builderVersion: 3,
           overviewVersion: 3,
-          timelineVersion: 3,
+          timelineVersion: 6,
           factsVersion: 2,
           electionVersion: 2,
           relationshipVersion: 2,

@@ -19,7 +19,7 @@ import { computeConfidenceBreakdown } from "./confidenceEngine.js";
 import { detectFieldConflicts, applyConflictsToProfile } from "./conflictDetectionService.js";
 import { buildPoliticalStatistics } from "./politicalStatisticsService.js";
 import { buildSectionMeta, buildVerificationCatalog } from "./sectionMetaService.js";
-import { buildIntelligenceTimeline } from "./politicalTimelineService.js";
+import { buildCareerTimelinePackage } from "./politicalTimelineService.js";
 import {
   buildElectionIntelligence,
   toLegacyElections,
@@ -300,7 +300,7 @@ export const enrichPoliticalProfile = async (account) => {
     });
     const confidenceScore = confidenceBreakdown.overall;
 
-    const timeline = buildIntelligenceTimeline({
+    const { timeline, timelineIntelligence } = buildCareerTimelinePackage({
       biography: enrichedBiography,
       rawTimeline: merged.rawTimeline ?? [],
       elections,
@@ -349,6 +349,7 @@ export const enrichPoliticalProfile = async (account) => {
       fieldProvenance,
       fieldConflicts,
       timeline,
+      timelineIntelligence,
       elections,
       electionIntelligence,
       relationships,
@@ -377,6 +378,7 @@ export const enrichPoliticalProfile = async (account) => {
       fieldProvenance: {},
       fieldConflicts: [],
       timeline: [],
+      timelineIntelligence: {},
       elections: [],
       electionIntelligence: [],
       relationships: { nodes: [], edges: [] },
@@ -400,6 +402,7 @@ export const buildProfileUpdatePayload = (accountId, enriched) => {
     fieldProvenance: enriched.fieldProvenance || {},
     fieldConflicts: enriched.fieldConflicts || [],
     timeline: enriched.timeline,
+    timelineIntelligence: enriched.timelineIntelligence || {},
     elections: enriched.elections,
     electionIntelligence: enriched.electionIntelligence || [],
     relationships: enriched.relationships || { nodes: [], edges: [] },

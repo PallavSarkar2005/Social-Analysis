@@ -15,7 +15,7 @@ export const PROFILE_BUILDER_VERSIONS = {
   moduleVersion: 1,
   builderVersion: 3,
   overviewVersion: 4,
-  timelineVersion: 3,
+  timelineVersion: 6,
   factsVersion: 2,
   electionVersion: 3,
   relationshipVersion: 2,

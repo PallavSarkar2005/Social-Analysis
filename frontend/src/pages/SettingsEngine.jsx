@@ -85,7 +85,7 @@ export default function SettingsEngine() {
       setLoadingSessions(true);
       const res = await client.get("/api/users/sessions");
       if (res.data && res.data.success) {
-        setSessions(res.data.data);
+        setSessions(res.data.data ?? []);
       }
     } catch (err) {
       devError("Error fetching sessions:", err);
@@ -97,6 +97,9 @@ export default function SettingsEngine() {
 
   useEffect(() => {
     fetchSettingsAndSessions();
+    if (activeTab === "sessions") {
+      fetchSessions();
+    }
   }, [activeTab]);
 
   // Handler functions
@@ -133,18 +136,23 @@ export default function SettingsEngine() {
     }
   };
 
-  const handleConnectGoogle = async () => {
+  const handleConnectGoogle = async (idToken) => {
     try {
-      // In development or test, we trigger developer connection directly
-      const mockCred = "dummy-developer-token";
-      const res = await connectGoogle(mockCred);
+      const token = idToken || (import.meta.env.DEV ? "dummy-developer-token" : null);
+      if (!token) {
+        toast.error("Google Sign-In is not configured.");
+        return { success: false };
+      }
+      const res = await connectGoogle(token);
       if (res.success) {
         toast.success("Connected Google Identity successfully!");
       } else {
         toast.error(res.message || "Connection failed.");
       }
-    } catch (err) {
+      return res;
+    } catch {
       toast.error("An error occurred during Google connection.");
+      return { success: false };
     }
   };
 
@@ -244,7 +252,6 @@ export default function SettingsEngine() {
     { id: "sessions", label: "Sessions & Devices", icon: "Laptop" },
     { id: "privacy", label: "Privacy Policies", icon: "Lock" },
     { id: "data", label: "Data Archive", icon: "Database" },
-    { id: "audit", label: "Security Audit Logs", icon: "Clock" },
     { id: "integrations", label: "App Integrations", icon: "Sliders" },
     { id: "advanced", label: "Advanced Configurations", icon: "Sliders" },
     { id: "danger", label: "Danger Zone", icon: "AlertTriangle" },

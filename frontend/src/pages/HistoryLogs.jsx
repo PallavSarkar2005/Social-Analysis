@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo } from "react";
 import Sidebar from "../components/layout/Sidebar";
 import Navbar from "../components/layout/Navbar";
-import { useTrackedNodes, useSnapshots } from "../hooks/useQueries";
+import { useAccounts, useSnapshots } from "../hooks/useQueries";
 import {
   Calendar, Layers, ShieldAlert, TrendingUp, TrendingDown,
   Eye, Video, Percent, Sparkles, Clock, RefreshCw, BarChart2,
@@ -30,14 +30,14 @@ export default function HistoryLogs() {
   const [activeChartTab, setActiveChartTab] = useState("subscribers"); // subscribers, views, engagement, avgEngagement, videos
   const [timeframe, setTimeframe] = useState("daily"); // hourly, daily, weekly, monthly
 
-  const { data: accounts = [], isLoading: loadingAccounts, error: accountsError } = useTrackedNodes();
+  const { accounts = [], loading: loadingAccounts } = useAccounts();
   const { data: snapshotData, isLoading: loadingSnapshots, error: snapshotsError, refetch } = useSnapshots(selectedAccountId);
 
   const history = snapshotData?.history || [];
   const forecast = snapshotData?.forecast || null;
 
   const loading = loadingAccounts || loadingSnapshots;
-  const error = accountsError?.message || snapshotsError?.message || "";
+  const error = snapshotsError?.message || "";
 
   useEffect(() => {
     if (accounts.length > 0 && !selectedAccountId) {
@@ -150,7 +150,7 @@ export default function HistoryLogs() {
                 <Layers className="si-accent-text" size={24} /> Snapshot History & Telemetry
               </h1>
               <p className="text-xs sm:text-sm text-slate-400 font-medium mt-1">
-                Deep-dive audit logs, historical charts, and delta growth velocity calculated directly from stored snapshots.
+                Deep-dive snapshot logs, historical charts, and delta growth velocity calculated directly from stored snapshots.
               </p>
             </div>
 
@@ -389,7 +389,7 @@ export default function HistoryLogs() {
                 <div className="lg:col-span-1 space-y-6">
                   <div className="bg-[#111318]/60 border border-white/[0.05] rounded-2xl p-5 sm:p-6 backdrop-blur-sm space-y-4">
                     <div className="flex items-center gap-2 text-indigo-400 font-semibold text-xs uppercase tracking-wider">
-                      <Layers size={14} /> Audit Log Checkpoints
+                      <Layers size={14} /> Snapshot Checkpoints
                     </div>
 
                     <div className="border border-white/[0.06] rounded-xl overflow-hidden bg-slate-950/20">
@@ -541,8 +541,8 @@ export default function HistoryLogs() {
               <p className="text-sm font-semibold text-slate-400">No telemetry checkpoints loaded.</p>
               <p className="text-xs text-slate-500 max-w-sm mx-auto">
                 {activeAccount
-                  ? "Trigger a channel sync in Accounts or wait for the scheduler to capture snapshots."
-                  : "Go to Accounts page to index social profiles."}
+                  ? "Trigger a channel sync from the Analyzer or wait for the scheduler to capture snapshots."
+                  : "Use the Analyzer to index social profiles."}
               </p>
             </div>
           )}

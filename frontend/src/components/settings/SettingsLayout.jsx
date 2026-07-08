@@ -12,7 +12,6 @@ import Billing from "./Billing";
 import Sessions from "./Sessions";
 import Privacy from "./Privacy";
 import DataExport from "./DataExport";
-import AuditLogs from "./AuditLogs";
 import Integrations from "./Integrations";
 import Advanced from "./Advanced";
 import DangerZone from "./DangerZone";
@@ -83,8 +82,6 @@ export default function SettingsLayout({
         return <Privacy />;
       case "data":
         return <DataExport user={user} />;
-      case "audit":
-        return <AuditLogs />;
       case "integrations":
         return <Integrations />;
       case "advanced":

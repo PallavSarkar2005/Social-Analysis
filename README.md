@@ -64,7 +64,7 @@ By utilizing a hybrid **RAG (Retrieval-Augmented Generation)** framework backed 
 | **YouTube Media Analyzer** | Video statistical auditing, channel narrative tracking, automatic database snapshot storage. | Intelligent Cache layer bypassing live API limits, dynamic refresh controls. |
 | **Political Intelligence Profiles** | News aggregation, bio summaries, timeline milestones, election history tracking, influence matrix. | Hybrid RAG Pipeline utilizing Groq with OpenAI high-performance fallback models. |
 | **State & Party Analytics** | Interactive India Maps, regional density analytics, party alignment tracking. | React Query pre-fetching, lazy-loaded interactive SVG modules. |
-| **Auditing & Control** | Platform Audit Logs, developer API keys engine, user account settings dashboard. | Cryptographic hash checking, high-speed read/write optimizations. |
+| **Settings & Control** | Developer API keys engine, user account settings dashboard. | Cryptographic hash checking, high-speed read/write optimizations. |
 
 ---
 
@@ -321,17 +321,15 @@ For any creator tracked within SocialIQ, a profile is built via the following au
 
 - **Dashboard:** Unified dashboard displaying metrics (Total Reach, Engagement, Active Channels).
 - **Analyzer:** Live input engine supporting custom image overrides, state metadata, and quick uploads.
-- **Tracked Nodes:** A list containing all monitored creators with synchronized profile cards.
 - **Creator Compare:** Benchmarks up to 3 creators side-by-side on subscriber progression, engagement, and post rates.
 - **Competitors:** Automated mapping displaying competing channels within the same state/party.
 - **Snapshot History:** Detailed historical record of audited statistics over time.
-- **Reports:** Interactive PDF and Excel exports detailing audit logs and engagement statistics.
+- **Reports:** Interactive PDF and Excel exports detailing engagement statistics.
 - **AI Strategy:** Generates personalized political campaign strategies using context-aware LLM pipelines.
 - **Political Profiles:** Deep-dives into individual profiles (Sentiment Charts, Election Histories, News feeds).
 - **Settings:** API key controls, platform profiles, and session authorization management.
 - **Billing:** Package tier settings (Free, Professional, Enterprise) using Razorpay integrations.
 - **Developer Keys:** Manages REST keys to fetch SocialIQ metrics directly via external scripts.
-- **Audit Logs:** System-wide security logs recording profile updates, user logins, and administrative actions.
 
 ---
 
@@ -401,8 +399,7 @@ $env:NODE_OPTIONS="--experimental-vm-modules"; npx jest tests/api.test.js --runI
 | HTTP Verb | Endpoint | Authentication | Description |
 | :--- | :--- | :--- | :--- |
 | `GET` | `/api/accounts` | Bearer Token | Fetch all monitored channel accounts |
-| `POST` | `/api/accounts` | Bearer Token | Store a new YouTube or X profile node |
-| `DELETE`| `/api/accounts/:id` | Bearer Token | Untrack and remove creator node |
+| `DELETE`| `/api/accounts/:id` | Bearer Token | Remove a creator from the workspace |
 | `POST` | `/api/analyzer/youtube`| Bearer Token | Analyze YouTube URL, retrieve channel statistics |
 | `POST` | `/api/media/upload` | Bearer Token | Upload JPG/PNG/WEBP custom thumbnail |
 

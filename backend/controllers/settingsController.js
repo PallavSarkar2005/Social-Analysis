@@ -1,7 +1,9 @@
 import EmailSchedule from "../models/EmailSchedule.js";
 import User from "../models/User.js";
+import UserApiKey from "../models/UserApiKey.js";
 import bcrypt from "bcryptjs";
-import { logActivity } from "../utils/activityLogger.js";
+import crypto from "crypto";
+import { PLAN_PRICES } from "../controllers/billingController.js";
 
 // @desc    Get user email report schedule
 // @route   GET /api/settings/email-schedule
@@ -57,12 +59,6 @@ export const updateEmailSchedule = async (req, res, next) => {
       { upsert: true, new: true }
     );
 
-    await logActivity(
-      req.user._id,
-      "email_schedule_updated",
-      `Email schedule updated to: ${frequency} [Active: ${isActive}]`,
-      req
-    );
 
     res.json({
       success: true,
@@ -103,12 +99,6 @@ export const updateProfile = async (req, res, next) => {
     user.email = email;
     await user.save();
 
-    await logActivity(
-      req.user._id,
-      "profile_updated",
-      `Profile preferences updated to name: ${name}, email: ${email}`,
-      req
-    );
 
     res.json({
       success: true,
@@ -179,7 +169,6 @@ export const updatePassword = async (req, res, next) => {
     user.passwordHash = await bcrypt.hash(newPassword, salt);
     await user.save();
 
-    await logActivity(req.user._id, "password_changed", `Password successfully changed`, req);
 
     res.json({
       success: true,
@@ -227,12 +216,6 @@ export const updateNotificationPreferences = async (req, res, next) => {
 
     await user.save();
 
-    await logActivity(
-      req.user._id,
-      "notification_preferences_updated",
-      `Notification preferences updated`,
-      req
-    );
 
     res.json({
       success: true,
@@ -315,16 +298,347 @@ export const updateAppearance = async (req, res, next) => {
 
     await user.save();
 
-    await logActivity(
-      req.user._id,
-      "appearance_updated",
-      `Appearance preferences updated: theme=${user.appearancePreferences.theme}, accent=${user.appearancePreferences.accent}`,
-      req
-    );
 
     res.json({
       success: true,
       data: user.appearancePreferences,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const DEFAULT_PRIVACY = {
+  publicProfile: false,
+  searchVisibility: false,
+  analyticsSharing: true,
+  telemetry: false,
+  personalizedAI: true,
+};
+
+const DEFAULT_SECURITY = {
+  twoFactorEnabled: false,
+  passkeysEnabled: false,
+  suspiciousLoginAlerts: true,
+};
+
+const DEFAULT_ADVANCED = {
+  debugMode: false,
+  experimentalFeatures: false,
+  forceCacheBypass: false,
+};
+
+const INTEGRATION_IDS = [
+  "youtube", "twitter", "instagram", "drive", "slack",
+  "discord", "zapier", "n8n", "webhook", "github", "microsoft", "linkedin",
+];
+
+const OAUTH_INTEGRATIONS = new Set([
+  "youtube", "twitter", "instagram", "drive", "slack",
+  "discord", "zapier", "n8n", "github", "microsoft", "linkedin",
+]);
+
+export const getPrivacyPreferences = async (req, res, next) => {
+  try {
+    const user = await User.findById(req.user._id).select("privacyPreferences");
+    res.json({
+      success: true,
+      data: { ...DEFAULT_PRIVACY, ...(user?.privacyPreferences || {}) },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const updatePrivacyPreferences = async (req, res, next) => {
+  try {
+    const user = await User.findById(req.user._id);
+    user.privacyPreferences = {
+      publicProfile: req.body.publicProfile === true,
+      searchVisibility: req.body.searchVisibility === true,
+      analyticsSharing: req.body.analyticsSharing !== false,
+      telemetry: req.body.telemetry === true,
+      personalizedAI: req.body.personalizedAI !== false,
+    };
+    await user.save();
+
+    res.json({ success: true, data: user.privacyPreferences });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getSecurityPreferences = async (req, res, next) => {
+  try {
+    const user = await User.findById(req.user._id).select("securityPreferences");
+    const prefs = { ...DEFAULT_SECURITY, ...(user?.securityPreferences || {}) };
+    res.json({
+      success: true,
+      data: {
+        ...prefs,
+        passkeyCount: user?.securityPreferences?.passkeysEnabled ? 1 : 0,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const updateSecurityPreferences = async (req, res, next) => {
+  try {
+    const user = await User.findById(req.user._id);
+    const current = user.securityPreferences || {};
+    user.securityPreferences = {
+      twoFactorEnabled: req.body.twoFactorEnabled !== undefined ? Boolean(req.body.twoFactorEnabled) : (current.twoFactorEnabled ?? false),
+      passkeysEnabled: req.body.passkeysEnabled !== undefined ? Boolean(req.body.passkeysEnabled) : (current.passkeysEnabled ?? false),
+      suspiciousLoginAlerts: req.body.suspiciousLoginAlerts !== undefined ? Boolean(req.body.suspiciousLoginAlerts) : (current.suspiciousLoginAlerts ?? true),
+    };
+    await user.save();
+
+    res.json({
+      success: true,
+      data: {
+        ...user.securityPreferences,
+        passkeyCount: user.securityPreferences.passkeysEnabled ? 1 : 0,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getAdvancedPreferences = async (req, res, next) => {
+  try {
+    const user = await User.findById(req.user._id).select("advancedPreferences");
+    res.json({
+      success: true,
+      data: {
+        ...DEFAULT_ADVANCED,
+        ...(user?.advancedPreferences || {}),
+        apiEndpoint: process.env.API_PUBLIC_URL || "",
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const updateAdvancedPreferences = async (req, res, next) => {
+  try {
+    const user = await User.findById(req.user._id);
+    const current = user.advancedPreferences || {};
+    user.advancedPreferences = {
+      debugMode: req.body.debugMode !== undefined ? Boolean(req.body.debugMode) : (current.debugMode ?? false),
+      experimentalFeatures: req.body.experimentalFeatures !== undefined ? Boolean(req.body.experimentalFeatures) : (current.experimentalFeatures ?? false),
+      forceCacheBypass: req.body.forceCacheBypass !== undefined ? Boolean(req.body.forceCacheBypass) : (current.forceCacheBypass ?? false),
+    };
+    await user.save();
+
+    res.json({
+      success: true,
+      data: {
+        ...user.advancedPreferences,
+        apiEndpoint: process.env.API_PUBLIC_URL || "",
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getIntegrations = async (req, res, next) => {
+  try {
+    const user = await User.findById(req.user._id).select("integrations provider googleId");
+    const integrations = user?.integrations || {};
+
+    const list = INTEGRATION_IDS.map((id) => {
+      const entry = integrations[id] || {};
+      return {
+        id,
+        connected: Boolean(entry.connected),
+        connectedAt: entry.connectedAt || null,
+        lastSyncedAt: entry.lastSyncedAt || null,
+        status: entry.connected ? (entry.lastSyncedAt ? "Healthy" : "Active") : "Disconnected",
+        oauthAvailable: id === "webhook" ? true : OAUTH_INTEGRATIONS.has(id) && Boolean(process.env[`${id.toUpperCase()}_OAUTH_ENABLED`]),
+      };
+    });
+
+    res.json({
+      success: true,
+      data: {
+        google: {
+          connected: user?.provider === "google" || Boolean(user?.googleId),
+        },
+        integrations: list,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const updateIntegration = async (req, res, next) => {
+  try {
+    const integrationId = req.params.id;
+    if (!INTEGRATION_IDS.includes(integrationId)) {
+      return res.status(400).json({ success: false, message: "Unknown integration" });
+    }
+
+    if (integrationId !== "webhook" && OAUTH_INTEGRATIONS.has(integrationId)) {
+      return res.status(501).json({
+        success: false,
+        message: `${integrationId} OAuth integration is not configured on this server.`,
+      });
+    }
+
+    const user = await User.findById(req.user._id);
+    if (!user.integrations) user.integrations = {};
+
+    const connected = req.body.connected === true;
+    const now = new Date();
+
+    user.integrations[integrationId] = {
+      connected,
+      connectedAt: connected ? now : null,
+      lastSyncedAt: connected ? now : null,
+      url: integrationId === "webhook" ? (req.body.url || "") : undefined,
+    };
+
+    user.markModified("integrations");
+    await user.save();
+
+
+    res.json({
+      success: true,
+      data: user.integrations[integrationId],
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const listApiKeys = async (req, res, next) => {
+  try {
+    const keys = await UserApiKey.find({ userId: req.user._id, revokedAt: null })
+      .sort({ createdAt: -1 })
+      .select("name tokenPrefix permissions lastUsedAt expiresAt createdAt");
+
+    res.json({
+      success: true,
+      data: keys.map((k) => ({
+        id: k._id,
+        name: k.name,
+        tokenPrefix: k.tokenPrefix,
+        permissions: k.permissions === "read_write" ? "Read & Write" : "Read Only",
+        lastUsed: k.lastUsedAt ? k.lastUsedAt.toISOString() : "Never",
+        expiry: k.expiresAt,
+        createdAt: k.createdAt,
+      })),
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const createApiKey = async (req, res, next) => {
+  try {
+    const { name, permissions } = req.body;
+    if (!name?.trim()) {
+      return res.status(400).json({ success: false, message: "Key name is required" });
+    }
+
+    const perm = permissions === "Read Only" || permissions === "read" ? "read" : "read_write";
+    const rawToken = `sq_live_${crypto.randomBytes(24).toString("hex")}`;
+    const tokenHash = await bcrypt.hash(rawToken, 10);
+    const expiresAt = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000);
+
+    const key = await UserApiKey.create({
+      userId: req.user._id,
+      name: name.trim(),
+      tokenHash,
+      tokenPrefix: `${rawToken.substring(0, 12)}...`,
+      permissions: perm,
+      expiresAt,
+    });
+
+
+    res.status(201).json({
+      success: true,
+      data: {
+        id: key._id,
+        name: key.name,
+        token: rawToken,
+        permissions: perm === "read_write" ? "Read & Write" : "Read Only",
+        expiry: key.expiresAt,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const revokeApiKey = async (req, res, next) => {
+  try {
+    const key = await UserApiKey.findOne({ _id: req.params.id, userId: req.user._id, revokedAt: null });
+    if (!key) {
+      return res.status(404).json({ success: false, message: "API key not found" });
+    }
+
+    key.revokedAt = new Date();
+    await key.save();
+
+
+    res.json({ success: true, data: { id: key._id } });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getPlanCatalog = async (_req, res, next) => {
+  try {
+    res.json({
+      success: true,
+      data: {
+        currency: "INR",
+        plans: [
+          {
+            id: "free",
+            name: "Starter",
+            prices: { monthly: 0, annual: 0 },
+            features: ["Up to 2 Tracked Accounts", "5 AI Reports per month", "CSV Data Exports", "Basic support"],
+          },
+          {
+            id: "professional",
+            name: "Professional",
+            prices: PLAN_PRICES.professional,
+            features: ["Up to 15 Tracked Accounts", "100 AI Reports per cycle", "PDF / Excel / CSV Exports", "Priority Support"],
+          },
+          {
+            id: "enterprise",
+            name: "Enterprise",
+            prices: PLAN_PRICES.enterprise,
+            features: ["Up to 1000 Tracked Accounts", "10,000 AI requests per cycle", "White-labeled reports", "Dedicated Account Manager"],
+          },
+        ],
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const exportProfileData = async (req, res, next) => {
+  try {
+    const user = await User.findById(req.user._id).select("-passwordHash -passwordHistory");
+    const schedule = await EmailSchedule.findOne({ userId: req.user._id });
+
+    res.json({
+      success: true,
+      data: {
+        profile: user,
+        emailSchedule: schedule || null,
+        exportedAt: new Date().toISOString(),
+      },
     });
   } catch (error) {
     next(error);

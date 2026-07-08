@@ -5,11 +5,6 @@ export const getAccounts = async () => {
   return res.data;
 };
 
-export const createAccount = async (data) => {
-  const res = await client.post("/api/accounts", data);
-  return res.data;
-};
-
 export const deleteAccount = async (id) => {
   const res = await client.delete(`/api/accounts/${id}`);
   return res.data;

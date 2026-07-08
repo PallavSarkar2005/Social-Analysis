@@ -1,5 +1,5 @@
 import { isPresent } from "../providers/normalizedProfile.js";
-import { FACT_TYPE_TO_TIMELINE_CATEGORY, TIMELINE_CATEGORY_ORDER } from "../providers/shared/factTypes.js";
+import { FACT_TYPE_TO_TIMELINE_CATEGORY } from "../providers/shared/factTypes.js";
 import { generateFactId, isVerifiedValue } from "./politicalFactEngine.js";
 
 export const TIMELINE_CATEGORIES = [
@@ -14,10 +14,11 @@ export const TIMELINE_CATEGORIES = [
   "currentOffice",
 ];
 
-const CATEGORY_ORDER = TIMELINE_CATEGORY_ORDER;
-
 const SCHOOL_PATTERN = /\b(school|ssc|matric|matriculation|secondary|high school|10th|12th|intermediate|h\.?s\.?c|s\.?s\.?c)\b/i;
-const COLLEGE_PATTERN = /\b(university|college|iit|iim|mba|ph\.?d|b\.?a\.?|b\.?s\.?c|m\.?a\.?|m\.?s\.?c|degree|alma mater|graduate|b\.?tech|m\.?tech|llb|llm|md|b\.?com|m\.?com)\b/i;
+const COLLEGE_PATTERN = /\b(university|college|iit|iim|mba|ph\.?d|b\.?a\.?|b\.?s\.?c|m\.?a\.?|m\.?s\.?c|degree|alma mater|graduate|b\.?tech|m\.?tech|llb|llm|md|mbbs|b\.?com|m\.?com)\b/i;
+
+const MAJOR_ROLE_PATTERN =
+  /\b(chief minister|prime minister|governor|minister|cabinet|mla|mp|member of parliament|lok sabha|mayor|speaker|deputy speaker)\b/i;
 
 const SOURCE_MATCHERS = [
   { keys: ["myneta", "election commission", "eci"], label: "Election Commission / MyNeta" },
@@ -25,7 +26,7 @@ const SOURCE_MATCHERS = [
   { keys: ["rajya sabha"], label: "Rajya Sabha" },
   { keys: ["state assembly", "assembly"], label: "State Assembly" },
   { keys: ["wikipedia"], label: "Wikipedia" },
-  { keys: ["party", "bjp", "congress", "aap", "trinamool", "samajwadi", "bahujan"], label: "Official Party Website" },
+  { keys: ["party"], label: "Official Party Website" },
 ];
 
 const extractYear = (text) => {
@@ -41,30 +42,8 @@ const normalizeText = (value) =>
     .replace(/\s+/g, " ")
     .trim();
 
-const splitEducation = (education) => {
-  if (!isVerifiedValue(education)) return { school: null, college: null };
-
-  const text = String(education).trim();
-  const segments = text.split(/[;|•\n]+/).map((segment) => segment.trim()).filter(Boolean);
-
-  let school = null;
-  let college = null;
-
-  for (const segment of segments) {
-    if (!school && SCHOOL_PATTERN.test(segment)) school = segment;
-    if (!college && COLLEGE_PATTERN.test(segment)) college = segment;
-  }
-
-  if (!school && SCHOOL_PATTERN.test(text)) school = text;
-  if (!college && COLLEGE_PATTERN.test(text)) college = text;
-
-  if (!school && !college && segments.length > 1) {
-    return { school: segments[0], college: segments.slice(1).join("; ") };
-  }
-
-  if (!college && !school) return { school: null, college: text };
-  return { school, college };
-};
+const eventText = (event) =>
+  normalizeText([event?.title, event?.description, event?.value].filter(Boolean).join(" "));
 
 const resolveSource = (sources = [], preferredKeys = []) => {
   const safeSources = Array.isArray(sources) ? sources : [];
@@ -72,120 +51,219 @@ const resolveSource = (sources = [], preferredKeys = []) => {
     const match = safeSources.find((source) =>
       normalizeText(source.name).includes(normalizeText(preferred))
     );
-    if (match) {
-      return {
-        name: match.name,
-        url: match.url || "",
-        confidence: match.confidence ?? 0,
-      };
-    }
+    if (match) return { name: match.name, url: match.url || "", confidence: match.confidence ?? 0 };
   }
-
   for (const matcher of SOURCE_MATCHERS) {
     const match = safeSources.find((source) =>
       (matcher.keys ?? []).some((key) => normalizeText(source.name).includes(key))
     );
-    if (match) {
-      return {
-        name: match.name,
-        url: match.url || "",
-        confidence: match.confidence ?? 0,
-      };
-    }
+    if (match) return { name: match.name, url: match.url || "", confidence: match.confidence ?? 0 };
   }
-
   const first = safeSources.find((source) => isVerifiedValue(source.name));
   return first
     ? { name: first.name, url: first.url || "", confidence: first.confidence ?? 0 }
     : { name: "Verified Public Records", url: "", confidence: 0 };
 };
 
-const createEvent = ({ year, title, description, source, category }) => ({
-  year: String(year),
-  category,
+const createEvent = ({
+  year,
   title,
   description,
-  source: source.name,
-  sourceUrl: source.url || "",
-  confidence: source.confidence ?? 0,
-  sortKey: CATEGORY_ORDER[category] ?? 99,
+  source,
+  category,
+  id,
+  date,
+  verifiedBy,
+  confidence,
+  election,
+}) => ({
+  year: year != null ? String(year) : null,
+  category,
+  title,
+  description: description || "",
+  source: typeof source === "string" ? source : source?.name || "",
+  sourceUrl: typeof source === "string" ? "" : source?.url || "",
+  confidence: confidence ?? (typeof source === "object" ? source?.confidence ?? 0 : 0),
+  verifiedBy: Array.isArray(verifiedBy) ? verifiedBy : [],
+  date: date || null,
+  id,
+  election: election || null,
 });
 
-const dedupeEvents = (events) => {
+const isBirthEvent = (event) =>
+  event.category === "birth" || /\b(born|birth|date of birth|dob)\b/.test(eventText(event));
+
+const isPartyEvent = (event) =>
+  event.category === "joinedParty" ||
+  /\b(joined|affiliated|party join|party affiliation)\b/.test(eventText(event));
+
+const isEducationEvent = (event) =>
+  event.category === "school" || event.category === "college";
+
+const isCurrentOfficeEvent = (event) =>
+  event.category === "currentOffice" ||
+  /\b(current office|current position|incumbent)\b/.test(eventText(event));
+
+const isMajorAppointment = (event) => {
+  if (isBirthEvent(event) || isEducationEvent(event) || isPartyEvent(event) || event.category === "election") {
+    return false;
+  }
+  if (event.category === "cabinetCommittee" && /\bcommittee\b/i.test(eventText(event))) return false;
+  if (["position", "cabinetCommittee"].includes(event.category)) {
+    return MAJOR_ROLE_PATTERN.test(eventText(event));
+  }
+  return false;
+};
+
+const parseElectionResult = (position = "") => {
+  const text = String(position).toLowerCase();
+  if (/winner|won|elected|re-?elected/.test(text)) return "Won";
+  if (/lost|defeated|runner/.test(text)) return "Lost";
+  return "Contested";
+};
+
+const buildElectionCard = (row, source) => {
+  const year = row.year ? String(row.year) : null;
+  if (!year) return null;
+
+  const result = parseElectionResult(row.position);
+  const election = {
+    year,
+    type: row.election || "Election",
+    constituency: row.constituency || null,
+    party: row.party || null,
+    result,
+    margin: row.margin != null && row.margin > 0 ? Number(row.margin) : null,
+    voteShare: row.votePct != null && row.votePct > 0 ? Number(row.votePct) : null,
+  };
+
+  const details = [
+    election.constituency ? `Constituency: ${election.constituency}` : null,
+    election.party ? `Party: ${election.party}` : null,
+    election.margin != null ? `Margin: +${election.margin.toLocaleString()}` : null,
+    election.voteShare != null ? `Vote share: ${election.voteShare}%` : null,
+  ].filter(Boolean);
+
+  return createEvent({
+    year,
+    title: election.type,
+    description: details.join(" · "),
+    source,
+    category: "election",
+    election,
+  });
+};
+
+const splitEducation = (education) => {
+  if (!isVerifiedValue(education)) return null;
+  const text = String(education).trim();
+  const segments = text.split(/[;|•\n]+/).map((s) => s.trim()).filter(Boolean);
+  const school = segments.find((s) => SCHOOL_PATTERN.test(s)) || null;
+  const college = segments.find((s) => COLLEGE_PATTERN.test(s)) || null;
+  const merged = [school, college].filter(Boolean).join(" · ") || text;
+  const year = extractYear(text) || extractYear(college) || extractYear(school);
+  if (!year) return null;
+  return { text: merged, year };
+};
+
+const pickBestEvent = (current, candidate) => {
+  if (!current) return candidate;
+  const score = (e) => (e.confidence ?? 0) * 10 + String(e.description || "").length;
+  return score(candidate) > score(current) ? candidate : current;
+};
+
+export const normalizeTimelineEvent = (event) => {
+  if (!event) return null;
+  let { category, title, description } = event;
+  description = String(description || event.value || title || "").trim();
+  title = String(title || "").trim();
+
+  if (isBirthEvent(event)) {
+    return createEvent({ ...event, category: "birth", title: "Birth", description });
+  }
+  if (isPartyEvent(event)) {
+    return createEvent({ ...event, category: "joinedParty", title: "Party Entry", description });
+  }
+  if (isEducationEvent(event)) {
+    return createEvent({ ...event, category: "college", title: "Education", description });
+  }
+  if (isCurrentOfficeEvent(event)) {
+    return createEvent({ ...event, category: "currentOffice", title: title || "Current Position", description });
+  }
+  return createEvent({ ...event, category, title, description });
+};
+
+export const mergeDuplicateTimelineEvents = (events = []) => {
+  let birth = null;
+  let education = null;
+  let party = null;
+  let currentOffice = null;
+  const elections = [];
+  const appointments = [];
+  const other = [];
+
+  for (const raw of events) {
+    const event = normalizeTimelineEvent(raw);
+    if (!event?.year) continue;
+
+    if (isBirthEvent(event)) {
+      birth = pickBestEvent(birth, event);
+    } else if (isEducationEvent(event)) {
+      education = pickBestEvent(education, event);
+    } else if (isPartyEvent(event)) {
+      party = pickBestEvent(party, event);
+    } else if (isCurrentOfficeEvent(event)) {
+      currentOffice = pickBestEvent(currentOffice, event);
+    } else if (event.category === "election") {
+      elections.push(event);
+    } else if (isMajorAppointment(event)) {
+      appointments.push(event);
+    } else if (!isCurrentOfficeEvent(event)) {
+      other.push(event);
+    }
+  }
+
+  return { birth, education, party, currentOffice, elections, appointments, other };
+};
+
+const dedupeElections = (elections) => {
   const seen = new Set();
   const result = [];
-
-  for (const event of events) {
-    const key = `${event.year}:${event.category}:${normalizeText(event.title)}`;
+  for (const event of elections) {
+    const key = `${event.year}:${normalizeText(event.election?.constituency || event.description)}:${normalizeText(event.title)}`;
     if (seen.has(key)) continue;
     seen.add(key);
-    const { sortKey, ...stored } = event;
-    result.push(stored);
+    result.push(event);
   }
-
-  return result;
+  return result.sort((a, b) => Number(a.year) - Number(b.year));
 };
 
-const categorizeRawEvent = (eventText = "") => {
-  const text = normalizeText(eventText);
-  if (text.includes("born")) return "birth";
-  if (text.includes("affiliated") || text.includes("joined")) return "joinedParty";
-  if (
-    text.includes("assumed office") ||
-    text.includes("minister") ||
-    text.includes("member") ||
-    text.includes("speaker") ||
-    text.includes("chair")
-  ) {
-    return "position";
+const dedupeAppointments = (appointments) => {
+  const seen = new Set();
+  const result = [];
+  for (const event of appointments) {
+    const key = `${event.year}:${normalizeText(event.title)}:${normalizeText(event.description).slice(0, 40)}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(event);
   }
-  return "position";
+  return result.sort((a, b) => Number(a.year) - Number(b.year));
 };
 
-const parseRawTimelineEvent = (rawEvent, sources) => {
-  const year =
-    extractYear(rawEvent.year) ||
-    (rawEvent.year !== "—" ? extractYear(String(rawEvent.year)) : null);
-  if (!year) return null;
-
-  const text = String(rawEvent.event || "").trim();
-  if (!isVerifiedValue(text)) return null;
-
-  const category = categorizeRawEvent(text);
-  const source = resolveSource(
-    sources,
-    category === "birth" ? ["wikipedia"] : ["lok sabha", "rajya sabha", "wikipedia"]
+const mergeChronologicalMiddle = (elections, appointments) =>
+  [...dedupeElections(elections), ...dedupeAppointments(appointments)].sort(
+    (a, b) => Number(a.year) - Number(b.year)
   );
 
-  let title = text;
-  let description = text;
-
-  if (category === "birth") {
-    title = "Birth";
-    description = text.replace(/^born[:\s]*/i, "").trim() || text;
-  } else if (category === "joinedParty") {
-    title = "Political Party Affiliation";
-    description = text;
-  } else if (text.toLowerCase().startsWith("assumed office")) {
-    title = "Assumed Office";
-    description = text.replace(/^assumed office[:\s]*/i, "").trim();
-  }
-
-  return createEvent({ year, title, description, source, category });
-};
-
-const buildBirthEvent = (biography, sources) => {
-  const year = extractYear(biography.dob);
+const buildBirthEvent = (biography, sources, facts) => {
+  const fromBio = extractYear(biography.dob);
+  const birthFact = (facts || []).find((f) => f.type === "Birth" && f.year);
+  const year = fromBio || birthFact?.year;
   if (!year) return null;
-
-  const source = resolveSource(sources, ["wikipedia", "lok sabha", "myneta"]);
-  const place = biography.dob?.includes(",")
-    ? biography.dob.split(",").slice(1).join(",").trim()
-    : null;
 
   const description = [
     isVerifiedValue(biography.dob) ? biography.dob : null,
-    isVerifiedValue(place) ? `Birth place: ${place}` : null,
+    birthFact?.value || birthFact?.description,
   ]
     .filter(Boolean)
     .join(" · ");
@@ -194,88 +272,60 @@ const buildBirthEvent = (biography, sources) => {
     year,
     title: "Birth",
     description: description || `Born in ${year}`,
-    source,
+    source: resolveSource(sources, ["wikipedia", "lok sabha", "myneta"]),
     category: "birth",
   });
 };
 
-const buildEducationEvents = (biography, sources) => {
-  const { school, college } = splitEducation(biography.education);
-  const source = resolveSource(sources, ["wikipedia", "lok sabha", "myneta"]);
-  const events = [];
-
-  if (isVerifiedValue(school)) {
-    const year = extractYear(school);
-    if (year) {
-      events.push(
-        createEvent({
-          year,
-          title: "School Education",
-          description: school,
-          source,
-          category: "school",
-        })
-      );
-    }
-  }
-
-  if (isVerifiedValue(college) && college !== school) {
-    const year = extractYear(college);
-    if (year) {
-      events.push(
-        createEvent({
-          year,
-          title: "College / University",
-          description: college,
-          source,
-          category: "college",
-        })
-      );
-    }
-  }
-
-  return events;
-};
-
-const buildEarlyCareerEvent = (biography, sources) => {
-  const career = biography.profession || biography.priorCareer;
-  if (!isVerifiedValue(career)) return null;
-
-  const politicalRole = /\b(mp|mla|minister|member of|parliament|legislative|politician|party)\b/i.test(
-    career
+const buildEducationEvent = (biography, sources, facts) => {
+  const eduFacts = (facts || []).filter((f) =>
+    ["School Education", "College Education", "Degree"].includes(f.type)
   );
-  if (politicalRole) return null;
+  const fromBio = splitEducation(biography.education);
 
-  const year = extractYear(career);
-  if (!year) return null;
+  if (eduFacts.length > 0) {
+    const withYear = eduFacts.find((f) => f.year);
+    if (!withYear?.year) {
+      if (!fromBio) return null;
+      return createEvent({
+        year: fromBio.year,
+        title: "Education",
+        description: fromBio.text,
+        source: resolveSource(sources, ["wikipedia", "lok sabha", "myneta"]),
+        category: "college",
+      });
+    }
+    return createEvent({
+      year: withYear.year,
+      title: "Education",
+      description: eduFacts.map((f) => f.value || f.description).filter(Boolean).join(" · "),
+      source: resolveSource(sources, ["wikipedia", "lok sabha", "myneta"]),
+      category: "college",
+    });
+  }
 
+  if (!fromBio) return null;
   return createEvent({
-    year,
-    title: "Early Career",
-    description: career,
+    year: fromBio.year,
+    title: "Education",
+    description: fromBio.text,
     source: resolveSource(sources, ["wikipedia", "lok sabha", "myneta"]),
-    category: "earlyCareer",
+    category: "college",
   });
 };
 
-const buildJoinedPartyEvent = (biography, sources) => {
-  const joined = biography.dateJoinedParty;
-  const year = extractYear(joined);
-  const party = biography.party;
-
+const buildPartyEvent = (biography, sources, facts) => {
+  const partyFact = (facts || []).find((f) => ["Party Join", "Political Party"].includes(f.type) && f.year);
+  const year = extractYear(biography.dateJoinedParty) || partyFact?.year;
   if (!year) return null;
 
-  const description = [
-    isVerifiedValue(party) ? `Joined ${party}` : null,
-    isVerifiedValue(joined) && !joined.match(/^\d{4}$/) ? joined : null,
-  ]
-    .filter(Boolean)
-    .join(" · ");
+  const party = biography.party || partyFact?.value || partyFact?.description;
+  const description = isVerifiedValue(party) ? `Joined ${party}` : partyFact?.description || "Party Entry";
 
   return createEvent({
     year,
-    title: "Joined Political Party",
-    description: description || `Entered active party politics in ${year}`,
+    title: "Party Entry",
+    description,
     source: resolveSource(sources, ["party", "wikipedia"]),
     category: "joinedParty",
   });
@@ -283,50 +333,21 @@ const buildJoinedPartyEvent = (biography, sources) => {
 
 const buildElectionEvents = (elections = [], sources) => {
   const source = resolveSource(sources, ["myneta", "election commission"]);
-  const events = [];
-
-  for (const row of elections) {
-    const year = row.year ? String(row.year) : null;
-    if (!year) continue;
-
-    const resultLabel = isVerifiedValue(row.position) ? row.position : "Contested";
-    const title = `${row.election || "Election"} — ${resultLabel}`;
-
-    const details = [
-      isVerifiedValue(row.constituency) ? `Constituency: ${row.constituency}` : null,
-      isVerifiedValue(row.party) ? `Party: ${row.party}` : null,
-      row.votes != null && row.votes > 0 ? `Votes: ${Number(row.votes).toLocaleString()}` : null,
-      row.margin != null && row.margin > 0 ? `Margin: +${Number(row.margin).toLocaleString()}` : null,
-      row.votePct != null && row.votePct > 0 ? `Vote share: ${row.votePct}%` : null,
-    ].filter(Boolean);
-
-    events.push(
-      createEvent({
-        year,
-        title,
-        description: details.join(" · ") || title,
-        source,
-        category: "election",
-      })
-    );
-  }
-
-  return events;
+  return elections.map((row) => buildElectionCard(row, source)).filter(Boolean);
 };
 
-const buildPositionEvents = (biography, rawTimeline = [], sources) => {
+const buildAppointmentEvents = (biography, facts, rawTimeline, sources) => {
   const source = resolveSource(sources, ["lok sabha", "rajya sabha", "wikipedia", "state assembly"]);
   const events = [];
 
   for (const position of biography.previousPositions || []) {
     if (!isVerifiedValue(position)) continue;
     const year = extractYear(position);
-    if (!year) continue;
-
+    if (!year || !MAJOR_ROLE_PATTERN.test(position)) continue;
     events.push(
       createEvent({
         year,
-        title: "Political Position",
+        title: position.split(/[,.]/)[0].trim().slice(0, 80),
         description: position,
         source,
         category: "position",
@@ -334,38 +355,54 @@ const buildPositionEvents = (biography, rawTimeline = [], sources) => {
     );
   }
 
-  for (const raw of rawTimeline) {
-    const parsed = parseRawTimelineEvent(raw, sources);
-    if (parsed && parsed.category === "position") {
-      events.push(parsed);
+  for (const fact of facts || []) {
+    if (!["Appointment", "Government Position", "Cabinet Position", "Parliament Membership", "Assembly Membership"].includes(fact.type)) {
+      continue;
     }
+    if (!fact.year || !MAJOR_ROLE_PATTERN.test(`${fact.title} ${fact.value} ${fact.description}`)) continue;
+    events.push(
+      createEvent({
+        year: fact.year,
+        title: fact.title || fact.value,
+        description: fact.description || fact.value,
+        source: { name: fact.source, url: fact.sourceUrl, confidence: fact.confidence },
+        category: "position",
+      })
+    );
+  }
+
+  for (const raw of rawTimeline || []) {
+    const text = String(raw.event || "").trim();
+    const year = extractYear(raw.year) || extractYear(text);
+    if (!year || !MAJOR_ROLE_PATTERN.test(text)) continue;
+    events.push(
+      createEvent({
+        year,
+        title: text.replace(/^assumed office[:\s]*/i, "").trim().slice(0, 80),
+        description: text,
+        source,
+        category: "position",
+      })
+    );
   }
 
   return events;
 };
 
-const buildCurrentOfficeEvent = (biography, elections = [], rawTimeline = [], sources) => {
+const buildCurrentOfficeEvent = (biography, elections, existingEvents, sources) => {
   const office = biography.currentOffice || biography.currentPosition;
   if (!isVerifiedValue(office)) return null;
 
   let year =
-    rawTimeline
-      .map((entry) => {
-        const text = String(entry.event || "");
-        if (!/assumed office|term start|current/i.test(text)) return null;
-        return extractYear(entry.year) || extractYear(text);
-      })
-      .find(Boolean) || null;
+    existingEvents
+      .filter(isCurrentOfficeEvent)
+      .map((e) => e.year)
+      .find(Boolean) ||
+    [...(elections || [])]
+      .filter((row) => /winner|won|elected/i.test(String(row.position || "")))
+      .sort((a, b) => (b.year || 0) - (a.year || 0))[0]?.year;
 
-  if (!year) {
-    const winningElections = [...elections]
-      .filter((row) => isVerifiedValue(row.position) && /winner|won|elected/i.test(row.position))
-      .sort((a, b) => (b.year || 0) - (a.year || 0));
-    if (winningElections.length > 0) {
-      year = String(winningElections[0].year);
-    }
-  }
-
+  if (year) year = String(year);
   if (!year) return null;
 
   const description = [
@@ -378,139 +415,162 @@ const buildCurrentOfficeEvent = (biography, elections = [], rawTimeline = [], so
 
   return createEvent({
     year,
-    title: "Current Office",
+    title: office,
     description,
     source: resolveSource(sources, ["lok sabha", "rajya sabha", "myneta", "wikipedia"]),
     category: "currentOffice",
   });
 };
 
-const sortTimeline = (events) =>
-  events
-    .filter((event) => {
-      const numericYear = Number(event.year);
-      return Number.isFinite(numericYear) && numericYear > 1800;
-    })
-    .sort((a, b) => {
-      const yearDiff = Number(a.year) - Number(b.year);
-      if (yearDiff !== 0) return yearDiff;
-      return (a.sortKey ?? CATEGORY_ORDER[a.category] ?? 99) - (b.sortKey ?? CATEGORY_ORDER[b.category] ?? 99);
-    })
-    .map(({ sortKey, ...event }) => ({
-      ...event,
-      id: event.id || generateFactId(event),
-    }));
-
 const factToTimelineEvent = (fact) => {
   const category = FACT_TYPE_TO_TIMELINE_CATEGORY[fact.type];
-  if (!category) return null;
-  if (!fact.year) return null;
+  if (!category || !fact.year) return null;
 
-  return {
-    id: generateFactId({ year: fact.year, category, title: fact.title }),
-    year: String(fact.year),
-    date: fact.date || null,
-    category,
-    title: fact.title,
+  const event = createEvent({
+    year: fact.year,
+    title: fact.title || fact.type,
     description: fact.description || fact.value || fact.title,
-    source: fact.source || "",
-    sourceUrl: fact.sourceUrl || "",
-    confidence: fact.confidence ?? 0,
-    verifiedBy: fact.verifiedBy ?? [fact.source].filter(Boolean),
-    sortKey: CATEGORY_ORDER[category] ?? 99,
-  };
-};
+    source: { name: fact.source, url: fact.sourceUrl, confidence: fact.confidence },
+    category,
+    verifiedBy: fact.verifiedBy,
+  });
 
-/**
- * Build timeline primarily from merged facts — falls back to biography inference.
- */
-export const buildTimelineFromFacts = (facts = []) => {
-  const safeFacts = Array.isArray(facts) ? facts : [];
-  const fromFacts = safeFacts.map(factToTimelineEvent).filter(Boolean);
-
-  return sortTimeline(dedupeEvents(fromFacts));
-};
-
-/**
- * Build normalized political intelligence timeline from merged enrichment data.
- */
-const buildCabinetCommitteeEvents = (facts = [], sources) => {
-  const source = resolveSource(sources, ["lok sabha", "rajya sabha", "wikipedia"]);
-  const events = [];
-
-  for (const fact of facts) {
-    if (!["Cabinet Position", "Committee"].includes(fact.type)) continue;
-    if (!fact.year) continue;
-    events.push(
-      createEvent({
-        year: fact.year,
-        title: fact.title || fact.value,
-        description: fact.description || fact.value,
-        source: {
-          name: fact.source || source.name,
-          url: fact.sourceUrl || source.url,
-          confidence: fact.confidence ?? source.confidence,
-        },
-        category: "cabinetCommittee",
-      })
-    );
+  if (category === "election" && fact.value) {
+    event.election = {
+      year: String(fact.year),
+      type: fact.title || "Election",
+      constituency: null,
+      party: null,
+      result: parseElectionResult(fact.description || fact.value),
+      margin: null,
+      voteShare: null,
+    };
   }
 
+  return event;
+};
+
+const ingestStoredTimeline = (storedTimeline = [], sources = []) => {
+  const events = [];
+  for (const entry of storedTimeline || []) {
+    if (!entry) continue;
+    if (isPresent(entry.title) && isPresent(entry.category) && isPresent(entry.year)) {
+      events.push(
+        createEvent({
+          year: entry.year,
+          title: entry.title,
+          description: entry.description || "",
+          source: { name: entry.source, url: entry.sourceUrl, confidence: entry.confidence },
+          category: entry.category,
+          id: entry.id,
+          date: entry.date,
+          verifiedBy: entry.verifiedBy,
+          election: entry.election || null,
+        })
+      );
+    }
+  }
   return events;
 };
 
-const buildLegacyTimelineEvents = (biography, rawTimeline, elections, sources, facts) => {
+const assembleStoryTimeline = (pools, biography, elections, sources) => {
+  const { birth, education, party, elections: electionEvents, appointments, currentOffice: storedCurrent } = pools;
+
+  const middle = mergeChronologicalMiddle(electionEvents, appointments);
+  const current =
+    buildCurrentOfficeEvent(biography, elections, [...middle, ...(storedCurrent ? [storedCurrent] : [])], sources) ||
+    storedCurrent;
+
+  const timeline = [birth, education, party, ...middle, current].filter(Boolean);
+
+  return timeline.map((event) => ({
+    ...event,
+    id: event.id || generateFactId(event),
+  }));
+};
+
+const collectRawEvents = ({ biography, rawTimeline, elections, sources, facts, storedTimeline }) => {
   const events = [];
 
-  const birth = buildBirthEvent(biography, sources);
-  if (birth) events.push(birth);
-
-  events.push(...buildEducationEvents(biography, sources));
-
-  const earlyCareer = buildEarlyCareerEvent(biography, sources);
-  if (earlyCareer) events.push(earlyCareer);
-
-  const joinedParty = buildJoinedPartyEvent(biography, sources);
-  if (joinedParty) events.push(joinedParty);
-
+  events.push(buildBirthEvent(biography, sources, facts));
+  events.push(buildEducationEvent(biography, sources, facts));
+  events.push(buildPartyEvent(biography, sources, facts));
   events.push(...buildElectionEvents(elections, sources));
-  events.push(...buildPositionEvents(biography, rawTimeline, sources));
-  events.push(...buildCabinetCommitteeEvents(facts, sources));
+  events.push(...buildAppointmentEvents(biography, facts, rawTimeline, sources));
 
-  for (const raw of rawTimeline) {
-    const parsed = parseRawTimelineEvent(raw, sources);
-    if (parsed && !["position", "cabinetCommittee"].includes(parsed.category)) {
-      events.push(parsed);
+  for (const fact of facts || []) {
+    const mapped = factToTimelineEvent(fact);
+    if (mapped) events.push(mapped);
+  }
+
+  events.push(...ingestStoredTimeline(storedTimeline, sources));
+
+  for (const raw of rawTimeline || []) {
+    const text = String(raw.event || "").trim();
+    const year = extractYear(raw.year) || extractYear(text);
+    if (!year || !isVerifiedValue(text)) continue;
+    if (/\b(born|birth)\b/i.test(text)) {
+      events.push(
+        createEvent({
+          year,
+          title: "Birth",
+          description: text,
+          source: resolveSource(sources, ["wikipedia"]),
+          category: "birth",
+        })
+      );
+    } else if (/\b(joined|affiliated)\b/i.test(text)) {
+      events.push(
+        createEvent({
+          year,
+          title: "Party Entry",
+          description: text,
+          source: resolveSource(sources, ["party", "wikipedia"]),
+          category: "joinedParty",
+        })
+      );
     }
   }
 
-  const currentOffice = buildCurrentOfficeEvent(biography, elections, rawTimeline, sources);
-  if (currentOffice) events.push(currentOffice);
-
-  return events;
+  return events.filter(Boolean);
 };
 
+/**
+ * Build a clean storytelling timeline: Birth → Education → Party → Elections & Appointments → Current Role.
+ */
 export const buildIntelligenceTimeline = ({
   biography = {},
   rawTimeline = [],
   elections = [],
   sources = [],
   facts = [],
+  storedTimeline = [],
 }) => {
-  const factEvents = facts.length > 0 ? buildTimelineFromFacts(facts) : [];
-  const legacyEvents = buildLegacyTimelineEvents(
+  const rawEvents = collectRawEvents({
     biography,
-    Array.isArray(rawTimeline) ? rawTimeline : [],
-    Array.isArray(elections) ? elections : [],
-    Array.isArray(sources) ? sources : [],
-    Array.isArray(facts) ? facts : []
-  );
-  return sortTimeline(dedupeEvents([...factEvents, ...legacyEvents].filter(Boolean)));
+    rawTimeline,
+    elections,
+    sources,
+    facts,
+    storedTimeline,
+  });
+
+  const pools = mergeDuplicateTimelineEvents(rawEvents);
+  return assembleStoryTimeline(pools, biography, elections, sources);
 };
 
-/**
- * Sanitize stored timeline for API responses — drops legacy { year, event } rows.
- */
+export const buildTimelineFromFacts = (facts = []) =>
+  buildIntelligenceTimeline({ facts: Array.isArray(facts) ? facts : [] });
+
+export const refineStoredTimeline = (storedTimeline = [], biography = {}) =>
+  buildIntelligenceTimeline({ biography, storedTimeline });
+
+/** @deprecated Intelligence layer removed — returns timeline only. */
+export const buildCareerTimelinePackage = (params) => ({
+  timeline: buildIntelligenceTimeline(params),
+  timelineIntelligence: {},
+});
+
 export const sanitizeTimelineForResponse = (timeline = []) => {
   if (!Array.isArray(timeline)) return [];
 
@@ -533,5 +593,14 @@ export const sanitizeTimelineForResponse = (timeline = []) => {
       sourceUrl: isPresent(entry.sourceUrl) ? entry.sourceUrl : null,
       confidence: Number(entry.confidence) || 0,
       verifiedBy: Array.isArray(entry.verifiedBy) ? entry.verifiedBy : [],
+      election: entry.election || null,
     }));
 };
+
+export const sanitizeTimelineIntelligenceForResponse = () => ({});
+
+// Legacy exports kept for tests
+export const curateTimelineByDensity = (events) => events;
+export const mergeCareerProgression = (events) => events;
+export const scoreEventImportance = () => 0;
+export const buildTimelineInsights = () => ({});

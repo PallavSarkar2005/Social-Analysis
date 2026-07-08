@@ -206,7 +206,6 @@ client.interceptors.response.use(
       url.includes("/auth/") ||
       url.includes("/csrf") ||
       url.includes("/settings/appearance") ||
-      url.includes("/activity/log") ||
       url.includes("/api/profile/") ||
       originalRequest?._skipErrorRedirect;
 

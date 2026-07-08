@@ -20,7 +20,7 @@ const card = "bg-[#111319]/60 border border-white/[0.05] rounded-2xl p-5 space-y
 const sectionLabel = "text-[10px] font-bold text-slate-500 uppercase tracking-[0.14em] flex items-center gap-1.5";
 
 export default function Appearance() {
-  const { prefs, update } = useAppearance();
+  const { prefs, update, reset } = useAppearance();
   const { theme, accent, fontSize, compact, animations } = prefs;
 
   // Determine current accent hex for live preview
@@ -288,12 +288,10 @@ export default function Appearance() {
 
             {/* Reset button */}
             <button
-              onClick={() => {
-                import("../../context/AppearanceContext").then(({ useAppearance: _ }) => {});
-              }}
+              onClick={() => reset()}
               className="w-full h-8 px-4 rounded-xl bg-white/[0.04] border border-white/[0.06] hover:bg-white/[0.07] text-slate-400 hover:text-white transition text-[10px] font-semibold mt-2"
             >
-              Saved automatically ✓
+              Reset to defaults
             </button>
           </div>
         </div>

@@ -191,7 +191,7 @@ export default function Navbar() {
                       <button
                         key={acc._id}
                         onClick={() => {
-                          navigate("/accounts");
+                          navigate(`/profile/${acc._id || acc.accountId}`);
                           setRealSearchOpen(false);
                           setSearchQuery("");
                         }}

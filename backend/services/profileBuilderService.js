@@ -16,7 +16,7 @@ import {
   enrichPoliticalProfile,
   buildEmptyProfileShell,
 } from "./politicalProfileEnrichmentService.js";
-import { buildIntelligenceTimeline } from "./politicalTimelineService.js";
+import { buildCareerTimelinePackage } from "./politicalTimelineService.js";
 import { buildIntelligenceOverview } from "./overviewEngine.js";
 import { generateAiPoliticalSummary } from "./aiPoliticalSummaryService.js";
 import { buildRelationshipGraph } from "./relationshipGraphService.js";
@@ -233,16 +233,18 @@ const buildTimelineSection = (profile, overviewData = null) => {
   const sources = overviewData?.sources || profile?.sources || [];
   const rawTimeline = overviewData?.rawTimeline || [];
   const facts = overviewData?.facts || profile?.facts || [];
+  const storedTimeline = profile?.timeline || [];
 
-  const timeline = buildIntelligenceTimeline({
+  const { timeline, timelineIntelligence } = buildCareerTimelinePackage({
     biography,
     rawTimeline,
     elections,
     sources,
     facts,
+    storedTimeline,
   });
 
-  return { timeline };
+  return { timeline, timelineIntelligence };
 };
 
 const buildFactsSection = (overviewData, profile) => ({
@@ -805,12 +807,14 @@ const runBuildProfile = async (
       accountIdStr,
       logPrefix,
       () => buildTimelineSection(profile, overviewData),
-      { timeline: [] }
+      { timeline: [], timelineIntelligence: {} }
     );
     if (!timelineResult.success) {
       sectionErrors.push({ section: "buildTimeline", error: timelineResult.error });
     }
     updatePayload.timeline = timelineResult.data.timeline ?? overviewData?.timeline ?? profile?.timeline ?? [];
+    updatePayload.timelineIntelligence =
+      timelineResult.data.timelineIntelligence ?? profile?.timelineIntelligence ?? {};
     sectionsBuilt.push("timeline");
     await bumpProgress("timeline");
   }

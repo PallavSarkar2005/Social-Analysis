@@ -8,7 +8,6 @@ import { getCompareAccounts } from "../api/analyticsApi";
 import { getGroupsList, getGroupCreators } from "../api/groupApi";
 import {
   getAccounts,
-  createAccount,
   deleteAccount,
   updateAccountGroup,
   updateAccountPartyState,
@@ -22,6 +21,23 @@ import { getReports, deleteReport as apiDeleteReport } from "../api/reportApi";
 import { getCompetitors, addCompetitor, deleteCompetitor } from "../api/competitorApi";
 import { devWarn } from "../utils/devLog";
 import { getBillingStatus, cancelSubscription as apiCancelSubscription, getInvoices } from "../api/billingApi";
+import {
+  getAccountStats,
+  getPrivacyPreferences,
+  updatePrivacyPreferences,
+  getSecurityPreferences,
+  updateSecurityPreferences,
+  getAdvancedPreferences,
+  updateAdvancedPreferences,
+  getIntegrations,
+  updateIntegration,
+  listApiKeys,
+  createApiKey,
+  revokeApiKey,
+  getPlanCatalog,
+  exportProfileData,
+  resetWorkspace,
+} from "../api/settingsApi";
 
 // 1. Dashboard Hook
 export const useDashboard = () => {
@@ -93,7 +109,7 @@ export const useDashboard = () => {
   };
 };
 
-// 2. Creator Accounts Hook (Tracked Connections)
+// 2. Creator Accounts Hook
 export const useAccounts = () => {
   const queryClient = useQueryClient();
 
@@ -105,21 +121,10 @@ export const useAccounts = () => {
     },
   });
 
-  const createMutation = useMutation({
-    mutationFn: createAccount,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["accounts"] });
-      queryClient.invalidateQueries({ queryKey: ["trackedNodes"] });
-      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
-      queryClient.invalidateQueries({ queryKey: ["compare-accounts"] });
-    },
-  });
-
   const deleteMutation = useMutation({
     mutationFn: deleteAccount,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["accounts"] });
-      queryClient.invalidateQueries({ queryKey: ["trackedNodes"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
       queryClient.invalidateQueries({ queryKey: ["compare-accounts"] });
     },
@@ -142,7 +147,6 @@ export const useAccounts = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["accounts"] });
-      queryClient.invalidateQueries({ queryKey: ["trackedNodes"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
       queryClient.invalidateQueries({ queryKey: ["party-bjp"] });
       queryClient.invalidateQueries({ queryKey: ["party-congress"] });
@@ -177,7 +181,6 @@ export const useAccounts = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["accounts"] });
-      queryClient.invalidateQueries({ queryKey: ["trackedNodes"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
       queryClient.invalidateQueries({ queryKey: ["party-bjp"] });
       queryClient.invalidateQueries({ queryKey: ["party-congress"] });
@@ -188,8 +191,6 @@ export const useAccounts = () => {
   return {
     accounts: accountsQuery.data || [],
     loading: accountsQuery.isLoading,
-    createAccount: createMutation.mutateAsync,
-    creating: createMutation.isPending,
     deleteAccount: deleteMutation.mutateAsync,
     deleting: deleteMutation.isPending,
     updateAccountGroup: updateGroupMutation.mutateAsync,
@@ -198,19 +199,7 @@ export const useAccounts = () => {
   };
 };
 
-// 3. Tracked Nodes Hook (Background Sync list)
-export const useTrackedNodes = () => {
-  return useQuery({
-    queryKey: ["trackedNodes"],
-    queryFn: async () => {
-      const res = await getAccounts();
-      return res.data || [];
-    },
-    refetchInterval: 30000, // 30s background refetch
-  });
-};
-
-// 4. Party Analytics Hook
+// 3. Party Analytics Hook
 export const useParty = (groupName) => {
   const queryKey =
     groupName?.toLowerCase() === "bjp"
@@ -262,7 +251,6 @@ export const useAnalyzer = () => {
       });
 
       queryClient.invalidateQueries({ queryKey: ["accounts"] });
-      queryClient.invalidateQueries({ queryKey: ["trackedNodes"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
       queryClient.invalidateQueries({ queryKey: ["compare-accounts"] });
       queryClient.invalidateQueries({ queryKey: ["reports"] });
@@ -458,3 +446,126 @@ export const useAppearanceQuery = () => {
     retry: 0,
   });
 };
+
+// 14. Settings Hooks
+export const useAccountStats = () =>
+  useQuery({
+    queryKey: ["settings", "account-stats"],
+    queryFn: async () => {
+      const res = await getAccountStats();
+      return res?.data ?? null;
+    },
+  });
+
+export const usePrivacyPreferences = () =>
+  useQuery({
+    queryKey: ["settings", "privacy"],
+    queryFn: async () => {
+      const res = await getPrivacyPreferences();
+      return res?.data ?? {};
+    },
+  });
+
+export const useUpdatePrivacyPreferences = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: updatePrivacyPreferences,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["settings", "privacy"] }),
+  });
+};
+
+export const useSecurityPreferences = () =>
+  useQuery({
+    queryKey: ["settings", "security"],
+    queryFn: async () => {
+      const res = await getSecurityPreferences();
+      return res?.data ?? {};
+    },
+  });
+
+export const useUpdateSecurityPreferences = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: updateSecurityPreferences,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["settings", "security"] }),
+  });
+};
+
+export const useAdvancedPreferences = () =>
+  useQuery({
+    queryKey: ["settings", "advanced"],
+    queryFn: async () => {
+      const res = await getAdvancedPreferences();
+      return res?.data ?? {};
+    },
+  });
+
+export const useUpdateAdvancedPreferences = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: updateAdvancedPreferences,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["settings", "advanced"] }),
+  });
+};
+
+export const useIntegrations = () =>
+  useQuery({
+    queryKey: ["settings", "integrations"],
+    queryFn: async () => {
+      const res = await getIntegrations();
+      return res?.data ?? { google: { connected: false }, integrations: [] };
+    },
+  });
+
+export const useUpdateIntegration = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }) => updateIntegration(id, data),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["settings", "integrations"] }),
+  });
+};
+
+export const useApiKeys = () =>
+  useQuery({
+    queryKey: ["settings", "api-keys"],
+    queryFn: async () => {
+      const res = await listApiKeys();
+      return res?.data ?? [];
+    },
+  });
+
+export const useCreateApiKey = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: createApiKey,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["settings", "api-keys"] }),
+  });
+};
+
+export const useRevokeApiKey = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: revokeApiKey,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["settings", "api-keys"] }),
+  });
+};
+
+export const usePlanCatalog = () =>
+  useQuery({
+    queryKey: ["settings", "plans"],
+    queryFn: async () => {
+      const res = await getPlanCatalog();
+      return res?.data ?? { currency: "INR", plans: [] };
+    },
+    staleTime: 30 * 60 * 1000,
+  });
+
+export const useResetWorkspace = () =>
+  useMutation({
+    mutationFn: resetWorkspace,
+  });
+
+export const useExportProfileData = () =>
+  useMutation({
+    mutationFn: exportProfileData,
+  });

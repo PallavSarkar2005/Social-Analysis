@@ -4,7 +4,7 @@ import Snapshot from "../models/Snapshot.js";
 import Content from "../models/Content.js";
 import PoliticalProfile from "../models/PoliticalProfile.js";
 import { sanitizeBiographyForResponse, sanitizeVerifiedFactsForResponse, sanitizeSourcesForResponse } from "../services/politicalProfileEnrichmentService.js";
-import { sanitizeTimelineForResponse } from "../services/politicalTimelineService.js";
+import { sanitizeTimelineForResponse, sanitizeTimelineIntelligenceForResponse } from "../services/politicalTimelineService.js";
 import { scheduleProfileSync } from "../services/profileBuilderService.js";
 import { deriveModules, deriveModuleDataFlags, buildModuleMetaFromLegacy } from "../services/sectionMetaService.js";
 
@@ -84,6 +84,9 @@ const buildProfileReadResponse = (account, profile) => {
       : [],
     fieldProvenance: profile?.fieldProvenance || {},
     timeline: profile ? sanitizeTimelineForResponse(profile.timeline) : [],
+    timelineIntelligence: profile
+      ? sanitizeTimelineIntelligenceForResponse(profile.timelineIntelligence)
+      : sanitizeTimelineIntelligenceForResponse(),
     sources: profile ? sanitizeSourcesForResponse(profile.sources) : [],
     confidenceScore: profile?.confidenceScore ?? 0,
     confidenceBreakdown: profile?.confidenceBreakdown || {},
@@ -163,6 +166,7 @@ export const getTimeline = async (req, res, next) => {
     res.json({
       success: true,
       data: result.timeline,
+      timelineIntelligence: result.timelineIntelligence,
     });
     logProfileSuccess("getTimeline", creatorId, startedAt);
   } catch (error) {

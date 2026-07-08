@@ -1,5 +1,4 @@
 import SavedReport from "../models/SavedReport.js";
-import { logActivity } from "../utils/activityLogger.js";
 
 // @desc    Save a report (AI insight, comparison, analysis)
 // @route   POST /api/reports
@@ -22,13 +21,6 @@ export const saveReport = async (req, res, next) => {
       source,
       content,
     });
-
-    await logActivity(
-      req.user._id,
-      "report_generation",
-      `Saved report: "${title}" [Type: ${type}, Source: ${source}]`,
-      req
-    );
 
     res.status(201).json({
       success: true,
@@ -105,13 +97,6 @@ export const deleteReport = async (req, res, next) => {
         message: "Report not found or unauthorized",
       });
     }
-
-    await logActivity(
-      req.user._id,
-      "report_deleted",
-      `Deleted report: "${report.title}"`,
-      req
-    );
 
     res.json({
       success: true,

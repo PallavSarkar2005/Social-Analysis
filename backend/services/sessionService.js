@@ -37,6 +37,7 @@ export const getActiveSessions = async (userId, currentRefreshToken) => {
     ipAddress: session.ipAddress || "Unknown",
     userAgent: session.userAgent || "Unknown",
     createdAt: session.createdAt,
+    loggedInAt: session.createdAt,
     expiresAt: session.expiresAt,
     isCurrent: hashedCurrent ? session.tokenHash === hashedCurrent : false,
   }));

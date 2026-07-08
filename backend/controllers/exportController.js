@@ -3,7 +3,6 @@ import Account from "../models/Account.js";
 import Snapshot from "../models/Snapshot.js";
 import Content from "../models/Content.js";
 import TrackedCompetitor from "../models/TrackedCompetitor.js";
-import { logActivity } from "../utils/activityLogger.js";
 
 // Helper to send binary/text responses depending on format
 const sendExport = (res, format, filename, csvData, xlsxData, pdfDataObj) => {
@@ -73,8 +72,6 @@ export const exportDashboard = async (req, res, next) => {
       },
       notes: "System recommendation: Regular channel synchronization is required to capture historic snapshots. Stale data limits linear forecasting algorithms from operating with optimal confidence intervals.",
     };
-
-    await logActivity(req.user._id, "export_generated", `Exported dashboard data as: ${format.toUpperCase()}`, req);
     
     sendExport(res, format, "dashboard_report", csvData, csvData, pdfDataObj);
   } catch (error) {
@@ -140,8 +137,6 @@ export const exportCompetitors = async (req, res, next) => {
       notes: "Analysis: Benchmarking stats represent industry baselines. Identify competitor growth spikes to analyze their dynamic posting frequency strategies.",
     };
 
-    await logActivity(req.user._id, "export_generated", `Exported competitor list as: ${format.toUpperCase()}`, req);
-
     sendExport(res, format, "competitor_audit", rowData, rowData, pdfDataObj);
   } catch (error) {
     next(error);
@@ -181,8 +176,6 @@ export const exportSavedReport = async (req, res, next) => {
       summary: `This report details the saved content generated on ${new Date(report.createdAt).toLocaleDateString()}.`,
       notes: typeof report.content === "string" ? report.content : JSON.stringify(report.content, null, 2),
     };
-
-    await logActivity(req.user._id, "export_generated", `Exported saved report "${report.title}" as: ${format.toUpperCase()}`, req);
 
     sendExport(res, format, `report_${id}`, csvData, csvData, pdfDataObj);
   } catch (error) {

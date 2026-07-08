@@ -1,7 +1,5 @@
-import * as AuditRepository from "../repositories/AuditRepository.js";
-
 /**
- * Helper to log security audit trails (e.g., failed logins, rate limits, token violations)
+ * Helper to log security events (e.g., failed logins, rate limits, token violations)
  * @param {Object} params
  * @param {string|ObjectId} [params.userId] - User ID if authenticated
  * @param {string} params.action - Security action identifier
@@ -18,19 +16,8 @@ export const logSecurityEvent = async ({
 }) => {
   const timestamp = new Date().toISOString();
   const emailTag = email ? ` [Target: ${email}]` : "";
-  const logMessage = `[SECURITY WARNING] [${timestamp}] [Action: ${action}] [IP: ${ipAddress}]${emailTag} - ${details}`;
+  const userTag = userId ? ` [User: ${userId}]` : "";
+  const logMessage = `[SECURITY WARNING] [${timestamp}] [Action: ${action}] [IP: ${ipAddress}]${userTag}${emailTag} - ${details}`;
 
-  // Log to stdout/stderr so DevSecOps monitors can flag anomalous behaviors
   console.warn(logMessage);
-
-  try {
-    await AuditRepository.create({
-      userId: userId || null,
-      action: `security_${action}`,
-      details: email ? `[Email Target: ${email}] ${details}` : details,
-      ipAddress,
-    });
-  } catch (err) {
-    console.error(`[Security Logger DB Fail] Failed to record security event:`, err.message);
-  }
 };

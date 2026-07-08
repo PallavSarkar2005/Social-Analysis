@@ -27,7 +27,7 @@ export const dispatchScheduledEmails = async (frequency) => {
             
             <div style="padding: 20px; color: #1e293b;">
               <p>Hello,</p>
-              <p>Here is your scheduled <strong>${frequency.toUpperCase()}</strong> analytics report summary containing tracked node indicators and growth rates.</p>
+              <p>Here is your scheduled <strong>${frequency.toUpperCase()}</strong> analytics report summary containing creator indicators and growth rates.</p>
         `;
 
         // 1. Growth Report Section

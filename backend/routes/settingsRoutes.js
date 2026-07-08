@@ -8,6 +8,19 @@ import {
   updateNotificationPreferences,
   getAppearance,
   updateAppearance,
+  getPrivacyPreferences,
+  updatePrivacyPreferences,
+  getSecurityPreferences,
+  updateSecurityPreferences,
+  getAdvancedPreferences,
+  updateAdvancedPreferences,
+  getIntegrations,
+  updateIntegration,
+  listApiKeys,
+  createApiKey,
+  revokeApiKey,
+  getPlanCatalog,
+  exportProfileData,
 } from "../controllers/settingsController.js";
 import { protect, optionalAuth } from "../middleware/authMiddleware.js";
 import { body } from "express-validator";
@@ -15,8 +28,8 @@ import { validateResult } from "../middleware/validationMiddleware.js";
 
 const router = express.Router();
 
-// Public read — guests use defaults; logged-in users get saved prefs (no 401 on boot)
 router.get("/appearance", optionalAuth, getAppearance);
+router.get("/plans", getPlanCatalog);
 
 router.use(protect);
 
@@ -25,6 +38,24 @@ router.post("/email-schedule", updateEmailSchedule);
 
 router.get("/notifications", getNotificationPreferences);
 router.post("/notifications", updateNotificationPreferences);
+
+router.get("/privacy", getPrivacyPreferences);
+router.put("/privacy", updatePrivacyPreferences);
+
+router.get("/security", getSecurityPreferences);
+router.put("/security", updateSecurityPreferences);
+
+router.get("/advanced", getAdvancedPreferences);
+router.put("/advanced", updateAdvancedPreferences);
+
+router.get("/integrations", getIntegrations);
+router.put("/integrations/:id", updateIntegration);
+
+router.get("/api-keys", listApiKeys);
+router.post("/api-keys", createApiKey);
+router.delete("/api-keys/:id", revokeApiKey);
+
+router.get("/data-export/profile", exportProfileData);
 
 router.post(
   "/profile",

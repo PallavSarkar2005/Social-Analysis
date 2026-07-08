@@ -8,14 +8,12 @@ import ErrorRouter from "./errors/ErrorRouter";
 const LandingPage = lazy(() => import("./pages/LandingPage"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const Compare = lazy(() => import("./pages/Compare"));
-const Accounts = lazy(() => import("./pages/Accounts"));
 const Analyzer = lazy(() => import("./pages/Analyzer"));
 const AIInsights = lazy(() => import("./pages/AIInsights"));
 const HistoryLogs = lazy(() => import("./pages/HistoryLogs"));
 const SettingsEngine = lazy(() => import("./pages/SettingsEngine"));
 const Competitors = lazy(() => import("./pages/Competitors"));
 const Reports = lazy(() => import("./pages/Reports"));
-const Activity = lazy(() => import("./pages/Activity"));
 const Login = lazy(() => import("./pages/Login"));
 const Register = lazy(() => import("./pages/Register"));
 const GroupAnalytics = lazy(() => import("./pages/GroupAnalytics"));
@@ -55,14 +53,12 @@ function App() {
           <Route element={<ProtectedRoute />}>
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/compare" element={<Compare />} />
-            <Route path="/accounts" element={<Accounts />} />
             <Route path="/analyzer" element={<Analyzer />} />
             <Route path="/ai-insights" element={<AIInsights />} />
             <Route path="/history" element={<HistoryLogs />} />
             <Route path="/settings" element={<SettingsEngine />} />
             <Route path="/competitors" element={<Competitors />} />
             <Route path="/reports" element={<Reports />} />
-            <Route path="/activity" element={<Activity />} />
             <Route path="/groups/:groupName" element={<GroupAnalytics />} />
             <Route path="/billing" element={<Billing />} />
             <Route path="/profile/:creatorId" element={<PoliticalProfile />} />

@@ -96,12 +96,12 @@ export default function Dashboard() {
                   size={14}
                   className={syncing ? "animate-spin text-indigo-400" : ""}
                 />
-                Batch Sync Nodes
+                Batch Sync Channels
               </button>
-              <Link to="/accounts">
+              <Link to="/analyzer">
                 <button className="h-10 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-xs font-semibold text-white transition flex items-center gap-2 shadow-lg shadow-indigo-600/10">
                   <Plus size={14} />
-                  Add Node
+                  Analyze Creator
                 </button>
               </Link>
             </div>
@@ -125,7 +125,7 @@ export default function Dashboard() {
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 {[
                   {
-                    title: "Tracked Nodes",
+                    title: "Indexed Creators",
                     value: overview?.totalAccounts || 0,
                     icon: Users,
                     color: "text-blue-400 bg-blue-500/10 border-blue-500/20",
@@ -235,8 +235,8 @@ export default function Dashboard() {
                         path: "/compare",
                       },
                       {
-                        title: "Verify Audit Trail",
-                        desc: "View detailed capture tables",
+                        title: "Snapshot History",
+                        desc: "View historical growth captures",
                         path: "/history",
                       },
                       {
@@ -270,7 +270,7 @@ export default function Dashboard() {
                   <div>
                     <div className="flex items-center gap-2 text-indigo-400 font-semibold text-xs uppercase tracking-wider">
                       <Sparkles size={14} className="text-indigo-400 animate-pulse" />
-                      Research Groups
+                      Political Organizations
                     </div>
                     <p className="text-xs text-slate-400 mt-1.5 leading-normal">
                       Select a political organization to explore analytics of all tracked leaders, spokespersons, ministers and official creators.
@@ -369,7 +369,7 @@ export default function Dashboard() {
                 </div>
               </div>
 
-              {/* Tracked Nodes Comparison Table */}
+              {/* Creator Comparison Table */}
               <div className="bg-[#121318]/40 backdrop-blur-md border border-white/[0.06] rounded-2xl p-6 shadow-xl space-y-4">
                 <div className="flex items-center justify-between border-b border-white/[0.06] pb-4">
                   <div>
@@ -377,14 +377,14 @@ export default function Dashboard() {
                       Active Index Matrix
                     </h3>
                     <p className="text-xs text-slate-400 mt-0.5">
-                      Real-time comparison values of all tracked social nodes.
+                      Real-time comparison values of indexed social profiles.
                     </p>
                   </div>
                   <Link
-                    to="/accounts"
+                    to="/compare"
                     className="text-xs font-semibold text-indigo-400 hover:text-indigo-300 flex items-center gap-1"
                   >
-                    Manage Accounts
+                    Open Compare
                     <ArrowRight size={12} />
                   </Link>
                 </div>
@@ -439,11 +439,11 @@ export default function Dashboard() {
                 ) : (
                   <div className="text-center py-10 bg-white/[0.01] border border-white/[0.05] border-dashed rounded-xl space-y-3">
                     <p className="text-xs text-slate-400">
-                      No tracked nodes indexed yet.
+                      No creators indexed yet.
                     </p>
-                    <Link to="/accounts">
+                    <Link to="/analyzer">
                       <button className="h-8 px-3 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-[10px] font-bold text-white transition">
-                        Index First Node
+                        Analyze First Creator
                       </button>
                     </Link>
                   </div>

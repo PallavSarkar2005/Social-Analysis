@@ -1,37 +1,5 @@
 import Account from "../models/Account.js";
 
-export const createAccount = async (req, res, next) => {
-  try {
-    const { name, platform, accountId, profileUrl, state, party } = req.body;
-
-    // Check if account already tracked by this user
-    const existing = await Account.findOne({ accountId, userId: req.user._id });
-    if (existing) {
-      return res.status(400).json({
-        success: false,
-        message: "You are already tracking this account",
-      });
-    }
-
-    const account = await Account.create({
-      name,
-      platform,
-      accountId,
-      profileUrl,
-      userId: req.user._id,
-      state: state || "Unknown State",
-      party: party || "Independent",
-    });
-
-    res.status(201).json({
-      success: true,
-      data: account,
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
 export const getAccounts = async (req, res, next) => {
   try {
     const accounts = await Account.find({ userId: req.user._id, isCompetitor: { $ne: true } });

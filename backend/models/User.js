@@ -78,6 +78,82 @@ const userSchema = new mongoose.Schema(
       type: String,
       default: "",
     },
+    username: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    phone: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    organization: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    designation: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    website: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    country: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    state: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    timeZone: {
+      type: String,
+      default: "UTC",
+      trim: true,
+    },
+    language: {
+      type: String,
+      default: "English",
+      trim: true,
+    },
+    privacyPreferences: {
+      publicProfile: { type: Boolean, default: false },
+      searchVisibility: { type: Boolean, default: false },
+      analyticsSharing: { type: Boolean, default: true },
+      telemetry: { type: Boolean, default: false },
+      personalizedAI: { type: Boolean, default: true },
+    },
+    securityPreferences: {
+      twoFactorEnabled: { type: Boolean, default: false },
+      passkeysEnabled: { type: Boolean, default: false },
+      suspiciousLoginAlerts: { type: Boolean, default: true },
+    },
+    advancedPreferences: {
+      debugMode: { type: Boolean, default: false },
+      experimentalFeatures: { type: Boolean, default: false },
+      forceCacheBypass: { type: Boolean, default: false },
+    },
+    integrations: {
+      youtube: { connected: { type: Boolean, default: false }, connectedAt: Date, lastSyncedAt: Date },
+      twitter: { connected: { type: Boolean, default: false }, connectedAt: Date, lastSyncedAt: Date },
+      instagram: { connected: { type: Boolean, default: false }, connectedAt: Date, lastSyncedAt: Date },
+      drive: { connected: { type: Boolean, default: false }, connectedAt: Date, lastSyncedAt: Date },
+      slack: { connected: { type: Boolean, default: false }, connectedAt: Date, lastSyncedAt: Date },
+      discord: { connected: { type: Boolean, default: false }, connectedAt: Date, lastSyncedAt: Date },
+      zapier: { connected: { type: Boolean, default: false }, connectedAt: Date, lastSyncedAt: Date },
+      n8n: { connected: { type: Boolean, default: false }, connectedAt: Date, lastSyncedAt: Date },
+      webhook: { connected: { type: Boolean, default: false }, connectedAt: Date, lastSyncedAt: Date, url: { type: String, default: "" } },
+      github: { connected: { type: Boolean, default: false }, connectedAt: Date, lastSyncedAt: Date },
+      microsoft: { connected: { type: Boolean, default: false }, connectedAt: Date, lastSyncedAt: Date },
+      linkedin: { connected: { type: Boolean, default: false }, connectedAt: Date, lastSyncedAt: Date },
+    },
     lastLogin: Date,
     loginHistory: [
       {

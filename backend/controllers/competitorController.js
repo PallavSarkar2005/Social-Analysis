@@ -4,7 +4,6 @@ import Snapshot from "../models/Snapshot.js";
 import axios from "axios";
 import { scrapeXProfile } from "../scrapers/xScraper.js";
 import { getChannelStats } from "../services/youtubeService.js";
-import { logActivity } from "../utils/activityLogger.js";
 import { youtubeGet } from "../utils/youtubeClient.js";
 
 // Helper to find YouTube Channel ID by handle/query
@@ -191,8 +190,6 @@ export const addCompetitor = async (req, res, next) => {
       accountName,
     });
 
-    await logActivity(req.user._id, "competitor_added", `Added competitor benchmark: ${accountName} (${platform})`, req);
-
     res.status(201).json({
       success: true,
       data: competitor,
@@ -232,8 +229,6 @@ export const removeCompetitor = async (req, res, next) => {
       account.isCompetitor = false;
       await account.save();
     }
-
-    await logActivity(req.user._id, "competitor_removed", `Stopped tracking competitor: ${competitor.accountName} (${competitor.platform})`, req);
 
     res.json({
       success: true,

@@ -41,12 +41,6 @@ const testAllEndpoints = async () => {
         url: `${BASE_URL}/api/accounts`,
       },
       {
-        name: "POST /api/accounts (dry run error check)",
-        method: "post",
-        url: `${BASE_URL}/api/accounts`,
-        data: {}, // expect failure 500 or validation fail
-      },
-      {
         name: "GET /api/analytics/dashboard-overview",
         method: "get",
         url: `${BASE_URL}/api/analytics/dashboard-overview`,

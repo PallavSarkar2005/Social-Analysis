@@ -28,16 +28,6 @@ class ErrorLogger {
 
     console.error(`[Error Boundary - ${requestId}]`, telemetry);
 
-    // Save silently to the backend database activity logs
-    try {
-      await client.post("/api/activity/log", {
-        action: `err_${type}`,
-        details: telemetry,
-      });
-    } catch (err) {
-      console.warn("Telemetry endpoint failed to capture log:", err.message);
-    }
-
     return telemetry;
   }
 }

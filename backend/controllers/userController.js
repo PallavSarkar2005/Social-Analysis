@@ -5,7 +5,9 @@ import TrackedCompetitor from "../models/TrackedCompetitor.js";
 import SavedReport from "../models/SavedReport.js";
 import Snapshot from "../models/Snapshot.js";
 import EmailSchedule from "../models/EmailSchedule.js";
-import ActivityLog from "../models/ActivityLog.js";
+import Subscription from "../models/Subscription.js";
+import Usage from "../models/Usage.js";
+import { PLAN_LIMITS } from "../middleware/billingMiddleware.js";
 import { logSecurityEvent } from "../utils/securityLogger.js";
 import { sendEmailReport } from "../services/emailService.js";
 import {
@@ -38,6 +40,16 @@ export const updateProfile = async (req, res, next) => {
     if (avatar !== undefined) user.avatar = avatar.trim();
     if (bio !== undefined) user.bio = bio.trim();
 
+    const profileFields = [
+      "username", "phone", "organization", "designation",
+      "website", "country", "state", "timeZone", "language",
+    ];
+    for (const field of profileFields) {
+      if (req.body[field] !== undefined) {
+        user[field] = String(req.body[field]).trim();
+      }
+    }
+
     await user.save();
 
     res.json({
@@ -51,6 +63,17 @@ export const updateProfile = async (req, res, next) => {
         plan: user.plan,
         avatar: user.avatar,
         bio: user.bio,
+        username: user.username,
+        phone: user.phone,
+        organization: user.organization,
+        designation: user.designation,
+        website: user.website,
+        country: user.country,
+        state: user.state,
+        timeZone: user.timeZone,
+        language: user.language,
+        updatedAt: user.updatedAt,
+        createdAt: user.createdAt,
       },
     });
   } catch (error) {
@@ -204,7 +227,6 @@ export const deleteAccount = async (req, res, next) => {
     await SavedReport.deleteMany({ userId: user._id });
     await Snapshot.deleteMany({ userId: user._id });
     await EmailSchedule.deleteMany({ userId: user._id });
-    await ActivityLog.deleteMany({ userId: user._id });
     await revokeAllSessions(user._id);
 
     await user.deleteOne();
@@ -273,6 +295,92 @@ export const revokeSession = async (req, res, next) => {
       success: true,
       message: isCurrent ? "Current session revoked. Logging out..." : "Session successfully revoked",
       data: { isCurrent },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Reset workspace data (keeps user account)
+// @route   POST /api/users/reset-workspace
+// @access  Private
+export const resetWorkspace = async (req, res, next) => {
+  try {
+    const userId = req.user._id;
+
+    await Account.deleteMany({ userId });
+    await TrackedCompetitor.deleteMany({ userId });
+    await SavedReport.deleteMany({ userId });
+    await Snapshot.deleteMany({ userId });
+
+    await logSecurityEvent({
+      userId,
+      action: "workspace_reset",
+      details: "User reset all workspace data (accounts, competitors, reports, snapshots).",
+    });
+
+    res.json({
+      success: true,
+      message: "Workspace data reset successfully.",
+      data: {},
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Get account registry stats for settings
+// @route   GET /api/users/account-stats
+// @access  Private
+export const getAccountStats = async (req, res, next) => {
+  try {
+    const user = await User.findById(req.user._id);
+    if (!user) {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+
+    let subscription = await Subscription.findOne({ userId: user._id });
+    if (!subscription) {
+      subscription = { plan: "free", status: "active" };
+    }
+
+    let usage = await Usage.findOne({
+      userId: user._id,
+      billingCycleStart: { $lte: new Date() },
+      billingCycleEnd: { $gte: new Date() },
+    });
+
+    const limits = PLAN_LIMITS[subscription.plan] || PLAN_LIMITS.free;
+    const reportsCount = usage?.reportsCount ?? 0;
+    const aiRequestsCount = usage?.aiRequestsCount ?? 0;
+    const maxApiCalls = limits.maxAiRequestsCount + limits.maxReportsCount;
+
+    const [reportDocs, snapshotDocs] = await Promise.all([
+      SavedReport.countDocuments({ userId: user._id }),
+      Snapshot.countDocuments({ userId: user._id }),
+    ]);
+
+    const storageBytes = (reportDocs * 48_000) + (snapshotDocs * 12_000);
+    const storageMb = Number((storageBytes / (1024 * 1024)).toFixed(1));
+
+    res.json({
+      success: true,
+      data: {
+        accountType: user.role || "user",
+        memberSince: user.createdAt,
+        userId: user._id,
+        currentPlan: subscription.plan || user.plan || "free",
+        workspaceId: `ws_${user._id.toString().substring(0, 8)}`,
+        accountStatus: "active",
+        isEmailVerified: user.isEmailVerified ?? false,
+        storageUsedMb: storageMb,
+        apiUsage: {
+          used: aiRequestsCount + reportsCount,
+          limit: maxApiCalls,
+          aiRequestsCount,
+          reportsCount,
+        },
+      },
     });
   } catch (error) {
     next(error);

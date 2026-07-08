@@ -3,25 +3,38 @@ import { Bell, Mail, ToggleLeft, ToggleRight, Sparkles, ShieldCheck, HelpCircle 
 import toast from "react-hot-toast";
 
 export default function Notifications({
-  notificationPrefs,
+  notificationPrefs = {
+    growthSpike: true,
+    newAiReport: true,
+    snapshotCompleted: true,
+    milestoneReached: true,
+  },
   onUpdatePrefs,
-  emailSchedule,
+  emailSchedule = {
+    frequency: "weekly",
+    reportTypes: ["growth"],
+    emailAddress: "",
+    isActive: false,
+  },
   onUpdateSchedule,
   loadingPrefs,
   loadingSchedule,
 }) {
+  const prefs = notificationPrefs ?? {};
+  const schedule = emailSchedule ?? {};
+
   const togglePref = async (field) => {
-    const nextPrefs = { ...notificationPrefs, [field]: !notificationPrefs[field] };
+    const nextPrefs = { ...prefs, [field]: !prefs[field] };
     await onUpdatePrefs(nextPrefs);
   };
 
   const handleFrequencyChange = async (e) => {
-    const nextSchedule = { ...emailSchedule, frequency: e.target.value };
+    const nextSchedule = { ...schedule, frequency: e.target.value };
     await onUpdateSchedule(nextSchedule);
   };
 
   const handleActiveToggle = async () => {
-    const nextSchedule = { ...emailSchedule, isActive: !emailSchedule.isActive };
+    const nextSchedule = { ...schedule, isActive: !schedule.isActive };
     await onUpdateSchedule(nextSchedule);
   };
 
@@ -52,12 +65,12 @@ export default function Notifications({
                   disabled={loadingPrefs}
                   onClick={() => togglePref("growthSpike")}
                   className={`w-10 h-6 rounded-full p-1 transition-colors duration-200 outline-none flex-shrink-0 disabled:opacity-50 ${
-                    notificationPrefs.growthSpike ? "bg-indigo-600" : "bg-[#181b24] border border-white/[0.08]"
+                    prefs.growthSpike ? "bg-indigo-600" : "bg-[#181b24] border border-white/[0.08]"
                   }`}
                 >
                   <div
                     className={`w-4 h-4 rounded-full bg-white transition-transform duration-200 ${
-                      notificationPrefs.growthSpike ? "translate-x-4" : "translate-x-0"
+                      prefs.growthSpike ? "translate-x-4" : "translate-x-0"
                     }`}
                   />
                 </button>
@@ -72,12 +85,12 @@ export default function Notifications({
                   disabled={loadingPrefs}
                   onClick={() => togglePref("newAiReport")}
                   className={`w-10 h-6 rounded-full p-1 transition-colors duration-200 outline-none flex-shrink-0 disabled:opacity-50 ${
-                    notificationPrefs.newAiReport ? "bg-indigo-600" : "bg-[#181b24] border border-white/[0.08]"
+                    prefs.newAiReport ? "bg-indigo-600" : "bg-[#181b24] border border-white/[0.08]"
                   }`}
                 >
                   <div
                     className={`w-4 h-4 rounded-full bg-white transition-transform duration-200 ${
-                      notificationPrefs.newAiReport ? "translate-x-4" : "translate-x-0"
+                      prefs.newAiReport ? "translate-x-4" : "translate-x-0"
                     }`}
                   />
                 </button>
@@ -92,12 +105,12 @@ export default function Notifications({
                   disabled={loadingPrefs}
                   onClick={() => togglePref("snapshotCompleted")}
                   className={`w-10 h-6 rounded-full p-1 transition-colors duration-200 outline-none flex-shrink-0 disabled:opacity-50 ${
-                    notificationPrefs.snapshotCompleted ? "bg-indigo-600" : "bg-[#181b24] border border-white/[0.08]"
+                    prefs.snapshotCompleted ? "bg-indigo-600" : "bg-[#181b24] border border-white/[0.08]"
                   }`}
                 >
                   <div
                     className={`w-4 h-4 rounded-full bg-white transition-transform duration-200 ${
-                      notificationPrefs.snapshotCompleted ? "translate-x-4" : "translate-x-0"
+                      prefs.snapshotCompleted ? "translate-x-4" : "translate-x-0"
                     }`}
                   />
                 </button>
@@ -112,12 +125,12 @@ export default function Notifications({
                   disabled={loadingPrefs}
                   onClick={() => togglePref("milestoneReached")}
                   className={`w-10 h-6 rounded-full p-1 transition-colors duration-200 outline-none flex-shrink-0 disabled:opacity-50 ${
-                    notificationPrefs.milestoneReached ? "bg-indigo-600" : "bg-[#181b24] border border-white/[0.08]"
+                    prefs.milestoneReached ? "bg-indigo-600" : "bg-[#181b24] border border-white/[0.08]"
                   }`}
                 >
                   <div
                     className={`w-4 h-4 rounded-full bg-white transition-transform duration-200 ${
-                      notificationPrefs.milestoneReached ? "translate-x-4" : "translate-x-0"
+                      prefs.milestoneReached ? "translate-x-4" : "translate-x-0"
                     }`}
                   />
                 </button>
@@ -144,22 +157,22 @@ export default function Notifications({
                     disabled={loadingSchedule}
                     onClick={handleActiveToggle}
                     className={`w-10 h-6 rounded-full p-1 transition-colors duration-200 outline-none flex-shrink-0 disabled:opacity-50 ${
-                      emailSchedule.isActive ? "bg-indigo-600" : "bg-[#181b24] border border-white/[0.08]"
+                      schedule.isActive ? "bg-indigo-600" : "bg-[#181b24] border border-white/[0.08]"
                     }`}
                   >
                     <div
                       className={`w-4 h-4 rounded-full bg-white transition-transform duration-200 ${
-                        emailSchedule.isActive ? "translate-x-4" : "translate-x-0"
+                        schedule.isActive ? "translate-x-4" : "translate-x-0"
                       }`}
                     />
                   </button>
                 </div>
 
-                {emailSchedule.isActive && (
+                {schedule.isActive && (
                   <div className="space-y-1.5 pt-2">
                     <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Digest Frequency</label>
                     <select
-                      value={emailSchedule.frequency}
+                      value={schedule.frequency}
                       onChange={handleFrequencyChange}
                       disabled={loadingSchedule}
                       className="w-full h-10 px-3 bg-[#181b24] border border-white/[0.06] rounded-xl text-xs text-white focus:outline-none focus:border-indigo-500/50"
@@ -175,7 +188,7 @@ export default function Notifications({
 
             <div className="border-t border-white/[0.04] pt-4 mt-6 text-[10px] text-slate-500 flex items-center gap-2">
               <ShieldCheck size={12} className="text-indigo-400" />
-              <span>Receiving to: {emailSchedule.emailAddress || "your email"}</span>
+              <span>Receiving to: {schedule.emailAddress || "your email"}</span>
             </div>
           </div>
         </div>

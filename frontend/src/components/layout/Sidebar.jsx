@@ -4,7 +4,6 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   LayoutDashboard,
   BarChart3,
-  Users,
   Sparkles,
   Settings,
   Menu,
@@ -28,12 +27,10 @@ export default function Sidebar() {
     { name: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
     { name: "Analyzer", path: "/analyzer", icon: Search },
     { name: "Creator Compare", path: "/compare", icon: BarChart3 },
-    { name: "Tracked Nodes", path: "/accounts", icon: Users },
     { name: "Competitors", path: "/competitors", icon: Trophy },
     { name: "Saved Reports", path: "/reports", icon: FileText },
     { name: "AI Strategy", path: "/ai-insights", icon: Brain },
     { name: "Snapshot History", path: "/history", icon: History },
-    { name: "Audit Trail", path: "/activity", icon: History },
   ];
 
   const toggleSidebar = () => setIsOpen(!isOpen);
