@@ -25,7 +25,6 @@ import { csrfProtection } from "./middleware/csrfMiddleware.js";
 
 // Route imports
 import authRoutes from "./routes/authRoutes.js";
-import mediaRoutes from "./routes/mediaRoutes.js";
 import youtubeRoutes from "./routes/youtubeRoutes.js";
 import accountRoutes from "./routes/accountRoutes.js";
 import analyticsRoutes from "./routes/analyticsRoutes.js";
@@ -45,6 +44,7 @@ import groupRoutes from "./routes/groupRoutes.js";
 import userRoutes from "./routes/userRoutes.js";
 import billingRoutes from "./routes/billingRoutes.js";
 import profileRoutes from "./routes/profileRoutes.js";
+import sharedRoutes from "./routes/sharedRoutes.js";
 
 // Jobs & Schedulers
 import { syncAllYoutubeChannels } from "./jobs/youtubeSyncJob.js";
@@ -59,6 +59,10 @@ await connectDB();
 if (process.env.NODE_ENV !== "test") {
   startSnapshotJob();
   startEmailReportJobs();
+  // One-time legacy Intelligence Hub backfill (idempotent, no duplicates)
+  import("./services/hubIndexService.js")
+    .then(({ backfillAllHubIndexes }) => backfillAllHubIndexes())
+    .catch((err) => console.warn("[HubIndex] startup backfill skipped:", err.message));
 }
 
 const app = express();
@@ -221,13 +225,13 @@ app.use("/api", apiLimiter);
 
 // Specific routes
 app.use("/api/auth", strictLimiter, authRoutes);
-app.use("/api/media", strictLimiter, mediaRoutes);
 app.use("/api/analyzer", strictLimiter, analyzerRoutes);
 app.use("/api/compare", strictLimiter, compareRoutes);
 app.use("/api/ai", strictLimiter, aiRoutes);
 app.use("/api/ai", strictLimiter, aiChannelRoutes);
 app.use("/api/competitors", strictLimiter, competitorRoutes);
 app.use("/api/reports", strictLimiter, reportRoutes);
+app.use("/api/shared", apiLimiter, sharedRoutes);
 app.use("/api/notifications", strictLimiter, notificationRoutes);
 app.use("/api/exports", strictLimiter, exportRoutes);
 app.use("/api/settings", strictLimiter, settingsRoutes);

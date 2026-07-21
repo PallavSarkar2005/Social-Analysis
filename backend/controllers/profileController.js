@@ -66,6 +66,8 @@ const buildProfileReadResponse = (account, profile) => {
   const building = !profile || syncStatus === "pending" || syncStatus === "building";
 
   return {
+    _id: profile?._id || null,
+    id: profile?._id || null,
     account,
     syncStatus: building ? "building" : syncStatus,
     syncProgress: profile?.syncProgress || {
@@ -90,12 +92,28 @@ const buildProfileReadResponse = (account, profile) => {
     sources: profile ? sanitizeSourcesForResponse(profile.sources) : [],
     confidenceScore: profile?.confidenceScore ?? 0,
     confidenceBreakdown: profile?.confidenceBreakdown || {},
-    intelligenceOverview: profile?.intelligenceOverview || [],
-    politicalStatistics: profile?.politicalStatistics || [],
-    relationships: profile?.relationships || { nodes: [], edges: [] },
-    fieldConflicts: profile?.fieldConflicts || [],
+    intelligenceOverview: Array.isArray(profile?.intelligenceOverview)
+      ? profile.intelligenceOverview
+      : [],
+    politicalStatistics: Array.isArray(profile?.politicalStatistics)
+      ? profile.politicalStatistics
+      : [],
+    relationships: {
+      nodes: Array.isArray(profile?.relationships?.nodes)
+        ? profile.relationships.nodes
+        : [],
+      edges: Array.isArray(profile?.relationships?.edges)
+        ? profile.relationships.edges.map((edge) => ({
+            ...edge,
+            relation: edge?.relation || "related",
+          }))
+        : [],
+    },
+    fieldConflicts: Array.isArray(profile?.fieldConflicts) ? profile.fieldConflicts : [],
     sectionMeta: profile?.sectionMeta || {},
-    verificationCatalog: profile?.verificationCatalog || [],
+    verificationCatalog: Array.isArray(profile?.verificationCatalog)
+      ? profile.verificationCatalog
+      : [],
     lastVerified: profile?.lastVerified || profile?.lastSynced || null,
     lastSynced: profile?.lastSynced || null,
     profileSchemaVersion: profile?.profileSchemaVersion ?? 0,
@@ -348,16 +366,100 @@ export const getInfluence = async (req, res, next) => {
     if (!result) return res.status(404).json({ success: false, message: "Profile not found" });
 
     const profile = await PoliticalProfile.findOne({ accountId: result.account._id })
-      .select("influence geographicReach")
+      .select("influence geographicReach geographicMeta")
       .lean();
+
+    const influenceRaw =
+      profile?.influence && typeof profile.influence === "object" && !Array.isArray(profile.influence)
+        ? profile.influence
+        : {};
+    const influence = {
+      ...influenceRaw,
+      explanation:
+        typeof influenceRaw.explanation === "string"
+          ? influenceRaw.explanation
+          : influenceRaw.explanation != null
+            ? String(influenceRaw.explanation)
+            : "",
+      metrics: Array.isArray(influenceRaw.metrics)
+        ? influenceRaw.metrics.map((m) => ({
+            ...m,
+            label: m?.label != null ? String(m.label) : "",
+            tooltip: m?.tooltip != null ? String(m.tooltip) : "",
+            sources: Array.isArray(m?.sources)
+              ? m.sources
+                  .map((s) =>
+                    typeof s === "string"
+                      ? s
+                      : s?.name || s?.label || s?.source || ""
+                  )
+                  .filter(Boolean)
+              : [],
+          }))
+        : [],
+    };
+
+    const geographicReach = (Array.isArray(profile?.geographicReach) ? profile.geographicReach : []).map(
+      (row) => {
+        const evidence = Array.isArray(row?.evidence)
+          ? row.evidence.map((ev) => ({
+              type: ev?.type || "evidence",
+              label: ev?.label != null ? String(ev.label) : "",
+              detail: ev?.detail != null ? String(ev.detail) : "",
+              source: ev?.source != null ? String(ev.source) : "",
+            }))
+          : [];
+        const primarySources = Array.isArray(row?.primarySources)
+          ? row.primarySources
+              .map((s) =>
+                typeof s === "string" ? s : s?.name || s?.label || s?.source || ""
+              )
+              .filter(Boolean)
+          : evidence.map((ev) => ev.source).filter(Boolean);
+
+        return {
+          ...row,
+          evidence,
+          primarySources,
+          source:
+            typeof row?.source === "string"
+              ? row.source
+              : primarySources.join("; "),
+        };
+      }
+    );
+
+    const geographicMeta = profile?.geographicMeta || {
+      status: "monitoring",
+      message:
+        "Geographic monitoring active. State influence will populate as verified evidence syncs.",
+      verifiedCoverage: 0,
+      regionalSummary: {
+        primaryRegion: null,
+        secondaryRegions: [],
+        emergingRegions: [],
+        verifiedCoverage: 0,
+      },
+    };
+
+    if (geographicMeta.regionalSummary) {
+      geographicMeta.regionalSummary = {
+        ...geographicMeta.regionalSummary,
+        secondaryRegions: Array.isArray(geographicMeta.regionalSummary.secondaryRegions)
+          ? geographicMeta.regionalSummary.secondaryRegions.map(String)
+          : [],
+        emergingRegions: Array.isArray(geographicMeta.regionalSummary.emergingRegions)
+          ? geographicMeta.regionalSummary.emergingRegions.map(String)
+          : [],
+      };
+    }
 
     res.json({
       success: true,
       data: {
-        influence: profile?.influence || {},
-        geographicReach: Array.isArray(profile?.geographicReach)
-          ? profile.geographicReach
-          : [],
+        influence,
+        geographicReach,
+        geographicMeta,
       },
     });
     console.log("SUCCESS getInfluence");
@@ -378,11 +480,47 @@ export const getAiInsights = async (req, res, next) => {
       .select("aiInsights aiSummary")
       .lean();
 
+    const rawSummary =
+      profile?.aiSummary && typeof profile.aiSummary === "object" && !Array.isArray(profile.aiSummary)
+        ? profile.aiSummary
+        : typeof profile?.aiSummary === "string"
+          ? { overview: profile.aiSummary }
+          : {};
+    const summary = Object.fromEntries(
+      Object.entries(rawSummary).map(([key, value]) => [
+        key,
+        value == null
+          ? ""
+          : typeof value === "string" || typeof value === "number"
+            ? String(value)
+            : typeof value === "object"
+              ? [value.label, value.detail, value.source].filter(Boolean).join(" — ") || ""
+              : String(value),
+      ])
+    );
+
+    const insights = Array.isArray(profile?.aiInsights)
+      ? profile.aiInsights
+          .map((item) =>
+            typeof item === "string"
+              ? item
+              : item == null
+                ? ""
+                : typeof item === "object"
+                  ? [item.label, item.detail, item.source].filter(Boolean).join(" — ") ||
+                    item.summary ||
+                    item.text ||
+                    ""
+                  : String(item)
+          )
+          .filter(Boolean)
+      : [];
+
     res.json({
       success: true,
       data: {
-        insights: Array.isArray(profile?.aiInsights) ? profile.aiInsights : [],
-        summary: profile?.aiSummary || {},
+        insights,
+        summary,
       },
     });
     console.log("SUCCESS getAiInsights");
@@ -449,8 +587,7 @@ export const getSimilar = async (req, res, next) => {
         name: s.name,
         party: s.party,
         state: s.state,
-        profileImage: s.profileImage || s.uploadedImage || s.thumbnail || "",
-        uploadedImage: s.uploadedImage || "",
+        profileImage: s.profileImage || s.resolvedImage || s.thumbnail || "",
         resolvedImage: s.resolvedImage || "",
         thumbnail: s.thumbnail || "",
         imageSource: s.imageSource || "youtube",

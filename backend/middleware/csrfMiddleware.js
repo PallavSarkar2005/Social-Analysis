@@ -6,9 +6,10 @@ import {
 
 export const csrfProtection = async (req, res, next) => {
   try {
-    await ensureCsrfToken(req, res);
+    const isSafeRequest = shouldBypassCsrfValidation(req);
+    await ensureCsrfToken(req, res, { createIfMissing: isSafeRequest });
 
-    if (shouldBypassCsrfValidation(req)) {
+    if (isSafeRequest) {
       return next();
     }
 

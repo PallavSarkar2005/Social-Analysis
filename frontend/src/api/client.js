@@ -41,13 +41,23 @@ const clearCsrfToken = () => {
   csrfFetchPromise = null;
 };
 
-export const fetchCsrfToken = async () => {
-  if (csrfTokenInMemory) {
+const isCsrfError = (error) => {
+  const status = error?.response?.status;
+  const msg = (error?.response?.data?.message || "").toLowerCase();
+  return status === 403 && msg.includes("csrf");
+};
+
+const requestCsrfToken = async ({ force = false } = {}) => {
+  if (!force && csrfTokenInMemory) {
     return csrfTokenInMemory;
   }
 
-  if (csrfFetchPromise) {
+  if (!force && csrfFetchPromise) {
     return csrfFetchPromise;
+  }
+
+  if (force) {
+    clearCsrfToken();
   }
 
   csrfFetchPromise = (async () => {
@@ -73,8 +83,28 @@ export const fetchCsrfToken = async () => {
   return csrfFetchPromise;
 };
 
+/** Returns cached CSRF token when available. */
+export const fetchCsrfToken = () => requestCsrfToken();
+
+/** Always fetches a fresh CSRF token from the server. */
+export const refreshCsrfToken = () => requestCsrfToken({ force: true });
+
+const AUTH_MUTATION_PATHS = [
+  "/auth/login",
+  "/auth/register",
+  "/auth/logout",
+  "/auth/refresh",
+  "/auth/forgot-password",
+  "/auth/reset-password",
+  "/auth/google",
+  "/auth/change-password",
+];
+
+const isAuthMutation = (url = "") =>
+  AUTH_MUTATION_PATHS.some((path) => url.includes(path));
+
 export const restoreSession = async () => {
-  await fetchCsrfToken();
+  await refreshCsrfToken();
   try {
     const response = await client.post(
       "/api/auth/refresh",
@@ -112,7 +142,10 @@ client.interceptors.request.use(
 
     // Ensure a synchronizer token exists before any state-changing request.
     if (!safeMethods.includes(config.method?.toLowerCase())) {
-      const csrfToken = csrfTokenInMemory || (await fetchCsrfToken());
+      const url = config.url || "";
+      const csrfToken = isAuthMutation(url)
+        ? await refreshCsrfToken()
+        : csrfTokenInMemory || (await fetchCsrfToken());
       if (csrfToken) {
         config.headers["X-XSRF-TOKEN"] = csrfToken;
       } else if (config.headers["X-XSRF-TOKEN"]) {
@@ -145,6 +178,24 @@ client.interceptors.response.use(
       status: error.response?.status,
       message: error.response?.data?.message || error.message,
     });
+
+    // Retry once after refreshing CSRF when the header/cookie pair is out of sync.
+    if (
+      isCsrfError(error) &&
+      originalRequest &&
+      !originalRequest._csrfRetry
+    ) {
+      originalRequest._csrfRetry = true;
+      clearCsrfToken();
+      const csrfToken = await refreshCsrfToken();
+      if (csrfToken) {
+        originalRequest.headers = {
+          ...originalRequest.headers,
+          "X-XSRF-TOKEN": csrfToken,
+        };
+        return client(originalRequest);
+      }
+    }
 
     // Check if error is 401 (Unauthorized) and not already retried
     if (
@@ -201,12 +252,14 @@ client.interceptors.response.use(
     const message = (error.message || "").toLowerCase();
     const url = originalRequest?.url || "";
 
-    // Skip redirects for auth, CSRF, and refresh token endpoints — these are handled by AuthContext
+    // Skip redirects for auth, CSRF, refresh, profile reads, and background hub auto-save.
+    // Auto-save must never eject the user from an analysis page on quota / server errors.
     const skipRedirect =
       url.includes("/auth/") ||
       url.includes("/csrf") ||
       url.includes("/settings/appearance") ||
       url.includes("/api/profile/") ||
+      url.includes("/api/reports/upsert") ||
       originalRequest?._skipErrorRedirect;
 
     if (!skipRedirect && typeof window !== "undefined") {

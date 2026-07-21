@@ -1,5 +1,6 @@
 import React from "react";
 import { Shield } from "lucide-react";
+import { asObject, asNumber, safeText } from "../../utils/safeData";
 
 const CATEGORY_LABELS = {
   identity: "Identity",
@@ -12,11 +13,12 @@ const CATEGORY_LABELS = {
 };
 
 export default function ConfidenceBreakdown({ breakdown = {} }) {
-  const entries = Object.entries(breakdown ?? {}).filter(
-    ([key, value]) => key !== "overall" && value > 0
+  const safeBreakdown = asObject(breakdown);
+  const entries = Object.entries(safeBreakdown).filter(
+    ([key, value]) => key !== "overall" && asNumber(value, 0) > 0
   );
 
-  if (entries.length === 0 && !breakdown.overall) return null;
+  if (entries.length === 0 && !asNumber(safeBreakdown.overall, 0)) return null;
 
   return (
     <div className="rounded-2xl border border-white/[0.08] bg-[#121318]/40 p-5">
@@ -25,28 +27,33 @@ export default function ConfidenceBreakdown({ breakdown = {} }) {
         <h4 className="text-xs font-bold uppercase tracking-widest text-slate-400">
           Confidence Breakdown
         </h4>
-        {breakdown.overall > 0 && (
+        {asNumber(safeBreakdown.overall, 0) > 0 && (
           <span className="ml-auto rounded-lg bg-emerald-500/10 px-2.5 py-1 text-sm font-extrabold text-emerald-300 ring-1 ring-emerald-500/20">
-            {breakdown.overall}%
+            {asNumber(safeBreakdown.overall, 0)}%
           </span>
         )}
       </div>
 
       <div className="space-y-3">
-        {entries.map(([key, value]) => (
-          <div key={key} className="space-y-1">
-            <div className="flex items-center justify-between text-[10px]">
-              <span className="font-semibold text-slate-400">{CATEGORY_LABELS[key] || key}</span>
-              <span className="font-bold text-white">{value}%</span>
+        {entries.map(([key, value]) => {
+          const pct = asNumber(value, 0);
+          return (
+            <div key={key} className="space-y-1">
+              <div className="flex items-center justify-between text-[10px]">
+                <span className="font-semibold text-slate-400">
+                  {CATEGORY_LABELS[key] || safeText(key)}
+                </span>
+                <span className="font-bold text-white">{pct}%</span>
+              </div>
+              <div className="h-1.5 overflow-hidden rounded-full bg-white/[0.04]">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-indigo-500 transition-all duration-700"
+                  style={{ width: `${Math.min(100, pct)}%` }}
+                />
+              </div>
             </div>
-            <div className="h-1.5 overflow-hidden rounded-full bg-white/[0.04]">
-              <div
-                className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-indigo-500 transition-all duration-700"
-                style={{ width: `${value}%` }}
-              />
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

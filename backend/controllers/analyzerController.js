@@ -279,9 +279,6 @@ export const analyzeYoutubeUrl = async (req, res, next) => {
     const selectedParty = req.body?.party || "Independent";
     const resolvedGroup = resolvePoliticalGroup(selectedGroup, selectedParty);
     const forceRefresh = req.body?.forceRefresh === true || req.body?.forceRefresh === "true";
-    // profileImage is a URL string like /uploads/filename.jpg — extracted before any further processing
-    const submittedProfileImage = (req.body?.profileImage || "").trim();
-    console.log("STEP 1.3: Submitted profileImage =", submittedProfileImage || "(none)");
     if (!rawUrl || typeof rawUrl !== "string") {
       console.error("STEP 3 Error: URL parsing failed due to empty/invalid url parameter");
       return res.status(400).json({
@@ -427,8 +424,7 @@ export const analyzeYoutubeUrl = async (req, res, next) => {
         title: cachedAccount.name,
         description: cachedAccount.description || "",
         thumbnail: cachedAccount.thumbnail || "",
-        profileImage: cachedAccount.profileImage || cachedAccount.uploadedImage || cachedAccount.thumbnail || "",
-        uploadedImage: cachedAccount.uploadedImage || "",
+        profileImage: cachedAccount.profileImage || cachedAccount.resolvedImage || cachedAccount.thumbnail || "",
         resolvedImage: cachedAccount.resolvedImage || "",
         imageSource: cachedAccount.imageSource || "youtube",
         subscribers: cachedAccount.subscribers || 0,
@@ -493,61 +489,17 @@ export const analyzeYoutubeUrl = async (req, res, next) => {
       cacheExpiresAt,
     };
 
-    // ── Resolve Image: 4-Tier Priority ─────────────────────────────────────────
+    // ── Resolve Image: official → YouTube thumbnail ───────────────────────────
     //
-    // Priority 1 — User just uploaded a new image (highest, always replaces everything)
-    // Priority 2 — Global previously uploaded image for this creator (same channelId, any user)
-    // Priority 3 — Official public image resolved via Wikimedia/dictionary
-    // Priority 4 — YouTube channel thumbnail (always available)
-    //
-    // IMPORTANT: If Priority 1 is set, it MUST replace whatever was stored before.
+    // Priority 1 — Official public image resolved via Wikimedia/dictionary
+    // Priority 2 — YouTube channel thumbnail (always available when fetched)
     // ────────────────────────────────────────────────────────────────────────────
 
-    let uploadedImage = "";
     let resolvedImage = "";
     let profileImage = "";
     let imageSource = "youtube";
 
-    console.log("[IMAGE] submittedProfileImage =", submittedProfileImage || "(none)");
-
-    if (submittedProfileImage) {
-      // ── Priority 1: Brand-new user upload → always wins ──────────────────────
-      uploadedImage = submittedProfileImage;
-      profileImage  = submittedProfileImage;
-      imageSource   = "user";
-      updateFields.uploadedBy = req.user._id;
-      updateFields.uploadedAt = new Date();
-      console.log("[IMAGE] Priority 1 (user upload) selected:", uploadedImage);
-
-    } else {
-      // ── No new upload this run: inherit the best image that already exists ───
-      // Fetch global uploaded image (any user, same creator)
-      let globalUploadedImage = "";
-      const existingWithUpload = await Account.findOne({
-        accountId: channelId,
-        uploadedImage: { $exists: true, $ne: "" },
-      }).sort({ imageUpdatedAt: -1, updatedAt: -1 }).lean();
-      if (existingWithUpload?.uploadedImage) {
-        globalUploadedImage = existingWithUpload.uploadedImage;
-      }
-
-      // Also check the current user's existing account
-      const localUploadedImage = account?.uploadedImage || "";
-
-      if (globalUploadedImage) {
-        uploadedImage = globalUploadedImage;
-        profileImage  = globalUploadedImage;
-        imageSource   = "user";
-        console.log("[IMAGE] Priority 2a (global uploaded) selected:", uploadedImage);
-      } else if (localUploadedImage) {
-        uploadedImage = localUploadedImage;
-        profileImage  = localUploadedImage;
-        imageSource   = "user";
-        console.log("[IMAGE] Priority 2b (local uploaded) selected:", uploadedImage);
-      }
-    }
-
-    // ── Priority 3: Official resolved image (Wikimedia / verified dictionary) ──
+    // ── Priority 1: Official resolved image (Wikimedia / verified dictionary) ──
     let globalResolvedImage = "";
     const existingWithResolved = await Account.findOne({
       accountId: channelId,
@@ -564,28 +516,33 @@ export const analyzeYoutubeUrl = async (req, res, next) => {
 
     resolvedImage = resolvedOfficialImage || globalResolvedImage || account?.resolvedImage || (isDataCached && accountData.resolvedImage) || "";
 
-    // Use resolved image as profileImage only if no user upload exists
-    if (!uploadedImage && resolvedImage) {
+    if (resolvedImage) {
       profileImage = resolvedImage;
       imageSource  = "official";
-      console.log("[IMAGE] Priority 3 (resolved official) selected:", profileImage);
+      console.log("[IMAGE] Priority 1 (resolved official) selected:", profileImage);
     }
 
-    // ── Priority 4: YouTube channel thumbnail ─────────────────────────────────
+    // ── Priority 2: YouTube channel thumbnail ─────────────────────────────────
     if (!profileImage) {
       profileImage = accountData.thumbnail;
       imageSource  = accountData.thumbnail ? "youtube" : "default";
-      console.log("[IMAGE] Priority 4 (youtube thumbnail) selected:", profileImage);
+      console.log("[IMAGE] Priority 2 (youtube thumbnail) selected:", profileImage);
     }
 
     // Stamp the final image state into the update fields
-    updateFields.uploadedImage   = uploadedImage;
     updateFields.resolvedImage   = resolvedImage;
     updateFields.profileImage    = profileImage;
     updateFields.imageSource     = imageSource;
     updateFields.imageUpdatedAt  = new Date();
 
-    console.log("[IMAGE] Final state → uploadedImage:", uploadedImage, "| profileImage:", profileImage, "| imageSource:", imageSource);
+    console.log("[IMAGE] Final state → profileImage:", profileImage, "| imageSource:", imageSource);
+
+    // Legacy manual-upload fields to strip from documents (schema no longer defines them)
+    const unsetLegacyUpload = {
+      uploadedImage: "",
+      uploadedBy: "",
+      uploadedAt: "",
+    };
 
     // ── Persist: Create or Update the Account document ────────────────────────
     if (!account) {
@@ -595,10 +552,10 @@ export const analyzeYoutubeUrl = async (req, res, next) => {
       console.log("[DB] Updating existing Account record:", account._id.toString());
       account = await Account.findOneAndUpdate(
         { _id: account._id },
-        { $set: updateFields },
+        { $set: updateFields, $unset: unsetLegacyUpload },
         { new: true }
       );
-      console.log("[DB] Update result — uploadedImage:", account.uploadedImage, "| profileImage:", account.profileImage);
+      console.log("[DB] Update result — profileImage:", account.profileImage);
     }
 
     // ── Propagate images globally to all other user accounts for this creator ──
@@ -607,11 +564,11 @@ export const analyzeYoutubeUrl = async (req, res, next) => {
       {
         $set: {
           profileImage,
-          uploadedImage,
           resolvedImage,
           imageSource,
           imageUpdatedAt: new Date(),
         },
+        $unset: unsetLegacyUpload,
       }
     );
     console.log("[DB] Global updateMany propagated to", globalUpdateResult.modifiedCount, "other account(s)");
@@ -664,7 +621,6 @@ export const analyzeYoutubeUrl = async (req, res, next) => {
         description: account.description || "",
         thumbnail: account.thumbnail,
         profileImage: account.profileImage || "",
-        uploadedImage: account.uploadedImage || "",
         resolvedImage: account.resolvedImage || "",
         imageSource: account.imageSource || "youtube",
         // imageUpdatedAt is used by the frontend as a cache-buster (?v=timestamp)

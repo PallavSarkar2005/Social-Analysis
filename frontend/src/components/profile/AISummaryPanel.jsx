@@ -1,5 +1,7 @@
 import React from "react";
 import { Sparkles } from "lucide-react";
+import { safeArray } from "../../utils/profileFacts";
+import { asObject, safeText } from "../../utils/safeData";
 
 const SECTION_LABELS = {
   politicalJourney: "Political Journey",
@@ -9,11 +11,14 @@ const SECTION_LABELS = {
   publicProfile: "Public Profile",
 };
 
-import { safeArray } from "../../utils/profileFacts";
-
 export default function AISummaryPanel({ summary = {}, insights = [] }) {
-  const safeInsights = safeArray(insights);
-  const sections = Object.entries(summary ?? {}).filter(([, value]) => value && String(value).trim());
+  const safeInsights = safeArray(insights)
+    .map((insight) => safeText(insight))
+    .filter(Boolean);
+  const summaryObj = typeof summary === "string" ? { overview: summary } : asObject(summary);
+  const sections = Object.entries(summaryObj)
+    .map(([key, value]) => [key, safeText(value)])
+    .filter(([, text]) => text.trim());
 
   if (sections.length === 0 && safeInsights.length === 0) return null;
 
@@ -28,12 +33,12 @@ export default function AISummaryPanel({ summary = {}, insights = [] }) {
 
       {sections.length > 0 ? (
         <div className="space-y-4">
-          {sections.map(([key, value]) => (
+          {sections.map(([key, text]) => (
             <div key={key} className="rounded-xl border border-white/[0.04] bg-white/[0.02] p-4">
               <h4 className="mb-1.5 text-[10px] font-bold uppercase tracking-widest text-indigo-400">
-                {SECTION_LABELS[key] || key}
+                {SECTION_LABELS[key] || safeText(key)}
               </h4>
-              <p className="text-xs leading-relaxed text-slate-300">{value}</p>
+              <p className="text-xs leading-relaxed text-slate-300">{text}</p>
             </div>
           ))}
         </div>

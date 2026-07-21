@@ -107,29 +107,18 @@ const accountSchema = new mongoose.Schema(
       type: String,
       default: "",
     },
-    uploadedImage: {
-      type: String,
-      default: "",
-    },
     resolvedImage: {
       type: String,
       default: "",
     },
     imageSource: {
       type: String,
-      enum: ["user", "official", "youtube", "default"],
+      enum: ["official", "youtube", "default"],
       default: "youtube",
     },
     imageUpdatedAt: {
       type: Date,
       default: Date.now,
-    },
-    uploadedBy: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-    },
-    uploadedAt: {
-      type: Date,
     },
     analyzedAt: {
       type: Date,

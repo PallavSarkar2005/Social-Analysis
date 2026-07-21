@@ -38,7 +38,7 @@ export const xssSanitizer = (req, res, next) => {
   if (req.body) {
     for (const key in req.body) {
       if (Object.prototype.hasOwnProperty.call(req.body, key)) {
-        // Skip slash-encoding for URL fields to preserve valid paths like /uploads/photo.jpg
+        // Skip slash-encoding for URL fields to preserve valid remote image paths
         if (URL_FIELDS.has(key)) {
           if (typeof req.body[key] === "string") {
             // Only strip <script> and obvious injection — keep slashes/quotes intact

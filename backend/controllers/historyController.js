@@ -16,7 +16,7 @@ export const getChannelHistory = async (req, res, next) => {
       account: accountId,
       userId: req.user._id,
     })
-      .populate("account", "profileImage uploadedImage resolvedImage thumbnail imageSource imageUpdatedAt")
+      .populate("account", "profileImage resolvedImage thumbnail imageSource imageUpdatedAt")
       .sort({ capturedAt: 1 });
 
     const formatted = snapshots.map((snapshot) => ({
@@ -34,7 +34,6 @@ export const getChannelHistory = async (req, res, next) => {
       state: snapshot.state || "Unknown State",
       name: snapshot.name || "",
       profileImage: snapshot.profileImage || snapshot.account?.profileImage || "",
-      uploadedImage: snapshot.account?.uploadedImage || "",
       resolvedImage: snapshot.account?.resolvedImage || "",
       thumbnail: snapshot.account?.thumbnail || "",
       imageSource: snapshot.account?.imageSource || "youtube",
@@ -61,7 +60,7 @@ export const getAllHistory = async (req, res, next) => {
 
     const total = await Snapshot.countDocuments({ userId: req.user._id });
     const snapshots = await Snapshot.find({ userId: req.user._id })
-      .populate("account", "name platform accountId party state profileImage uploadedImage resolvedImage thumbnail imageSource imageUpdatedAt")
+      .populate("account", "name platform accountId party state profileImage resolvedImage thumbnail imageSource imageUpdatedAt")
       .sort({ capturedAt: -1 })
       .skip(skip)
       .limit(limit);
@@ -80,7 +79,6 @@ export const getAllHistory = async (req, res, next) => {
       party: snapshot.party || snapshot.account?.party || "Independent",
       state: snapshot.state || snapshot.account?.state || "Unknown State",
       profileImage: snapshot.profileImage || snapshot.account?.profileImage || "",
-      uploadedImage: snapshot.account?.uploadedImage || "",
       resolvedImage: snapshot.account?.resolvedImage || "",
       thumbnail: snapshot.account?.thumbnail || "",
       imageSource: snapshot.account?.imageSource || "youtube",

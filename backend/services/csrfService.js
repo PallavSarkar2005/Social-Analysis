@@ -81,7 +81,7 @@ const createCsrfSession = async (req, res) => {
   return csrfToken;
 };
 
-export const ensureCsrfToken = async (req, res) => {
+export const ensureCsrfToken = async (req, res, { createIfMissing = true } = {}) => {
   if (req.csrfToken) {
     return req.csrfToken;
   }
@@ -96,10 +96,16 @@ export const ensureCsrfToken = async (req, res) => {
         return memoryToken;
       }
     }
+    if (!createIfMissing) {
+      return null;
+    }
     return createMemoryCsrfSession(req, res);
   }
 
   if (!sessionId) {
+    if (!createIfMissing) {
+      return null;
+    }
     return createCsrfSession(req, res);
   }
 
@@ -112,6 +118,9 @@ export const ensureCsrfToken = async (req, res) => {
   try {
     const session = await CsrfSessionRepository.findBySessionId(sessionId);
     if (!session) {
+      if (!createIfMissing) {
+        return null;
+      }
       return createCsrfSession(req, res);
     }
 
@@ -119,6 +128,9 @@ export const ensureCsrfToken = async (req, res) => {
     return session.csrfToken;
   } catch (dbError) {
     console.error("[CSRF] Database lookup failed, using in-memory fallback:", dbError.message);
+    if (!createIfMissing) {
+      return null;
+    }
     return createMemoryCsrfSession(req, res);
   }
 };

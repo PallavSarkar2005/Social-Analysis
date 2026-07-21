@@ -155,13 +155,12 @@ export const getGroupCreators = async (req, res, next) => {
         platform: account.platform,
         accountId: account.accountId,
         profileUrl: account.profileUrl,
-        // Full image priority chain — LeaderAvatar needs all fields for sequential fallback
-        profileImage: account.profileImage || account.uploadedImage || account.thumbnail || "",
-        uploadedImage: account.uploadedImage || "",
+        // Auto-fetched image chain — LeaderAvatar needs all fields for sequential fallback
+        profileImage: account.profileImage || account.resolvedImage || account.thumbnail || "",
         resolvedImage: account.resolvedImage || "",
         thumbnail: account.thumbnail || "",
         imageSource: account.imageSource || "youtube",
-        // Cache-buster: frontend appends ?v=imageUpdatedAt to uploaded image URLs
+        // Cache-buster: frontend appends ?v=imageUpdatedAt to image URLs
         imageUpdatedAt: account.imageUpdatedAt ? new Date(account.imageUpdatedAt).getTime() : (account.updatedAt ? new Date(account.updatedAt).getTime() : Date.now()),
         subscribers,
         totalViews,
@@ -234,7 +233,6 @@ export const healImageUrls = async (req, res, next) => {
     const accounts = await Account.find({
       userId: req.user._id,
       $or: [
-        { uploadedImage: /&#x2F;/ },
         { resolvedImage: /&#x2F;/ },
         { profileImage: /&#x2F;/ },
         { thumbnail: /&#x2F;/ },
@@ -244,7 +242,6 @@ export const healImageUrls = async (req, res, next) => {
     let healed = 0;
     for (const account of accounts) {
       const update = {};
-      if (account.uploadedImage) update.uploadedImage = unescapeUrl(account.uploadedImage);
       if (account.resolvedImage) update.resolvedImage = unescapeUrl(account.resolvedImage);
       if (account.profileImage) update.profileImage = unescapeUrl(account.profileImage);
       if (account.thumbnail) update.thumbnail = unescapeUrl(account.thumbnail);
@@ -257,14 +254,12 @@ export const healImageUrls = async (req, res, next) => {
     // Also heal globally across all users for the same accountIds
     const globalAccounts = await Account.find({
       $or: [
-        { uploadedImage: /&#x2F;/ },
         { resolvedImage: /&#x2F;/ },
         { profileImage: /&#x2F;/ },
       ],
     });
     for (const account of globalAccounts) {
       const update = {};
-      if (account.uploadedImage) update.uploadedImage = unescapeUrl(account.uploadedImage);
       if (account.resolvedImage) update.resolvedImage = unescapeUrl(account.resolvedImage);
       if (account.profileImage) update.profileImage = unescapeUrl(account.profileImage);
       if (Object.keys(update).length > 0) {

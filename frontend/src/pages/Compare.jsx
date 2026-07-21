@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import Sidebar from "../components/layout/Sidebar";
 import Navbar from "../components/layout/Navbar";
 import { useCompare } from "../hooks/useQueries";
+import { autoSaveReport, buildComparisonReportPayload } from "../utils/autoSaveReport";
 import {
   ResponsiveContainer,
   BarChart,
@@ -44,6 +45,23 @@ export default function Compare() {
   const { data, isLoading: loading, error: queryError } = useCompare(searchParams.c1, searchParams.c2);
 
   const error = queryError?.response?.data?.message || queryError?.message || "";
+  const savedCompareKeyRef = useRef("");
+
+  // Auto-index comparison into Intelligence Hub (backend also upserts; this covers cache hits)
+  useEffect(() => {
+    if (!data?.creatorA || !data?.creatorB || loading) return;
+    const key = `${data.creatorA.channelId || data.creatorA.name}:${data.creatorB.channelId || data.creatorB.name}:${data.comparison?.overallWinner || ""}`;
+    if (savedCompareKeyRef.current === key) return;
+    savedCompareKeyRef.current = key;
+    autoSaveReport(
+      buildComparisonReportPayload({
+        creatorA: data.creatorA,
+        creatorB: data.creatorB,
+        comparison: data.comparison,
+        aiReport: data.aiReport,
+      })
+    );
+  }, [data, loading]);
 
   const handleCompare = (e) => {
     e.preventDefault();

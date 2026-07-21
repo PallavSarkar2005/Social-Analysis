@@ -6,9 +6,6 @@ import Navbar from "../components/layout/Navbar";
 import { useAnalyzer } from "../hooks/useQueries";
 import { getVideoInsights } from "../api/aiApi";
 import { getChannelInsights } from "../api/aiChannelApi";
-import FollowerChart from "../components/charts/FollowerChart";
-import client from "../api/client";
-import toast from "react-hot-toast";
 import LeaderAvatar from "../components/common/LeaderAvatar";
 import { formatIndianDate } from "../utils/dateFormatter";
 import { devError } from "../utils/devLog";
@@ -63,40 +60,11 @@ function Analyzer() {
   const [state, setState] = useState("");
   const [party, setParty] = useState("");
   const [searchParams] = useSearchParams();
-  const [photoFile, setPhotoFile] = useState(null);
-  const [photoPreview, setPhotoPreview] = useState(null);
 
   const { data: result, isLoading: loading, error: queryError, analyze, reset } = useAnalyzer();
 
   const [error, setError] = useState("");
   const displayError = queryError?.response?.data?.message || queryError?.message || error;
-
-  const handlePhotoChange = (e) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
-      if (!allowedTypes.includes(file.type)) {
-        toast.error("Please upload a JPG, PNG, or WEBP image.");
-        return;
-      }
-      const maxSizeBytes = 5 * 1024 * 1024;
-      if (file.size > maxSizeBytes) {
-        toast.error("File size must be less than 5 MB.");
-        return;
-      }
-      setPhotoFile(file);
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setPhotoPreview(reader.result);
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  const handleClearPhoto = () => {
-    setPhotoFile(null);
-    setPhotoPreview(null);
-  };
 
   const handleAnalyze = async (targetUrl = url, force = true) => {
     setError("");
@@ -111,29 +79,12 @@ function Analyzer() {
     }
 
     try {
-      let profileImageUrl = "";
-      if (photoFile) {
-        toast.loading("Uploading profile photo...", { id: "photo-upload" });
-        const formData = new FormData();
-        formData.append("photo", photoFile);
-        const uploadRes = await client.post("/api/media/upload", formData, {
-          headers: { "Content-Type": "multipart/form-data" },
-        });
-        if (uploadRes.data && uploadRes.data.success) {
-          profileImageUrl = uploadRes.data.url;
-          toast.success("Profile photo uploaded!", { id: "photo-upload" });
-        } else {
-          throw new Error("Failed to upload profile photo");
-        }
-      }
-
       await analyze({
         searchUrl: cleanTarget,
         group,
         force,
         state: state || "Unknown State",
         party: party || "Independent",
-        profileImage: profileImageUrl,
       });
     } catch (err) {
       devError(err);
@@ -298,50 +249,7 @@ function Analyzer() {
                     </div>
                   </div>
 
-                  {/* Optional Profile Photo Upload */}
-                  <div className="space-y-1.5 text-left">
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                      Optional Profile Photo Upload (JPG, PNG, WEBP - Max 5MB)
-                    </label>
-                    <div className="flex flex-col sm:flex-row items-center gap-4 p-4 rounded-xl bg-[#171923] border border-white/[0.08]">
-                      <div className="flex-1 w-full">
-                        <input
-                          type="file"
-                          id="creator-photo-upload"
-                          accept="image/jpeg,image/png,image/webp"
-                          onChange={handlePhotoChange}
-                          className="hidden"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => document.getElementById("creator-photo-upload").click()}
-                          className="w-full h-10 px-4 rounded-lg bg-white/[0.04] border border-white/[0.08] hover:bg-white/[0.08] text-xs font-semibold text-slate-300 transition flex items-center justify-center gap-2 cursor-pointer"
-                        >
-                          Select Image File
-                        </button>
-                      </div>
-
-                      {photoPreview && (
-                        <div className="flex items-center gap-3 bg-white/[0.02] border border-white/[0.06] p-2 rounded-lg shrink-0 w-full sm:w-auto justify-between sm:justify-start">
-                          <img
-                            src={photoPreview}
-                            alt="Preview"
-                            className="w-10 h-10 rounded-full object-cover border border-white/[0.1]"
-                            loading="lazy"
-                          />
-                          <button
-                            type="button"
-                            onClick={handleClearPhoto}
-                            className="text-[10px] text-red-400 hover:text-red-300 font-bold uppercase tracking-wider"
-                          >
-                            Remove
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="flex justify-center mt-6">
+                  <div className="flex justify-center mt-2">
                     <button
                       onClick={() => handleAnalyze()}
                       disabled={loading}

@@ -17,9 +17,14 @@ import { compareAccounts, compareYoutubeCreators } from "../api/compareApi";
 import { getChannelHistory } from "../api/historyApi";
 import { syncAllChannels } from "../api/youtubeApi";
 import { getNotifications, markAsRead, markAllAsRead } from "../api/notificationApi";
-import { getReports, deleteReport as apiDeleteReport } from "../api/reportApi";
+import {
+  getReports,
+  deleteReport as apiDeleteReport,
+  patchReport as apiPatchReport,
+} from "../api/reportApi";
 import { getCompetitors, addCompetitor, deleteCompetitor } from "../api/competitorApi";
 import { devWarn } from "../utils/devLog";
+import { asArray } from "../utils/safeData";
 import { getBillingStatus, cancelSubscription as apiCancelSubscription, getInvoices } from "../api/billingApi";
 import {
   getAccountStats,
@@ -47,7 +52,7 @@ export const useDashboard = () => {
     queryKey: ["dashboard", "overview"],
     queryFn: async () => {
       const res = await getDashboardOverview();
-      return res.data;
+      return res?.data ?? null;
     },
     refetchInterval: 30000, // 30 seconds automatic refetch
   });
@@ -56,7 +61,7 @@ export const useDashboard = () => {
     queryKey: ["dashboard", "groups"],
     queryFn: async () => {
       const res = await getGroupsList();
-      return res.data || [];
+      return asArray(res?.data);
     },
     refetchInterval: 30000,
   });
@@ -65,7 +70,7 @@ export const useDashboard = () => {
     queryKey: ["dashboard", "top-videos"],
     queryFn: async () => {
       const res = await getTopVideos();
-      return res.data || [];
+      return asArray(res?.data);
     },
     refetchInterval: 45000,
   });
@@ -74,7 +79,7 @@ export const useDashboard = () => {
     queryKey: ["compare-accounts"],
     queryFn: async () => {
       const res = await getCompareAccounts();
-      return res.data || [];
+      return asArray(res?.data);
     },
     refetchInterval: 45000,
   });
@@ -89,15 +94,18 @@ export const useDashboard = () => {
   });
 
   return {
-    overview: overviewQuery.data,
+    overview: overviewQuery.data ?? null,
     overviewLoading: overviewQuery.isLoading,
-    groups: groupsQuery.data,
+    groups: asArray(groupsQuery.data),
     groupsLoading: groupsQuery.isLoading,
-    topContent: topContentQuery.data,
+    topContent: asArray(topContentQuery.data),
     topContentLoading: topContentQuery.isLoading,
-    compareAccounts: compareAccountsQuery.data || [],
+    compareAccounts: asArray(compareAccountsQuery.data),
     compareAccountsLoading: compareAccountsQuery.isLoading,
-    loading: overviewQuery.isLoading || groupsQuery.isLoading || topContentQuery.isLoading,
+    loading:
+      overviewQuery.isLoading ||
+      groupsQuery.isLoading ||
+      compareAccountsQuery.isLoading,
     syncAll: syncMutation.mutateAsync,
     syncing: syncMutation.isPending,
     refetch: () => {
@@ -235,9 +243,8 @@ export const useAnalyzer = () => {
       force = true,
       state = "Unknown State",
       party = "Independent",
-      profileImage = "",
     }) => {
-      return analyzeYoutubeUrl(searchUrl, group, force, state, party, profileImage);
+      return analyzeYoutubeUrl(searchUrl, group, force, state, party);
     },
     onSuccess: async (result) => {
       await queryClient.refetchQueries({
@@ -342,30 +349,54 @@ export const useNotifications = () => {
   };
 };
 
-// 9. Reports Hook
-export const useReports = () => {
+// 9. Reports Hook (Intelligence Hub — accepts optional list params)
+export const useReports = (params = {}) => {
   const queryClient = useQueryClient();
+  const hasParams = params && Object.keys(params).length > 0;
 
   const reportsQuery = useQuery({
-    queryKey: ["reports"],
+    queryKey: hasParams ? ["reports", params] : ["reports"],
     queryFn: async () => {
-      const res = await getReports();
-      return res.data || [];
+      const res = await getReports(hasParams ? params : undefined);
+      return {
+        reports: res.data || [],
+        pagination: res.pagination || null,
+        count: res.count ?? (res.data || []).length,
+      };
     },
   });
 
   const deleteMutation = useMutation({
-    mutationFn: apiDeleteReport,
+    mutationFn: ({ id, hard }) =>
+      hard ? apiDeleteReport(id, { hard: true }) : apiDeleteReport(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["reports"] });
     },
   });
 
+  const patchMutation = useMutation({
+    mutationFn: ({ id, data }) => apiPatchReport(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["reports"] });
+    },
+  });
+
+  const payload = reportsQuery.data;
+
   return {
-    reports: reportsQuery.data || [],
+    reports: payload?.reports || [],
+    pagination: payload?.pagination || null,
+    count: payload?.count ?? 0,
     loading: reportsQuery.isLoading,
-    deleteReport: deleteMutation.mutateAsync,
+    error: reportsQuery.error,
+    isError: reportsQuery.isError,
+    deleteReport: (id, opts) =>
+      deleteMutation.mutateAsync(
+        typeof id === "object" ? id : { id, hard: opts?.hard }
+      ),
     deleting: deleteMutation.isPending,
+    patchReport: (id, data) => patchMutation.mutateAsync({ id, data }),
+    patching: patchMutation.isPending,
     refetch: reportsQuery.refetch,
   };
 };

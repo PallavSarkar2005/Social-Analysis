@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { User } from "lucide-react";
 
-// API base URL — images uploaded to the backend are stored at /uploads/
-// and must be served from the backend origin, not the frontend origin.
+// API base URL — relative image paths (legacy /uploads/, etc.) are served from the backend origin.
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 /**
@@ -13,7 +12,7 @@ const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
  * Passes through: https://... and http://... unchanged.
  *
  * @param {string} url  - The raw URL from the database
- * @param {number} [v]  - Optional version/timestamp for cache-busting uploaded images
+ * @param {number} [v]  - Optional version/timestamp for cache-busting
  */
 const resolveImgUrl = (url, v) => {
   if (!url || typeof url !== "string" || url.trim() === "") return "";
@@ -27,15 +26,15 @@ const resolveImgUrl = (url, v) => {
     .replace(/&gt;/g, ">")
     .replace(/&quot;/g, '"');
 
-  // Resolve relative /uploads/ paths to the full backend origin
+  // Resolve relative paths to the full backend origin
   if (!clean.startsWith("http://") && !clean.startsWith("https://") && !clean.startsWith("data:")) {
     if (clean.startsWith("/")) clean = `${API_BASE}${clean}`;
   }
 
-  // Append cache-buster for /uploads/ images (user-uploaded files)
-  // This forces the browser to bypass its disk cache when the image is replaced
-  if (v && clean.includes("/uploads/")) {
-    clean = `${clean}?v=${v}`;
+  // Append cache-buster when a version timestamp is provided
+  if (v) {
+    const sep = clean.includes("?") ? "&" : "?";
+    clean = `${clean}${sep}v=${v}`;
   }
 
   return clean;
@@ -45,11 +44,10 @@ const resolveImgUrl = (url, v) => {
  * LeaderAvatar — Production-grade creator avatar component.
  *
  * Image Priority Order (auto-fallback on error):
- *   1. uploadedImage  (user-uploaded, highest priority)
- *   2. profileImage   (active resolved profile image from DB)
- *   3. resolvedImage  (official public image e.g. Wikimedia Commons)
- *   4. thumbnail      (YouTube channel thumbnail)
- *   5. Default silhouette placeholder
+ *   1. profileImage   (active resolved profile image from DB)
+ *   2. resolvedImage  (official public image e.g. Wikimedia Commons)
+ *   3. thumbnail      (YouTube channel thumbnail)
+ *   4. Default silhouette placeholder
  *
  * Handles broken URLs gracefully by sequentially trying the next source
  * without breaking the layout or showing empty space.
@@ -59,21 +57,20 @@ export default function LeaderAvatar({ creator, size = 48, className = "" }) {
   const buildSources = (c) => {
     const v = c?.imageUpdatedAt; // cache-buster version timestamp
     const candidates = [
-      c?.uploadedImage,
       c?.profileImage,
       c?.resolvedImage,
       c?.thumbnail,
     ];
-    // Resolve, add cache-buster for uploads, deduplicate, filter empty
+    // Resolve, add cache-buster, deduplicate, filter empty
     const seen = new Set();
     return candidates
-      .map((url) => resolveImgUrl(url, v))
-      .filter((url) => {
-        if (!url || typeof url !== "string" || url.trim() === "") return false;
-        if (seen.has(url)) return false;
-        seen.add(url);
-        return true;
-      });
+    .map((url) => resolveImgUrl(url, v))
+    .filter((url) => {
+      if (!url || typeof url !== "string" || url.trim() === "") return false;
+      if (seen.has(url)) return false;
+      seen.add(url);
+      return true;
+    });
   };
 
   const [sources, setSources] = useState(() => buildSources(creator));
@@ -85,11 +82,10 @@ export default function LeaderAvatar({ creator, size = 48, className = "" }) {
     setSources(newSources);
     setSrcIndex(0);
   }, [
-    creator?.uploadedImage,
     creator?.profileImage,
     creator?.resolvedImage,
     creator?.thumbnail,
-    creator?.imageUpdatedAt, // ensures re-render when same URL is updated (cache-buster changes)
+    creator?.imageUpdatedAt,
   ]);
 
   const activeSrc = sources[srcIndex];

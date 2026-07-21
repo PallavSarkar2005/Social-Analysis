@@ -1,86 +1,190 @@
-import { useState, useEffect } from "react";
+import { useMemo, useState, useEffect } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import Sidebar from "../components/layout/Sidebar";
 import Navbar from "../components/layout/Navbar";
 import { useReports } from "../hooks/useQueries";
 import { useDebounce } from "../hooks/useDebounce";
-import { formatIndianDate, formatIndianDateTime } from "../utils/dateFormatter";
+import { shareReport, regenerateReport } from "../api/reportApi";
+import { triggerDownload } from "../api/exportApi";
+import { copyTextToClipboard } from "../utils/shareHelpers";
 import { devError } from "../utils/devLog";
-import {
-  FileText,
-  Search,
-  Trash2,
-  Eye,
-  Download,
-  Calendar,
-  Sparkles,
-  RefreshCw,
-  X,
-  Database,
-  Grid,
-} from "lucide-react";
+import ReportFilters from "../components/reports/ReportFilters";
+import ReportCard from "../components/reports/ReportCard";
+import ReportSkeletonCard from "../components/reports/ReportSkeletonCard";
+import ReportEmptyState from "../components/reports/ReportEmptyState";
+import ReportErrorState from "../components/reports/ReportErrorState";
+import ReportVirtualGrid from "../components/reports/ReportVirtualGrid";
+import { FileText, RefreshCw, ChevronLeft, ChevronRight } from "lucide-react";
 import toast, { Toaster } from "react-hot-toast";
-import { motion, AnimatePresence } from "framer-motion";
+import { AnimatePresence } from "framer-motion";
+import { getReportDisplayTitle } from "../utils/reportMeta";
+
+const PAGE_SIZE = 24;
 
 export default function Reports() {
-  const { reports, loading, deleteReport, refetch: loadReports } = useReports();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [searchQuery, setSearchQuery] = useState("");
-  const debouncedSearchQuery = useDebounce(searchQuery, 300);
-  const [activeTab, setActiveTab] = useState("all");
-  const [selectedReport, setSelectedReport] = useState(null);
+  const debouncedSearch = useDebounce(searchQuery, 300);
+  const [filter, setFilter] = useState("all");
+  const [sort, setSort] = useState("newest");
+  const [page, setPage] = useState(1);
   const [exportingId, setExportingId] = useState("");
+  const [offline, setOffline] = useState(
+    typeof navigator !== "undefined" ? !navigator.onLine : false
+  );
 
-  const handleDelete = async (id, title) => {
-    if (!window.confirm(`Are you sure you want to delete "${title}"?`)) return;
+  useEffect(() => {
+    const onOnline = () => setOffline(false);
+    const onOffline = () => setOffline(true);
+    window.addEventListener("online", onOnline);
+    window.addEventListener("offline", onOffline);
+    return () => {
+      window.removeEventListener("online", onOnline);
+      window.removeEventListener("offline", onOffline);
+    };
+  }, []);
+
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearch, filter, sort]);
+
+  const listParams = useMemo(() => {
+    const params = {
+      sort,
+      page,
+      limit: PAGE_SIZE,
+    };
+    if (debouncedSearch) params.q = debouncedSearch;
+    if (filter && filter !== "all") params.filter = filter;
+    return params;
+  }, [debouncedSearch, filter, sort, page]);
+
+  const {
+    reports,
+    pagination,
+    loading,
+    isError,
+    error,
+    deleteReport,
+    patchReport,
+    refetch,
+  } = useReports(listParams);
+
+  const hasActiveFilters = Boolean(debouncedSearch) || filter !== "all";
+
+  const clearFilters = () => {
+    setSearchQuery("");
+    setFilter("all");
+    setSort("newest");
+    setPage(1);
+  };
+
+  const handleOpen = (report) => {
+    navigate(`/reports/${report._id}`);
+  };
+
+  // Deep-link: /reports?open=<id> → detail page
+  useEffect(() => {
+    const openId = searchParams.get("open");
+    if (!openId) return;
+    navigate(`/reports/${openId}`, { replace: true });
+  }, [searchParams, navigate]);
+
+  const handleDelete = async (report) => {
+    const displayTitle = getReportDisplayTitle(report);
+    const archive = window.confirm(
+      `Remove "${displayTitle}" from the hub?\n\nOK = Archive\nCancel = keep`
+    );
+    if (!archive) return;
+
+    const wipe = window.confirm(
+      "Permanently delete instead of archive?\n\nOK = permanent delete\nCancel = archive only"
+    );
 
     try {
-      await deleteReport(id);
-      toast.success("Report deleted successfully");
-      if (selectedReport?._id === id) setSelectedReport(null);
+      await deleteReport(report._id, wipe ? { hard: true } : undefined);
+      toast.success(wipe ? "Report permanently deleted" : "Report archived");
     } catch (err) {
       devError(err);
-      toast.error("Failed to delete report.");
+      toast.error("Failed to remove report.");
     }
   };
 
-  const handleDownload = async (id, title, format) => {
+  const handleExport = async (report, format) => {
     try {
-      setExportingId(`${id}-${format}`);
-      toast.loading(`Generating ${format.toUpperCase()} export...`, { id: "export" });
-      
-      await triggerDownload(`reports/${id}`, format, title.toLowerCase().replace(/\s+/g, "_"));
-      
-      toast.success("File downloaded successfully", { id: "export" });
+      setExportingId(`${report._id}-${format}`);
+      toast.loading(`Generating ${format.toUpperCase()}…`, { id: "export" });
+      await triggerDownload(
+        `reports/${report._id}`,
+        format,
+        (getReportDisplayTitle(report) || "intelligence_report")
+          .toLowerCase()
+          .replace(/\s+/g, "_")
+      );
+      toast.success("Download ready", { id: "export" });
     } catch (err) {
       devError(err);
-      toast.error("Failed to export report.", { id: "export" });
+      toast.error(err?.message || "Failed to export report.", { id: "export" });
     } finally {
       setExportingId("");
     }
   };
 
-  // Filtering
-  const filteredReports = reports.filter((rep) => {
-    const matchesSearch =
-      rep.title.toLowerCase().includes(debouncedSearchQuery.toLowerCase()) ||
-      rep.source.toLowerCase().includes(debouncedSearchQuery.toLowerCase());
-    
-    if (activeTab === "all") return matchesSearch;
-    return rep.type === activeTab && matchesSearch;
-  });
-
-  const getReportTypeIcon = (type) => {
-    switch (type) {
-      case "ai_insight":
-        return <Sparkles className="text-purple-400" size={16} />;
-      case "comparison":
-        return <Grid className="text-indigo-400" size={16} />;
-      default:
-        return <FileText className="text-blue-400" size={16} />;
+  const handleToggleFavorite = async (report) => {
+    try {
+      await patchReport(report._id, { favorite: !report.favorite });
+      toast.success(report.favorite ? "Removed from favorites" : "Added to favorites");
+    } catch (err) {
+      devError(err);
+      toast.error("Could not update favorite.");
     }
   };
 
-  const formatReportTypeLabel = (type) => {
-    return type ? type.replace("_", " ").toUpperCase() : "REPORT";
+  const handleTogglePin = async (report) => {
+    try {
+      await patchReport(report._id, { pinned: !report.pinned });
+      toast.success(report.pinned ? "Unpinned" : "Pinned to top");
+    } catch (err) {
+      devError(err);
+      toast.error("Could not update pin.");
+    }
+  };
+
+  const handleShare = async (report) => {
+    try {
+      const res = await shareReport(report._id, {
+        visibility: "public",
+        expiresInDays: 30,
+      });
+      const url = res.data?.shareUrl;
+      if (!url) {
+        toast.error("Share link was not returned by the server.");
+        return;
+      }
+      try {
+        await copyTextToClipboard(url);
+        toast.success("Public share link copied (30-day expiry)");
+      } catch {
+        window.prompt("Copy this share link:", url);
+        toast.success("Share link ready — copy from the dialog");
+      }
+    } catch (err) {
+      devError(err);
+      toast.error(err?.response?.data?.message || "Could not create share link.");
+    }
+  };
+
+  const handleRegenerate = async (report) => {
+    try {
+      toast.loading("Regenerating from latest profile analysis…", { id: "regen" });
+      await regenerateReport(report._id);
+      await refetch();
+      toast.success("Report refreshed", { id: "regen" });
+    } catch (err) {
+      devError(err);
+      toast.error(err?.response?.data?.message || "Regenerate failed", { id: "regen" });
+    }
   };
 
   return (
@@ -91,228 +195,111 @@ export default function Reports() {
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative z-10">
         <Navbar />
 
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto space-y-8 z-10 relative">
-          
-          {/* Header */}
+        <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 max-w-[1600px] w-full mx-auto space-y-6 z-10 relative">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/[0.06] pb-6">
             <div>
               <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white flex items-center gap-2">
                 <FileText size={28} className="text-indigo-400" />
-                Saved Reports Hub
+                Intelligence Hub
               </h1>
-              <p className="text-xs sm:text-sm text-slate-400 font-medium mt-1">
-                Access your archived AI strategies, channel comparisons, and audit analysis snapshots.
+              <p className="text-xs sm:text-sm text-slate-400 font-medium mt-1 max-w-2xl">
+                Searchable knowledge base for every analysis Social IQ generates — find, filter, pin, and open in seconds.
               </p>
             </div>
 
             <button
-              onClick={loadReports}
-              className="h-10 px-4 rounded-xl bg-white/[0.04] border border-white/[0.08] hover:bg-white/[0.08] text-xs font-semibold text-white transition flex items-center gap-2 self-start"
+              type="button"
+              onClick={() => refetch()}
+              className="h-10 px-4 rounded-xl bg-white/[0.04] border border-white/[0.08] hover:bg-white/[0.08] text-xs font-semibold text-white transition inline-flex items-center gap-2 self-start"
             >
               <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
-              Refresh Registry
+              Refresh
             </button>
           </div>
 
-          {/* Search and Filters Bar */}
-          <div className="flex flex-col md:flex-row gap-4 justify-between items-stretch">
-            {/* Search Input */}
-            <div className="relative flex-1 max-w-md">
-              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-              <input
-                type="text"
-                placeholder="Search reports by title or source..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full h-11 pl-10 pr-4 bg-[#111319] border border-white/[0.08] rounded-xl text-xs text-white focus:outline-none focus:border-indigo-500/50 transition-colors"
-              />
-            </div>
+          <ReportFilters
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
+            filter={filter}
+            onFilterChange={setFilter}
+            sort={sort}
+            onSortChange={setSort}
+          />
 
-            {/* Tabs */}
-            <div className="bg-[#111319] border border-white/[0.08] p-1 rounded-xl flex gap-1 self-stretch md:self-auto overflow-x-auto">
-              {[
-                { id: "all", label: "All Reports" },
-                { id: "ai_insight", label: "AI Strategy" },
-                { id: "comparison", label: "Comparisons" },
-                { id: "analysis", label: "Analyses" },
-              ].map((tab) => (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold uppercase tracking-wider transition-all whitespace-nowrap ${
-                    activeTab === tab.id
-                      ? "bg-indigo-600 text-white"
-                      : "text-slate-400 hover:text-white"
-                  }`}
-                >
-                  {tab.label}
-                </button>
+          {isError || offline ? (
+            <ReportErrorState
+              error={error}
+              offline={offline}
+              onRetry={() => refetch()}
+            />
+          ) : loading && reports.length === 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-5">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <ReportSkeletonCard key={i} />
               ))}
             </div>
-          </div>
-
-          {/* Reports Grid */}
-          {loading && reports.length === 0 ? (
-            <div className="h-64 flex flex-col items-center justify-center gap-4">
-              <RefreshCw className="w-8 h-8 text-indigo-500 animate-spin" />
-              <p className="text-sm font-medium text-slate-400">Loading saved reports...</p>
-            </div>
-          ) : filteredReports.length === 0 ? (
-            <div className="h-64 flex flex-col items-center justify-center gap-4 bg-[#121318]/20 border border-white/[0.04] rounded-2xl text-center p-6">
-              <Database className="w-12 h-12 text-slate-600 mb-2" />
-              <h4 className="text-sm font-semibold text-slate-300">No reports matched your query</h4>
-              <p className="text-xs text-slate-500 max-w-sm">
-                Save an AI insight, video analysis, or comparison directly from their respective pages to index them.
-              </p>
-            </div>
+          ) : reports.length === 0 ? (
+            <ReportEmptyState
+              filtered={hasActiveFilters || page > 1}
+              onClearFilters={clearFilters}
+            />
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              <AnimatePresence>
-                {filteredReports.map((rep) => (
-                  <motion.div
-                    key={rep._id}
-                    layout
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 0.95 }}
-                    className="bg-[#121318]/40 backdrop-blur-md rounded-2xl border border-white/[0.06] p-5 shadow-lg flex flex-col justify-between hover:border-white/[0.12] transition-colors group relative overflow-hidden"
-                  >
-                    <div className="space-y-3">
-                      {/* Top Type Indicator */}
-                      <div className="flex items-center justify-between">
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/[0.04] border border-white/[0.06] text-[10px] font-bold text-slate-300 uppercase tracking-widest">
-                          {getReportTypeIcon(rep.type)}
-                          {formatReportTypeLabel(rep.type)}
-                        </span>
-                        
-                        <span className="text-[10px] text-slate-500 flex items-center gap-1">
-                          <Calendar size={12} />
-                          {formatIndianDate(rep.createdAt)}
-                        </span>
-                      </div>
-
-                      {/* Title & Source */}
-                      <div>
-                        <h3 className="font-bold text-sm text-white group-hover:text-indigo-300 transition-colors line-clamp-1">
-                          {rep.title}
-                        </h3>
-                        <p className="text-[11px] text-slate-400 mt-1 font-semibold">
-                          Source: <span className="text-slate-300">{rep.source}</span>
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Bottom Actions */}
-                    <div className="flex items-center justify-between mt-6 pt-4 border-t border-white/[0.04]">
-                      <button
-                        onClick={() => setSelectedReport(rep)}
-                        className="px-3 py-1.5 rounded-lg bg-indigo-600/10 border border-indigo-500/20 text-indigo-400 hover:bg-indigo-600 hover:text-white transition text-xs font-semibold flex items-center gap-1.5"
-                      >
-                        <Eye size={13} /> Open
-                      </button>
-
-                      <div className="flex items-center gap-2">
-                        {/* Download Menu */}
-                        <div className="flex items-center bg-[#111319] border border-white/[0.08] p-0.5 rounded-lg">
-                          {["pdf", "xlsx", "csv"].map((fmt) => (
-                            <button
-                              key={fmt}
-                              disabled={exportingId === `${rep._id}-${fmt}`}
-                              onClick={() => handleDownload(rep._id, rep.title, fmt)}
-                              className="px-2 py-1 rounded text-[9px] font-bold uppercase hover:text-indigo-400 transition"
-                              title={`Export to ${fmt.toUpperCase()}`}
-                            >
-                              {exportingId === `${rep._id}-${fmt}` ? (
-                                <RefreshCw size={10} className="animate-spin text-indigo-500" />
-                              ) : (
-                                fmt
-                              )}
-                            </button>
-                          ))}
-                        </div>
-
-                        <button
-                          onClick={() => handleDelete(rep._id, rep.title)}
-                          className="p-2 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition"
-                          title="Delete Report"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                    </div>
-                  </motion.div>
-                ))}
-              </AnimatePresence>
-            </div>
-          )}
-
-          {/* Report Reader Overlay Modal */}
-          <AnimatePresence>
-            {selectedReport && (
-              <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-                {/* Backdrop */}
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  onClick={() => setSelectedReport(null)}
-                  className="absolute inset-0 bg-black/80 backdrop-blur-sm"
-                />
-
-                {/* Modal Contents */}
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.95, y: 15 }}
-                  animate={{ opacity: 1, scale: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.95, y: 15 }}
-                  className="bg-[#111319] border border-white/[0.08] w-full max-w-2xl rounded-2xl shadow-2xl relative z-10 max-h-[85vh] flex flex-col overflow-hidden"
-                >
-                  {/* Modal Header */}
-                  <div className="p-6 border-b border-white/[0.06] flex items-center justify-between">
-                    <div>
-                      <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest">
-                        {formatReportTypeLabel(selectedReport.type)} REPORT
-                      </span>
-                      <h2 className="text-lg font-bold text-white mt-1">{selectedReport.title}</h2>
-                      <p className="text-[11px] text-slate-400 mt-0.5">Source target: {selectedReport.source}</p>
-                    </div>
-                    <button
-                      onClick={() => setSelectedReport(null)}
-                      className="p-1.5 rounded-lg bg-white/[0.04] border border-white/[0.08] text-slate-400 hover:text-white"
-                    >
-                      <X size={16} />
-                    </button>
-                  </div>
-
-                  {/* Modal Body */}
-                  <div className="p-6 overflow-y-auto space-y-6 flex-1 text-slate-300 text-xs sm:text-sm leading-relaxed custom-scrollbar">
-                    {/* Render text directly or pretty JSON if comparison/array */}
-                    {typeof selectedReport.content === "string" ? (
-                      <div className="whitespace-pre-line bg-white/[0.01] p-4 rounded-xl border border-white/[0.04] text-slate-200">
-                        {selectedReport.content}
-                      </div>
-                    ) : (
-                      <pre className="bg-[#090a0f] p-4 rounded-xl border border-white/[0.06] font-mono text-[11px] text-emerald-400 overflow-x-auto select-text">
-                        {JSON.stringify(selectedReport.content, null, 2)}
-                      </pre>
-                    )}
-                  </div>
-
-                  {/* Modal Footer */}
-                  <div className="p-4 border-t border-white/[0.06] bg-black/10 flex justify-between items-center">
-                    <span className="text-[10px] text-slate-500 font-mono">
-                      Captured: {formatIndianDateTime(selectedReport.createdAt)}
-                    </span>
-                    <button
-                      onClick={() => handleDownload(selectedReport._id, selectedReport.title, "pdf")}
-                      className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-xs font-bold text-white rounded-xl transition flex items-center gap-2"
-                    >
-                      <Download size={14} /> Download PDF
-                    </button>
-                  </div>
-                </motion.div>
+            <>
+              <div className="flex items-center justify-between text-[11px] text-slate-500">
+                <span>
+                  {pagination?.total != null
+                    ? `${pagination.total} report${pagination.total === 1 ? "" : "s"}`
+                    : `${reports.length} report${reports.length === 1 ? "" : "s"}`}
+                  {filter !== "all" ? ` · ${filter}` : ""}
+                </span>
+                {pagination && (
+                  <span>
+                    Page {pagination.page} of {pagination.totalPages}
+                  </span>
+                )}
               </div>
-            )}
-          </AnimatePresence>
+
+              <ReportVirtualGrid itemCount={reports.length}>
+                <AnimatePresence mode="popLayout">
+                  {reports.map((report) => (
+                    <ReportCard
+                      key={report._id}
+                      report={report}
+                      exportingId={exportingId}
+                      onOpen={handleOpen}
+                      onDelete={handleDelete}
+                      onExport={handleExport}
+                      onToggleFavorite={handleToggleFavorite}
+                      onTogglePin={handleTogglePin}
+                      onShare={handleShare}
+                      onRegenerate={handleRegenerate}
+                    />
+                  ))}
+                </AnimatePresence>
+              </ReportVirtualGrid>
+
+              {pagination && pagination.totalPages > 1 && (
+                <div className="flex items-center justify-center gap-3 pt-2">
+                  <button
+                    type="button"
+                    disabled={page <= 1 || loading}
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    className="h-9 px-3 rounded-xl border border-white/[0.08] bg-white/[0.03] text-xs font-semibold text-white disabled:opacity-40 inline-flex items-center gap-1 hover:bg-white/[0.06] transition"
+                  >
+                    <ChevronLeft size={14} /> Prev
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!pagination.hasMore || loading}
+                    onClick={() => setPage((p) => p + 1)}
+                    className="h-9 px-3 rounded-xl border border-white/[0.08] bg-white/[0.03] text-xs font-semibold text-white disabled:opacity-40 inline-flex items-center gap-1 hover:bg-white/[0.06] transition"
+                  >
+                    Next <ChevronRight size={14} />
+                  </button>
+                </div>
+              )}
+            </>
+          )}
         </main>
       </div>
     </div>

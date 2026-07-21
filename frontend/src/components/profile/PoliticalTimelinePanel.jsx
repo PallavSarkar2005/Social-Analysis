@@ -11,6 +11,7 @@ import {
   Clock,
 } from "lucide-react";
 import { safeArray } from "../../utils/profileFacts";
+import { safeText } from "../../utils/safeData";
 
 const CATEGORY_META = {
   birth: { icon: Calendar, color: "text-rose-400", ring: "ring-rose-500/30", bg: "bg-rose-500/10" },
@@ -32,9 +33,9 @@ function ElectionCard({ event }) {
     <div className="min-w-0 flex-1 rounded-xl border border-white/[0.05] bg-white/[0.02] p-4">
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <span className="rounded-md bg-indigo-500/15 px-2.5 py-0.5 text-[10px] font-extrabold tracking-wider text-indigo-300 ring-1 ring-indigo-500/20">
-          {e.year || event.year}
+          {safeText(e.year || event.year)}
         </span>
-        <h4 className="text-sm font-bold text-white">{e.type || event.title}</h4>
+        <h4 className="text-sm font-bold text-white">{safeText(e.type || event.title)}</h4>
         {e.result && (
           <span
             className={`rounded-md px-2 py-0.5 text-[9px] font-bold ring-1 ${
@@ -45,7 +46,7 @@ function ElectionCard({ event }) {
                   : "bg-slate-500/15 text-slate-400 ring-slate-500/25"
             }`}
           >
-            {e.result}
+            {safeText(e.result)}
           </span>
         )}
       </div>
@@ -53,12 +54,12 @@ function ElectionCard({ event }) {
       <div className="space-y-1.5 text-xs text-slate-300">
         {e.constituency && (
           <p>
-            <span className="text-slate-500">Constituency:</span> {e.constituency}
+            <span className="text-slate-500">Constituency:</span> {safeText(e.constituency)}
           </p>
         )}
         {e.party && (
           <p>
-            <span className="text-slate-500">Party:</span> {e.party}
+            <span className="text-slate-500">Party:</span> {safeText(e.party)}
           </p>
         )}
         {e.margin != null && (
@@ -82,11 +83,11 @@ function ElectionCard({ event }) {
               rel="noopener noreferrer"
               className="inline-flex items-center gap-1 text-[11px] font-semibold text-indigo-400 hover:text-indigo-300"
             >
-              {event.source}
+              {safeText(event.source)}
               <ExternalLink className="h-3 w-3" />
             </a>
           ) : (
-            <span className="text-[11px] font-semibold text-slate-400">{event.source}</span>
+            <span className="text-[11px] font-semibold text-slate-400">{safeText(event.source)}</span>
           )}
         </div>
       )}
@@ -95,16 +96,23 @@ function ElectionCard({ event }) {
 }
 
 function StandardCard({ event }) {
+  const title = safeText(event.title);
+  const desc = safeText(event.description);
+  const showDesc =
+    desc &&
+    desc.toLowerCase() !== title.toLowerCase() &&
+    !title.toLowerCase().includes(desc.toLowerCase());
+
   return (
     <div className="min-w-0 flex-1 rounded-xl border border-white/[0.05] bg-white/[0.02] p-4">
       <div className="mb-2 flex flex-wrap items-center gap-2">
         <span className="rounded-md bg-indigo-500/15 px-2.5 py-0.5 text-[10px] font-extrabold tracking-wider text-indigo-300 ring-1 ring-indigo-500/20">
-          {event.year}
+          {safeText(event.year)}
         </span>
-        <h4 className="text-sm font-bold text-white">{event.title}</h4>
+        <h4 className="text-sm font-bold text-white">{title}</h4>
       </div>
-      {event.description && (
-        <p className="text-xs leading-relaxed text-slate-300">{event.description}</p>
+      {showDesc && (
+        <p className="whitespace-pre-line text-xs leading-relaxed text-slate-300">{desc}</p>
       )}
       {event.source && (
         <div className="mt-3 border-t border-white/[0.04] pt-3">
@@ -115,11 +123,11 @@ function StandardCard({ event }) {
               rel="noopener noreferrer"
               className="inline-flex items-center gap-1 text-[11px] font-semibold text-indigo-400 hover:text-indigo-300"
             >
-              {event.source}
+              {safeText(event.source)}
               <ExternalLink className="h-3 w-3" />
             </a>
           ) : (
-            <span className="text-[11px] font-semibold text-slate-400">{event.source}</span>
+            <span className="text-[11px] font-semibold text-slate-400">{safeText(event.source)}</span>
           )}
         </div>
       )}

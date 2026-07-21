@@ -19,6 +19,7 @@ import { computeConfidenceBreakdown } from "./confidenceEngine.js";
 import { detectFieldConflicts, applyConflictsToProfile } from "./conflictDetectionService.js";
 import { buildPoliticalStatistics } from "./politicalStatisticsService.js";
 import { buildSectionMeta, buildVerificationCatalog } from "./sectionMetaService.js";
+import { verifySources } from "./sourceVerificationService.js";
 import { buildCareerTimelinePackage } from "./politicalTimelineService.js";
 import {
   buildElectionIntelligence,
@@ -277,7 +278,24 @@ export const enrichPoliticalProfile = async (account) => {
       state: biography.state || merged.biography.state,
     };
 
-    const sources = mergeSources(successfulResults);
+    const rawSources = mergeSources(successfulResults);
+    const sources = (
+      await verifySources(rawSources, {
+        name: identity.name,
+        state: identity.state,
+        party: identity.party,
+      }, { allowNetwork: true, timeoutMs: 2500 })
+    ).map((s) => ({
+      name: s.name,
+      url: s.verified && s.matchedIdentity ? s.url || "" : "",
+      type: s.type || "scrape",
+      confidence: s.confidence ?? 0,
+      fetchedAt: s.fetchedAt || new Date(),
+      verified: s.verified === true,
+      matchedIdentity: s.matchedIdentity === true,
+      lastChecked: s.lastChecked || null,
+      statusCode: s.statusCode ?? null,
+    }));
 
     const providerElectionLists = SOURCE_PRIORITY.map(
       (key) => providerResults[key]?.data?.elections ?? []
@@ -332,7 +350,11 @@ export const enrichPoliticalProfile = async (account) => {
       elections,
     });
 
-    const verificationCatalog = buildVerificationCatalog(sources, lastVerified);
+    const verificationCatalog = buildVerificationCatalog(sources, lastVerified, {
+      name: identity.name,
+      state: identity.state,
+      party: identity.party,
+    });
 
     console.log(
       `[PROFILE ENRICHMENT] Completed for ${identity.name} — ${successfulResults.length}/${PROVIDER_REGISTRY.length} sources, confidence=${confidenceScore}, facts=${facts.length}, timeline=${timeline.length} events`
@@ -479,9 +501,18 @@ export const sanitizeVerifiedFactsForResponse = (facts = []) =>
   (facts || []).filter((f) => f?.value && isPresent(f.value)).map((f) => ({
     key: f.key,
     label: f.label,
-    value: f.value,
+    value: typeof f.value === "object" && f.value !== null
+      ? [f.value.label, f.value.detail, f.value.source].filter(Boolean).join(" — ") ||
+        String(f.value.value || "")
+      : f.value,
     confidence: f.confidence ?? 0,
-    verifiedBy: f.verifiedBy || [],
+    verifiedBy: (f.verifiedBy || [])
+      .map((src) =>
+        typeof src === "string"
+          ? src
+          : src?.name || src?.label || src?.source || ""
+      )
+      .filter(Boolean),
     lastVerified: f.lastVerified || null,
     conflict: Boolean(f.conflict),
     alternatives: f.alternatives || [],
@@ -490,9 +521,12 @@ export const sanitizeVerifiedFactsForResponse = (facts = []) =>
 export const sanitizeSourcesForResponse = (sources = []) =>
   (sources || []).map((s) => ({
     name: s.name,
-    url: s.url || null,
+    url: s.verified !== false && s.matchedIdentity !== false ? s.url || null : null,
     type: s.type || "scrape",
     confidence: s.confidence ?? 0,
     fetchedAt: s.fetchedAt || null,
-    verified: (s.confidence ?? 0) > 0,
+    verified: s.verified === true || ((s.confidence ?? 0) > 0 && s.matchedIdentity !== false),
+    matchedIdentity: s.matchedIdentity !== false,
+    lastChecked: s.lastChecked || null,
+    statusCode: s.statusCode ?? null,
   }));

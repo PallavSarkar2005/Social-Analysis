@@ -9,7 +9,7 @@ import { getNotifications, markAsRead, markAllAsRead } from "../../api/notificat
 import client from "../../api/client";
 import toast from "react-hot-toast";
 import PartyLogo from "../common/PartyLogo";
-
+import { asArray, asObject } from "../../utils/safeData";
 
 export default function Navbar() {
   const { user, logout } = useAuth();
@@ -51,8 +51,10 @@ export default function Navbar() {
     setSearching(true);
     try {
       const res = await client.get(`/api/search?query=${encodeURIComponent(val)}`);
-      if (res.data && res.data.success) {
-        setSearchResults(res.data.data);
+      if (res.data?.success) {
+        setSearchResults(asObject(res.data.data));
+      } else {
+        setSearchResults(null);
       }
     } catch (err) {
       devWarn("Failed search execution", err);
@@ -182,14 +184,14 @@ export default function Navbar() {
             ) : (
               <>
                 {/* Accounts */}
-                {searchResults?.accounts?.length > 0 && (
+                {asArray(searchResults?.accounts).length > 0 && (
                   <div className="space-y-1 text-left">
                     <div className="text-[9px] font-bold text-slate-500 uppercase tracking-widest px-2.5">
                       My Channels
                     </div>
-                    {searchResults.accounts.map((acc) => (
+                    {asArray(searchResults?.accounts).map((acc) => (
                       <button
-                        key={acc._id}
+                        key={acc?._id || acc?.accountId || acc?.name}
                         onClick={() => {
                           navigate(`/profile/${acc._id || acc.accountId}`);
                           setRealSearchOpen(false);
@@ -199,7 +201,7 @@ export default function Navbar() {
                       >
                         <div className="flex items-center gap-2">
                           <PartyLogo party={acc.party} size={18} />
-                          <span className="font-medium truncate max-w-[130px]">{acc.name}</span>
+                          <span className="font-medium truncate max-w-[130px]">{acc?.name || "Unnamed"}</span>
                         </div>
                         <span className="text-[9px] bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 px-2 py-0.5 rounded-full capitalize">
                           {acc.platform}
@@ -210,14 +212,14 @@ export default function Navbar() {
                 )}
 
                 {/* Competitors */}
-                {searchResults?.competitors?.length > 0 && (
+                {asArray(searchResults?.competitors).length > 0 && (
                   <div className="space-y-1 text-left">
                     <div className="text-[9px] font-bold text-slate-500 uppercase tracking-widest px-2.5">
                       Competitors
                     </div>
-                    {searchResults.competitors.map((comp) => (
+                    {asArray(searchResults?.competitors).map((comp) => (
                       <button
-                        key={comp._id}
+                        key={comp?._id || comp?.name}
                         onClick={() => {
                           navigate("/competitors");
                           setRealSearchOpen(false);
@@ -225,7 +227,7 @@ export default function Navbar() {
                         }}
                         className="w-full text-left p-2 rounded-xl text-xs hover:bg-white/[0.03] text-slate-200 transition flex items-center justify-between"
                       >
-                        <span className="font-medium">{comp.name}</span>
+                        <span className="font-medium">{comp?.name || "Competitor"}</span>
                         <span className="text-[9px] bg-purple-500/10 border border-purple-500/20 text-purple-400 px-2 py-0.5 rounded-full capitalize">
                           {comp.platform}
                         </span>
@@ -235,14 +237,14 @@ export default function Navbar() {
                 )}
 
                 {/* Reports */}
-                {searchResults?.reports?.length > 0 && (
+                {asArray(searchResults?.reports).length > 0 && (
                   <div className="space-y-1 text-left">
                     <div className="text-[9px] font-bold text-slate-500 uppercase tracking-widest px-2.5">
-                      Saved Reports
+                      Intelligence Hub
                     </div>
-                    {searchResults.reports.map((rep) => (
+                    {asArray(searchResults?.reports).map((rep) => (
                       <button
-                        key={rep._id}
+                        key={rep?._id || rep?.title}
                         onClick={() => {
                           navigate("/reports");
                           setRealSearchOpen(false);
@@ -250,7 +252,7 @@ export default function Navbar() {
                         }}
                         className="w-full text-left p-2 rounded-xl text-xs hover:bg-white/[0.03] text-slate-200 transition flex items-center justify-between"
                       >
-                        <span className="font-medium truncate max-w-[180px]">{rep.title}</span>
+                        <span className="font-medium truncate max-w-[180px]">{rep?.title || "Report"}</span>
                         <span className="text-[9px] bg-green-500/10 border border-green-500/20 text-green-400 px-2 py-0.5 rounded-full capitalize">
                           {rep.type}
                         </span>
@@ -260,14 +262,14 @@ export default function Navbar() {
                 )}
 
                 {/* History */}
-                {searchResults?.history?.length > 0 && (
+                {asArray(searchResults?.history).length > 0 && (
                   <div className="space-y-1 text-left">
                     <div className="text-[9px] font-bold text-slate-500 uppercase tracking-widest px-2.5">
                       History Snapshot Logs
                     </div>
-                    {searchResults.history.map((hist) => (
+                    {asArray(searchResults?.history).map((hist) => (
                       <button
-                        key={hist._id}
+                        key={hist?._id || hist?.accountName}
                         onClick={() => {
                           navigate("/history");
                           setRealSearchOpen(false);
@@ -275,9 +277,9 @@ export default function Navbar() {
                         }}
                         className="w-full text-left p-2 rounded-xl text-xs hover:bg-white/[0.03] text-slate-200 transition flex items-center justify-between"
                       >
-                        <span className="font-medium">{hist.accountName}</span>
+                        <span className="font-medium">{hist?.accountName || "Snapshot"}</span>
                         <span className="text-[9px] text-slate-500 font-mono">
-                          {formatIndianDate(hist.capturedAt)}
+                          {hist?.capturedAt ? formatIndianDate(hist.capturedAt) : "—"}
                         </span>
                       </button>
                     ))}
@@ -286,10 +288,10 @@ export default function Navbar() {
 
                 {/* No results placeholder */}
                 {(!searchResults ||
-                  (searchResults.accounts?.length === 0 &&
-                    searchResults.competitors?.length === 0 &&
-                    searchResults.reports?.length === 0 &&
-                    searchResults.history?.length === 0)) && (
+                  (asArray(searchResults?.accounts).length === 0 &&
+                    asArray(searchResults?.competitors).length === 0 &&
+                    asArray(searchResults?.reports).length === 0 &&
+                    asArray(searchResults?.history).length === 0)) && (
                   <div className="text-[10px] text-slate-500 text-center p-3">
                     No matching records found.
                   </div>
@@ -373,7 +375,7 @@ export default function Navbar() {
                   ) : (
                     notifications.map((notif) => (
                       <div
-                        key={notif._id}
+                        key={notif?._id || `${notif?.title}-${notif?.createdAt}`}
                         onClick={() => !notif.isRead && handleMarkRead(notif._id)}
                         className={`p-4 text-left transition-colors cursor-pointer relative ${
                           notif.isRead
@@ -387,12 +389,14 @@ export default function Navbar() {
                         )}
 
                         <div className={`${!notif.isRead ? "pl-3.5" : ""}`}>
-                          <h4 className="text-xs font-bold text-slate-200">{notif.title}</h4>
+                          <h4 className="text-xs font-bold text-slate-200">{notif?.title || "Notification"}</h4>
                           <p className="text-[11px] text-slate-400 mt-1 leading-normal">
-                            {notif.message}
+                            {notif?.message || ""}
                           </p>
                           <span className="text-[9px] text-slate-500 mt-2 block font-mono">
-                            {formatIndianDate(notif.createdAt)} at {formatIndianTime(notif.createdAt)}
+                            {notif?.createdAt
+                              ? `${formatIndianDate(notif.createdAt)} at ${formatIndianTime(notif.createdAt)}`
+                              : "—"}
                           </span>
                         </div>
                       </div>

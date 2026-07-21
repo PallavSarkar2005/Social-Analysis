@@ -17,11 +17,12 @@ router.use(protect);
 router.get("/dashboard", checkPlanLimits("pdfExport"), exportDashboard);
 router.get("/competitors", checkPlanLimits("pdfExport"), exportCompetitors);
 
+// Intelligence Hub exports are a core product feature — do not gate behind premium PDF flag.
+// (Dashboard/competitors exports remain plan-gated above.)
 router.get(
   "/reports/:id",
   param("id").isMongoId().withMessage("Invalid report ID format"),
   validateResult,
-  checkPlanLimits("pdfExport"),
   exportSavedReport
 );
 

@@ -21,25 +21,54 @@ import {
 import { motion } from "framer-motion";
 import toast, { Toaster } from "react-hot-toast";
 import PartyLogo from "../components/common/PartyLogo";
+import {
+  asArray,
+  formatLocaleNumber,
+  hasGrowthMetrics,
+  formatGrowthPeriod,
+  asNumber,
+} from "../utils/safeData";
 
+function GrowthDelta({ growth }) {
+  if (!hasGrowthMetrics(growth)) return null;
 
+  const week = formatGrowthPeriod(growth?.lastWeek, "Wk");
+  const month = formatGrowthPeriod(growth?.lastMonth, "Mo");
+
+  return (
+    <div className="flex flex-col text-[10px] space-y-0.5 mt-1 border-t border-white/[0.04] pt-1">
+      {week && (
+        <span className={week.positive ? "text-emerald-400" : "text-rose-400"}>
+          {week.label}: {week.text}
+        </span>
+      )}
+      {month && (
+        <span className={month.positive ? "text-emerald-400" : "text-rose-400"}>
+          {month.label}: {month.text}
+        </span>
+      )}
+    </div>
+  );
+}
 export default function Dashboard() {
   const {
     overview,
-    groups: activeGroups,
-    topContent,
-    compareAccounts: accounts,
+    groups: activeGroups = [],
+    compareAccounts: accounts = [],
     loading,
     syncAll,
     syncing,
   } = useDashboard();
 
+  const groupList = asArray(activeGroups);
+  const accountList = asArray(accounts);
+
   const getGroupCount = (groupId) => {
-    if (!activeGroups) return 0;
-    const match = activeGroups.find(
-      (g) => g._id && g._id.trim().toLowerCase() === groupId.toLowerCase()
+    if (!groupId) return 0;
+    const match = groupList.find(
+      (g) => g?._id && String(g._id).trim().toLowerCase() === groupId.toLowerCase()
     );
-    return match ? match.count : 0;
+    return asNumber(match?.count, 0);
   };
 
   const handleSyncAll = async () => {
@@ -133,11 +162,11 @@ export default function Dashboard() {
                   },
                   {
                     title: "Total Subscribers",
-                    value: Number(
+                    value: formatLocaleNumber(
                       overview?.growth?.subscribers?.current ??
                         overview?.totalFollowers ??
-                        0,
-                    ).toLocaleString(),
+                        0
+                    ),
                     icon: TrendingUp,
                     color:
                       "text-indigo-400 bg-indigo-500/10 border-indigo-500/20",
@@ -145,11 +174,11 @@ export default function Dashboard() {
                   },
                   {
                     title: "Total Video Views",
-                    value: Number(
+                    value: formatLocaleNumber(
                       overview?.growth?.views?.current ??
                         overview?.totalViews ??
-                        0,
-                    ).toLocaleString(),
+                        0
+                    ),
                     icon: Eye,
                     color:
                       "text-purple-400 bg-purple-500/10 border-purple-500/20",
@@ -177,31 +206,8 @@ export default function Dashboard() {
                         <h3 className="text-xl sm:text-2xl font-black text-white tracking-tight truncate">
                           {card.value}
                         </h3>
-                        {card.growth && (
-                          <div className="flex flex-col text-[10px] space-y-0.5 mt-1 border-t border-white/[0.04] pt-1">
-                            <span
-                              className={
-                                card.growth.lastWeek.value >= 0
-                                  ? "text-emerald-400"
-                                  : "text-rose-400"
-                              }
-                            >
-                              Wk: {card.growth.lastWeek.value >= 0 ? "+" : ""}
-                              {card.growth.lastWeek.value.toLocaleString()} (
-                              {card.growth.lastWeek.percentage}%)
-                            </span>
-                            <span
-                              className={
-                                card.growth.lastMonth.value >= 0
-                                  ? "text-emerald-400"
-                                  : "text-rose-400"
-                              }
-                            >
-                              Mo: {card.growth.lastMonth.value >= 0 ? "+" : ""}
-                              {card.growth.lastMonth.value.toLocaleString()} (
-                              {card.growth.lastMonth.percentage}%)
-                            </span>
-                          </div>
+                        {hasGrowthMetrics(card.growth) && (
+                          <GrowthDelta growth={card.growth} />
                         )}
                       </div>
                       <div
@@ -342,19 +348,25 @@ export default function Dashboard() {
                     </Link>
 
                     {/* Render Dynamic groups from database (AAP, TMC, etc.) */}
-                    {activeGroups
-                      .filter(g => g._id && g._id.toLowerCase() !== "bjp" && g._id.toLowerCase() !== "congress" && g._id.toLowerCase() !== "other")
+                    {groupList
+                      .filter(
+                        (g) =>
+                          g?._id &&
+                          !["bjp", "congress", "other"].includes(
+                            String(g._id).toLowerCase()
+                          )
+                      )
                       .map((g) => (
-                        <Link key={g._id} to={`/groups/${g._id}`} className="block group">
+                        <Link key={g._id} to={`/groups/${encodeURIComponent(g._id)}`} className="block group">
                           <div className="p-5 bg-[#171923]/45 border border-white/[0.05] hover:border-indigo-500/30 hover:bg-indigo-950/5 hover:shadow-indigo-500/[0.04] hover:shadow-2xl rounded-2xl flex flex-col justify-between h-44 transition duration-300 relative overflow-hidden select-none cursor-pointer">
                             <div className="flex items-start justify-between">
                               <div>
                                 <h4 className="text-sm font-bold text-white group-hover:text-indigo-400 transition-colors uppercase">{g._id} Group</h4>
                                 <p className="text-[10px] text-indigo-400/90 font-bold mt-1">
-                                  {g.count} {g.count === 1 ? "Account" : "Accounts"}
+                                  {asNumber(g.count, 0)} {asNumber(g.count, 0) === 1 ? "Account" : "Accounts"}
                                 </p>
                                 <p className="text-[10px] text-slate-500 mt-1 leading-relaxed max-w-[170px]">
-                                  Explore analytics for tracked members, ministers, and leaders of the {g._id.toUpperCase()} organization.
+                                  Explore analytics for tracked members, ministers, and leaders of {String(g._id).toUpperCase()} organization.
                                 </p>
                               </div>
                               <PartyLogo party={g._id} size={56} className="shadow-lg border-white/[0.04] shrink-0" />
@@ -389,7 +401,7 @@ export default function Dashboard() {
                   </Link>
                 </div>
 
-                {accounts.length > 0 ? (
+                {accountList.length > 0 ? (
                   <div className="border border-white/[0.06] rounded-xl overflow-hidden shadow-xl bg-slate-950/20">
                     <div className="overflow-x-auto">
                       <table className="w-full text-left border-collapse">
@@ -403,26 +415,26 @@ export default function Dashboard() {
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-white/[0.04]">
-                          {accounts.map((acc, idx) => (
+                          {accountList.map((acc, idx) => (
                             <tr
-                              key={idx}
+                              key={acc?._id || acc?.accountId || `account-${idx}`}
                               className="hover:bg-white/[0.01] transition-colors text-xs"
                             >
                               <td className="p-4 font-bold text-slate-200">
-                                <Link to={`/profile/${acc._id || acc.accountId}`} className="hover:text-indigo-400 hover:underline cursor-pointer transition">
-                                  {acc.name}
+                                <Link to={`/profile/${acc?._id || acc?.accountId || ""}`} className="hover:text-indigo-400 hover:underline cursor-pointer transition">
+                                  {acc?.name || "Unnamed Creator"}
                                 </Link>
                               </td>
                               <td className="p-4 text-slate-300">
-                                {Number(acc.followers).toLocaleString()}
+                                {formatLocaleNumber(acc?.followers)}
                               </td>
                               <td className="p-4 text-slate-300">
-                                {Number(acc.totalViews).toLocaleString()}
+                                {formatLocaleNumber(acc?.totalViews)}
                               </td>
                               <td className="p-4">
                                 <div className="flex items-center gap-2">
-                                  <PartyLogo party={acc.party} size={22} className="shadow-sm" />
-                                  <span className="font-semibold text-slate-200">{acc.party || "Independent"}</span>
+                                  <PartyLogo party={acc?.party} size={22} className="shadow-sm" />
+                                  <span className="font-semibold text-slate-200">{acc?.party || "Independent"}</span>
                                 </div>
                               </td>
                               <td className="p-4 text-right">

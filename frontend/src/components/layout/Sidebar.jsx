@@ -28,7 +28,7 @@ export default function Sidebar() {
     { name: "Analyzer", path: "/analyzer", icon: Search },
     { name: "Creator Compare", path: "/compare", icon: BarChart3 },
     { name: "Competitors", path: "/competitors", icon: Trophy },
-    { name: "Saved Reports", path: "/reports", icon: FileText },
+    { name: "Intelligence Hub", path: "/reports", icon: FileText },
     { name: "AI Strategy", path: "/ai-insights", icon: Brain },
     { name: "Snapshot History", path: "/history", icon: History },
   ];

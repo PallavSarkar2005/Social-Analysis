@@ -3,6 +3,7 @@ import { CheckCircle2, Circle, ExternalLink, Shield } from "lucide-react";
 
 import { safeArray } from "../../utils/profileFacts";
 import { formatIndianDate } from "../../utils/dateFormatter";
+import { safeText } from "../../utils/safeData";
 
 export default function SourceVerificationPanel({
   sources = [],
@@ -42,12 +43,12 @@ export default function SourceVerificationPanel({
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-1 truncate text-xs font-semibold text-indigo-400 hover:text-indigo-300"
                 >
-                  {source.label || source.name}
+                  {safeText(source.label || source.name) || "Source"}
                   <ExternalLink className="h-3 w-3 shrink-0" />
                 </a>
               ) : (
                 <span className="truncate text-xs font-semibold text-slate-300">
-                  {source.label || source.name}
+                  {safeText(source.label || source.name) || "Source"}
                 </span>
               )}
             </div>

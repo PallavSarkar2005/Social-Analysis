@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { buildVerifiedProfileFacts, safeArray } from "../../utils/profileFacts";
 import { formatIndianDate } from "../../utils/dateFormatter";
+import { safeText } from "../../utils/safeData";
 
 const FIELD_ICONS = {
   legalName: User,
@@ -110,7 +111,7 @@ export default function VerifiedProfileCard({
                   </span>
                   <div className="max-w-[55%] text-right">
                     <span className="text-xs font-semibold leading-relaxed text-slate-100">
-                      {field.value}
+                      {safeText(field.value)}
                     </span>
                     {(field.confidence > 0 || verifiedBy?.length > 0) && (
                       <div className="mt-1 flex flex-wrap justify-end gap-1">
@@ -124,14 +125,18 @@ export default function VerifiedProfileCard({
                         conflict
                       </span>
                     )}
-                        {verifiedBy.slice(0, 2).map((src) => (
+                        {verifiedBy.slice(0, 2).map((src, srcIdx) => {
+                          const label = safeText(src);
+                          if (!label) return null;
+                          return (
                           <span
-                            key={src}
+                            key={`${label}-${srcIdx}`}
                             className="rounded bg-white/[0.04] px-1.5 py-0.5 text-[8px] text-slate-500"
                           >
-                            {src}
+                            {label}
                           </span>
-                        ))}
+                          );
+                        })}
                       </div>
                     )}
                     {field.lastVerified && (

@@ -126,3 +126,55 @@ export const checkPlanLimits = (limitType) => {
     }
   };
 };
+
+/**
+ * Programmatic report quota check for upsert creates.
+ * Returns null on success, or an error payload object on limit reached.
+ */
+export async function checkAndIncrementReportLimit(userId) {
+  let subscription = await Subscription.findOne({
+    userId,
+    status: "active",
+  });
+
+  if (!subscription) {
+    subscription = await Subscription.create({
+      userId,
+      plan: "free",
+      status: "active",
+      currentPeriodStart: new Date(),
+      currentPeriodEnd: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+    });
+  }
+
+  const plan = subscription.plan;
+  const limits = PLAN_LIMITS[plan] || PLAN_LIMITS.free;
+
+  let usage = await Usage.findOne({
+    userId,
+    billingCycleStart: { $lte: new Date() },
+    billingCycleEnd: { $gte: new Date() },
+  });
+
+  if (!usage) {
+    usage = await Usage.create({
+      userId,
+      billingCycleStart: subscription.currentPeriodStart,
+      billingCycleEnd: subscription.currentPeriodEnd,
+      analysesCount: 0,
+      aiRequestsCount: 0,
+      reportsCount: 0,
+    });
+  }
+
+  if (usage.reportsCount >= limits.maxReportsCount) {
+    return {
+      success: false,
+      message: `Reports creation limit reached. Your plan (${plan.toUpperCase()}) allows ${limits.maxReportsCount} reports.`,
+    };
+  }
+
+  usage.reportsCount += 1;
+  await usage.save();
+  return null;
+}

@@ -6,6 +6,7 @@ import { getChannelSummary } from "../api/analyticsApi";
 import { ensureAccessToken, fetchCsrfToken } from "../api/client";
 import { formatIndianTime } from "../utils/dateFormatter";
 import { devError, devWarn } from "../utils/devLog";
+import { autoSaveReport, buildAiInsightReportPayload } from "../utils/autoSaveReport";
 import {
   Sparkles,
   Brain,
@@ -74,6 +75,32 @@ export default function AIInsights() {
           views: views,
           count: filtered.length,
         });
+
+        if (filtered.length > 0) {
+          autoSaveReport({
+            title: "Network Telemetry Snapshot",
+            type: "telemetry",
+            source: "telemetry:network",
+            summary: `${filtered.length} YouTube channels · ${subs.toLocaleString()} followers · ${views.toLocaleString()} views`,
+            category: "telemetry",
+            tags: ["telemetry", "network"],
+            searchKeywords: ["telemetry", "network", "youtube"],
+            sourceModules: ["telemetry"],
+            content: {
+              kind: "telemetry",
+              channelCount: filtered.length,
+              subscribers: subs,
+              views,
+              channels: filtered.slice(0, 40).map((a) => ({
+                id: a._id,
+                name: a.name,
+                party: a.party,
+                state: a.state,
+              })),
+            },
+            metadata: { channelCount: filtered.length },
+          });
+        }
       } catch (err) {
         devError("Failed to load political telemetry dashboard:", err);
       }
@@ -302,6 +329,17 @@ export default function AIInsights() {
         return s;
       });
       saveSessions(finalSessions);
+
+      const sessionTitle =
+        finalSessions.find((s) => s.id === activeSessionId)?.title || "AI Strategy";
+      autoSaveReport(
+        buildAiInsightReportPayload({
+          sessionId: activeSessionId,
+          title: sessionTitle,
+          history: finalHistory,
+          context: totalStats,
+        })
+      );
     } catch (err) {
       if (err.name === "AbortError") return;
       devError(err);

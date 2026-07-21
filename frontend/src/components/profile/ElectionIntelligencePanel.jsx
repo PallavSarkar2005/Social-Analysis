@@ -1,6 +1,7 @@
 import React from "react";
 import { Trophy, ExternalLink } from "lucide-react";
 import { isVerifiedValue, safeArray } from "../../utils/profileFacts";
+import { safeText } from "../../utils/safeData";
 
 const ElectionCard = ({ row }) => {
   const voteShare = row.voteShare ?? row.votePct;
@@ -27,19 +28,19 @@ const ElectionCard = ({ row }) => {
     <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5 transition hover:border-white/[0.1] hover:bg-white/[0.04]">
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <Trophy className="h-4 w-4 text-emerald-400" />
-        <span className="text-sm font-bold text-white">{row.election || "Election"}</span>
+        <span className="text-sm font-bold text-white">{safeText(row.election) || "Election"}</span>
         <span className="rounded-md bg-indigo-500/15 px-2 py-0.5 text-[10px] font-extrabold text-indigo-300 ring-1 ring-indigo-500/20">
-          {row.year}
+          {safeText(row.year)}
         </span>
         {row.position && (
           <span
             className={`rounded-md px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-wider ${
-              /winner|won|elected/i.test(row.position)
+              /winner|won|elected/i.test(String(row.position))
                 ? "bg-emerald-500/10 text-emerald-400 ring-1 ring-emerald-500/20"
                 : "bg-slate-800 text-slate-400"
             }`}
           >
-            {row.position}
+            {safeText(row.position)}
           </span>
         )}
       </div>
@@ -50,7 +51,7 @@ const ElectionCard = ({ row }) => {
             <span className="text-[9px] font-bold uppercase tracking-widest text-slate-500">
               {field.label}
             </span>
-            <p className="text-xs font-semibold text-slate-200">{field.value}</p>
+            <p className="text-xs font-semibold text-slate-200">{safeText(field.value)}</p>
           </div>
         ))}
       </div>
@@ -67,7 +68,7 @@ const ElectionCard = ({ row }) => {
               Affidavit <ExternalLink className="h-3 w-3" />
             </a>
           )}
-          {row.source && <span className="text-[10px] text-slate-500">Source: {row.source}</span>}
+          {row.source && <span className="text-[10px] text-slate-500">Source: {safeText(row.source)}</span>}
         </div>
       )}
     </div>

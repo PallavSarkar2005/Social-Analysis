@@ -15,7 +15,8 @@ export const isVerifiedValue = (value) => {
     return true;
   }
   if (Array.isArray(value)) return value.some((entry) => isVerifiedValue(entry));
-  return true;
+  // Evidence / nested objects are not scalar verified facts
+  return false;
 };
 
 const normalizeKey = (value) =>

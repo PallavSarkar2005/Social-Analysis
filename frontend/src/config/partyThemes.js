@@ -272,7 +272,7 @@ export const PARTY_LOGOS = {
  * Falls back to "Other" if not found.
  */
 export const getPartyTheme = (name = "") => {
-  const key = name.trim();
+  const key = String(name ?? "").trim();
   // Exact match first
   if (PARTY_THEMES[key]) return PARTY_THEMES[key];
   // Case-insensitive match

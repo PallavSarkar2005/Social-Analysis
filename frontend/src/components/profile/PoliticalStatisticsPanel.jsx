@@ -3,6 +3,7 @@ import { BarChart2 } from "lucide-react";
 
 import { safeArray } from "../../utils/profileFacts";
 import { formatIndianDate } from "../../utils/dateFormatter";
+import { safeText } from "../../utils/safeData";
 
 export default function PoliticalStatisticsPanel({ statistics = [], sectionMeta = {} }) {
   const safeStatistics = safeArray(statistics);
@@ -35,9 +36,9 @@ export default function PoliticalStatisticsPanel({ statistics = [], sectionMeta 
               className="rounded-xl border border-white/[0.06] bg-[#121318]/30 p-4"
             >
               <span className="text-[9px] font-bold uppercase tracking-widest text-slate-500">
-                {stat.label}
+                {safeText(stat.label)}
               </span>
-              <p className="mt-1.5 text-lg font-extrabold text-white">{stat.value}</p>
+              <p className="mt-1.5 text-lg font-extrabold text-white">{safeText(stat.value)}</p>
             </div>
           ))}
       </div>

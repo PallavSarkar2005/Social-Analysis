@@ -14,6 +14,7 @@ const TYPE_COLORS = {
 };
 
 import { safeArray } from "../../utils/profileFacts";
+import { safeText } from "../../utils/safeData";
 
 export default function RelationshipIntelligencePanel({ relationships = {}, sectionMeta = {} }) {
   const safeNodes = safeArray(relationships?.nodes);
@@ -58,9 +59,9 @@ export default function RelationshipIntelligencePanel({ relationships = {}, sect
             >
               <div className="flex items-center gap-2">
                 <span className={`text-[9px] font-bold uppercase tracking-wider ${color}`}>
-                  {node.type}
+                  {safeText(node.type) || "Node"}
                 </span>
-                <span className="text-xs font-semibold text-white">{node.label}</span>
+                <span className="text-xs font-semibold text-white">{safeText(node.label)}</span>
               </div>
               {nodeEdges.length > 0 && (
                 <div className="mt-1.5 flex flex-wrap gap-1.5">
@@ -71,8 +72,8 @@ export default function RelationshipIntelligencePanel({ relationships = {}, sect
                         key={idx}
                         className="rounded bg-white/[0.04] px-2 py-0.5 text-[9px] text-slate-500"
                       >
-                        {edge.relation.replace(/_/g, " ")}
-                        {target ? ` → ${target.label}` : ""}
+                        {String(edge.relation || "related").replace(/_/g, " ")}
+                        {target ? ` → ${target.label || ""}` : ""}
                       </span>
                     );
                   })}

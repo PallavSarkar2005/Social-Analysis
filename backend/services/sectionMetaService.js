@@ -3,6 +3,7 @@ import PROFILE_BUILDER_VERSIONS, {
   SECTION_VERSION_KEY,
   getStoredVersion,
 } from "../config/profileBuilderVersion.js";
+import { urlMatchesIdentity } from "./sourceVerificationService.js";
 
 const toIso = (value) => {
   if (!value) return null;
@@ -156,9 +157,11 @@ export const buildModuleMeta = ({
     influence: buildModuleDescriptor({
       enabled: profileActive,
       hasData:
-        Number(influence.digitalInfluence || 0) > 0 || geographicReach.length > 0,
-      lastUpdated: profile.lastBuiltAt || account.lastSynced,
-      confidence: influence.digitalInfluence ?? 0,
+        Number(influence.influenceScore || influence.digitalInfluence || 0) > 0 ||
+        geographicReach.length > 0 ||
+        influence.dataAvailable === true,
+      lastUpdated: influence.lastCalculated || profile.lastBuiltAt || account.lastSynced,
+      confidence: influence.influenceScore ?? influence.digitalInfluence ?? 0,
       version:
         moduleVersions.influence ??
         getStoredVersion(profile, SECTION_VERSION_KEY.influence),
@@ -284,22 +287,50 @@ export const CANONICAL_VERIFICATION_SOURCES = [
   { key: "wikipedia", label: "Wikipedia", matchers: ["wikipedia"] },
 ];
 
-export const buildVerificationCatalog = (sources = [], lastVerified = null) => {
+export const buildVerificationCatalog = (sources = [], lastVerified = null, identity = null) => {
   const safeSources = Array.isArray(sources) ? sources : [];
   return CANONICAL_VERIFICATION_SOURCES.map((canonical) => {
     const match = safeSources.find((s) => {
       const name = String(s.name || "").toLowerCase();
       return (canonical.matchers ?? []).some((m) => name.includes(m));
     });
+    if (!match) return null;
+
+    let url = match.url || null;
+    let matchedIdentity = match.matchedIdentity;
+    let verified = match.verified !== false;
+
+    if (identity && url) {
+      const heuristic = urlMatchesIdentity(url, identity);
+      matchedIdentity = heuristic.matchedIdentity;
+      if (!matchedIdentity) {
+        url = null;
+        verified = false;
+      } else {
+        verified = true;
+        matchedIdentity = true;
+      }
+    }
+
+    if (match.verified === false || match.matchedIdentity === false) {
+      verified = false;
+      matchedIdentity = false;
+      url = null;
+    }
+
+    if (!verified) return null;
 
     return {
       key: canonical.key,
       label: canonical.label,
-      verified: Boolean(match),
-      url: match?.url || null,
-      confidence: match?.confidence ?? 0,
-      fetchedAt: match?.fetchedAt || null,
+      verified: true,
+      matchedIdentity: matchedIdentity !== false,
+      url,
+      confidence: match.confidence ?? 0,
+      fetchedAt: match.fetchedAt || null,
+      lastChecked: match.lastChecked || null,
+      statusCode: match.statusCode ?? null,
       lastVerified: lastVerified ? new Date(lastVerified).toISOString().slice(0, 10) : null,
     };
-  }).filter((entry) => entry.verified);
+  }).filter(Boolean);
 };

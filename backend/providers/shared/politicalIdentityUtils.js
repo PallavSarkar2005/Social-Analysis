@@ -45,16 +45,21 @@ const STATE_ALIASES = [
   { pattern: /\bkarnataka\b/i, state: "Karnataka" },
   { pattern: /\bmaharashtra\b/i, state: "Maharashtra" },
   { pattern: /\bassam\b/i, state: "Assam" },
-  { pattern: /\bodisha\b/i, state: "Odisha" },
+  { pattern: /\bodisha\b|\borissa\b/i, state: "Odisha" },
   { pattern: /\bpunjab\b/i, state: "Punjab" },
   { pattern: /\bharyana\b/i, state: "Haryana" },
   { pattern: /\bjharkhand\b/i, state: "Jharkhand" },
   { pattern: /\bchhattisgarh\b/i, state: "Chhattisgarh" },
-  { pattern: /\buttarakhand\b/i, state: "Uttarakhand" },
+  { pattern: /\buttarakhand\b|\buttaranchal\b/i, state: "Uttarakhand" },
   { pattern: /\bhimachal pradesh\b/i, state: "Himachal Pradesh" },
   { pattern: /\btelangana\b/i, state: "Telangana" },
   { pattern: /\bandhra pradesh\b/i, state: "Andhra Pradesh" },
   { pattern: /\bkerala\b/i, state: "Kerala" },
+  { pattern: /\bnct of delhi\b|\bnew delhi\b|\bdelhi\b/i, state: "Delhi" },
+  { pattern: /\bjammu (and|&) kashmir\b|\bj\&k\b/i, state: "Jammu and Kashmir" },
+  { pattern: /\bladakh\b/i, state: "Ladakh" },
+  { pattern: /\bgoa\b/i, state: "Goa" },
+  { pattern: /\bpuducherry\b|\bpondicherry\b/i, state: "Puducherry" },
 ];
 
 export const stripHonorifics = (name = "") =>

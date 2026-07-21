@@ -229,21 +229,59 @@ export const validateSearchQuery = [
   validateResult,
 ];
 
-// Save Report validation
+// Canonical + legacy aliases accepted on write (normalized in reportService)
+const SAVEABLE_REPORT_TYPES = [
+  "political_profile",
+  "ai_insight",
+  "comparison",
+  "election",
+  "timeline",
+  "news_sentiment",
+  "influence",
+  "telemetry",
+  "snapshot",
+  "analysis",
+  "competitor_report",
+  "custom",
+  // legacy / alias inputs
+  "insight",
+  "ai",
+  "strategy",
+  "competitor",
+  "competitor_comparison",
+  "political",
+  "profile",
+  "news",
+  "sentiment",
+];
+
+const PATCHABLE_STATUSES = ["draft", "ready", "archived", "failed"];
+
+// Save Report validation (type OR reportType required)
 export const validateSaveReport = [
   body("title")
     .trim()
     .notEmpty()
     .withMessage("Title is required")
-    .isLength({ max: 100 })
-    .withMessage("Title cannot exceed 100 characters")
+    .isLength({ max: 200 })
+    .withMessage("Title cannot exceed 200 characters")
     .escape(),
   body("type")
+    .optional()
     .trim()
-    .notEmpty()
-    .withMessage("Type is required")
-    .isIn(["insight", "comparison", "analysis"])
+    .isIn(SAVEABLE_REPORT_TYPES)
     .withMessage("Invalid report type"),
+  body("reportType")
+    .optional()
+    .trim()
+    .isIn(SAVEABLE_REPORT_TYPES)
+    .withMessage("Invalid report type"),
+  body().custom((_, { req }) => {
+    if (!req.body.type && !req.body.reportType) {
+      throw new Error("Type is required");
+    }
+    return true;
+  }),
   body("source")
     .trim()
     .notEmpty()
@@ -251,7 +289,59 @@ export const validateSaveReport = [
     .escape(),
   body("content")
     .notEmpty()
-    .withMessage("Report content is required"), // Content is detailed text, we will clean it downstream
+    .withMessage("Report content is required"),
+  body("status")
+    .optional()
+    .isIn(PATCHABLE_STATUSES)
+    .withMessage("Invalid report status"),
+  body("favorite").optional().isBoolean().withMessage("favorite must be boolean"),
+  body("pinned").optional().isBoolean().withMessage("pinned must be boolean"),
+  body("confidence")
+    .optional({ nullable: true })
+    .isFloat({ min: 0, max: 100 })
+    .withMessage("confidence must be between 0 and 100"),
+  body("tags").optional().isArray().withMessage("tags must be an array"),
+  body("profileId")
+    .optional({ nullable: true })
+    .isMongoId()
+    .withMessage("Invalid profileId"),
+  body("accountId")
+    .optional({ nullable: true })
+    .isMongoId()
+    .withMessage("Invalid accountId"),
+  validateResult,
+];
+
+// Patch Report validation (hub primitives)
+export const validatePatchReport = [
+  body("title")
+    .optional()
+    .trim()
+    .notEmpty()
+    .withMessage("Title cannot be empty")
+    .isLength({ max: 200 })
+    .withMessage("Title cannot exceed 200 characters")
+    .escape(),
+  body("description")
+    .optional()
+    .trim()
+    .isLength({ max: 1000 })
+    .withMessage("Description cannot exceed 1000 characters"),
+  body("summary")
+    .optional()
+    .trim()
+    .isLength({ max: 2000 })
+    .withMessage("Summary cannot exceed 2000 characters"),
+  body("category").optional().trim().isLength({ max: 100 }),
+  body("thumbnail").optional().trim().isLength({ max: 2000 }),
+  body("status")
+    .optional()
+    .isIn(PATCHABLE_STATUSES)
+    .withMessage("Invalid report status"),
+  body("favorite").optional().isBoolean().withMessage("favorite must be boolean"),
+  body("pinned").optional().isBoolean().withMessage("pinned must be boolean"),
+  body("tags").optional().isArray().withMessage("tags must be an array"),
+  body("searchKeywords").optional().isArray().withMessage("searchKeywords must be an array"),
   validateResult,
 ];
 

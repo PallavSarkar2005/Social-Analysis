@@ -127,19 +127,6 @@ async function runTests() {
     }
   }
 
-  // 4. Test Optional Media Upload
-  try {
-    console.log("\n[Test 5] Calling POST /api/media/upload with no file...");
-    const res = await axios.post(`${BASE_URL}/api/media/upload`, {}, { headers: getHeaders(token) });
-    console.error("✗ Media upload accepted request without file! Status:", res.status);
-  } catch (error) {
-    if (error.response && error.response.status === 400) {
-      console.log("✓ Media upload correctly rejected request with 400 (No image file provided)!");
-    } else {
-      console.error("✗ Unexpected response for media upload:", error.response?.status || error.message, error.response?.data);
-    }
-  }
-
   console.log("\n==================================================");
   console.log("AUTHENTICATION REFACTOR VERIFICATION COMPLETED!");
   console.log("==================================================");

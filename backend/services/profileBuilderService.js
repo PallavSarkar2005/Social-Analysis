@@ -26,6 +26,10 @@ import {
 } from "./electionIntelligenceService.js";
 import { buildModuleMeta, buildModuleMetaFromLegacy } from "./sectionMetaService.js";
 import { resolveEnrichmentIdentity, resolveAccountParty } from "../providers/shared/politicalIdentityUtils.js";
+import { calculateInfluenceMetrics } from "./influenceScoreService.js";
+import { buildGeographicInfluence } from "./geographicInfluenceService.js";
+import { autoSavePoliticalProfileReport } from "./autoSaveReportService.js";
+import { syncAssociatedReportsMetadata } from "./reportSyncService.js";
 
 export { getOutdatedSections, getProfileUpgradePlan, isProfileOutdated } from "../config/profileBuilderVersion.js";
 
@@ -185,9 +189,6 @@ export const fetchNewsForAccount = async (account, { logPrefix = "[NEWS]" } = {}
   return { news: freshNews, newsSentiment: sentiment };
 };
 
-const clampScore = (value, max = 100) =>
-  Math.min(max, Math.max(0, Math.round(value)));
-
 const buildOverviewSection = async (account) => {
   const enriched = await enrichPoliticalProfile(account);
   if (!enriched.enrichmentSuccess) {
@@ -300,130 +301,11 @@ const buildOverviewCardsSection = (account, profile, overviewData) => {
   };
 };
 
-const buildInfluenceSection = (account, snapshots = []) => {
-  const subscribers = Number(account.subscribers || 0);
-  const views = Number(account.views || 0);
-  const engagement = Number(account.engagement || 0);
+const buildInfluenceSection = (account, snapshots = [], profile = {}) =>
+  calculateInfluenceMetrics({ account, profile, snapshots });
 
-  let audienceGrowth = 0;
-  if (snapshots.length >= 2) {
-    const oldest = snapshots[0];
-    const latest = snapshots[snapshots.length - 1];
-    const baseFollowers = Number(oldest.followers || 0);
-    const latestFollowers = Number(latest.followers || 0);
-    if (baseFollowers > 0) {
-      audienceGrowth =
-        Math.round(((latestFollowers - baseFollowers) / baseFollowers) * 1000) /
-        10;
-    }
-  }
-
-  const logSubs = Math.log10(Math.max(subscribers, 1));
-  const logViews = Math.log10(Math.max(views, 1));
-
-  return {
-    influence: {
-      nationalReach: clampScore(logSubs * 20),
-      regionalReach: clampScore(logSubs * 16),
-      digitalInfluence: clampScore(logSubs * 14 + engagement * 2),
-      audienceGrowth,
-      engagementScore: clampScore(engagement * 10),
-      visibilityScore: clampScore(logViews * 8),
-      trustScore: clampScore(40 + engagement * 3),
-      followerQualityScore: clampScore(engagement * 8 + logSubs * 5),
-      explanation: `Derived from ${subscribers.toLocaleString()} subscribers, ${views.toLocaleString()} views, and ${engagement}% engagement across stored telemetry.`,
-    },
-  };
-};
-
-const INDIAN_STATES = [
-  "Andhra Pradesh",
-  "Arunachal Pradesh",
-  "Assam",
-  "Bihar",
-  "Chhattisgarh",
-  "Goa",
-  "Gujarat",
-  "Haryana",
-  "Himachal Pradesh",
-  "Jharkhand",
-  "Karnataka",
-  "Kerala",
-  "Madhya Pradesh",
-  "Maharashtra",
-  "Manipur",
-  "Meghalaya",
-  "Mizoram",
-  "Nagaland",
-  "Odisha",
-  "Punjab",
-  "Rajasthan",
-  "Sikkim",
-  "Tamil Nadu",
-  "Telangana",
-  "Tripura",
-  "Uttar Pradesh",
-  "Uttarakhand",
-  "West Bengal",
-  "Delhi",
-  "Jammu and Kashmir",
-];
-
-const buildReachSection = (account, profile) => {
-  const homeState =
-    account.state || profile?.biography?.state || "Unknown State";
-  const subscribers = Number(account.subscribers || 0);
-  const baseInfluence = clampScore(Math.log10(Math.max(subscribers, 1)) * 18);
-
-  const geographicReach = [
-    {
-      state: homeState,
-      concentration: 55,
-      influenceScore: baseInfluence,
-    },
-  ];
-
-  for (const state of INDIAN_STATES) {
-    if (state === homeState || geographicReach.length >= 6) continue;
-    geographicReach.push({
-      state,
-      concentration: Math.max(2, Math.round(12 - geographicReach.length * 2)),
-      influenceScore: clampScore(baseInfluence * 0.35),
-    });
-  }
-
-  return {
-    geographicReach,
-    audienceAnalytics: {
-      ageGroups: {
-        "18-24": 25,
-        "25-34": 40,
-        "35-44": 20,
-        "45+": 15,
-      },
-      gender: {
-        male: 75,
-        female: 24,
-        other: 1,
-      },
-      devices: {
-        mobile: 85,
-        desktop: 12,
-        tablet: 3,
-      },
-      languages: {
-        Hindi: 50,
-        English: 25,
-        Regional: 25,
-      },
-      peakWatchTime: "7 PM - 10 PM",
-      topCities: ["Mumbai", "Delhi", homeState !== "Unknown State" ? homeState : "Bangalore"],
-      topCountries: ["India", "United States", "UAE"],
-      returningPct: 45,
-      newPct: 55,
-    },
-  };
-};
+const buildReachSection = (account, profile = {}) =>
+  buildGeographicInfluence({ account, profile });
 
 const buildAiInsightsSection = async (account, profile) => {
   const { summary, insights } = await generateAiPoliticalSummary({
@@ -888,11 +770,12 @@ const runBuildProfile = async (
   }
 
   if (outdatedSections.includes("influence")) {
+    const workingProfile = { ...(profile?.toObject?.() || profile || {}), ...updatePayload };
     const influenceResult = await runBuildSection(
       "buildInfluence",
       accountIdStr,
       logPrefix,
-      () => buildInfluenceSection(account, snapshots),
+      () => buildInfluenceSection(account, snapshots, workingProfile),
       { influence: {} }
     );
     if (!influenceResult.success) {
@@ -904,12 +787,28 @@ const runBuildProfile = async (
   }
 
   if (outdatedSections.includes("reach")) {
+    const workingProfile = { ...(profile?.toObject?.() || profile || {}), ...updatePayload };
     const reachResult = await runBuildSection(
       "buildReach",
       accountIdStr,
       logPrefix,
-      () => buildReachSection(account, profile),
-      { geographicReach: [], audienceAnalytics: {} }
+      () => buildReachSection(account, workingProfile),
+      {
+        geographicReach: [],
+        audienceAnalytics: {},
+        geographicMeta: {
+          status: "monitoring",
+          message:
+            "Geographic monitoring active. State influence will populate as verified evidence syncs.",
+          verifiedCoverage: 0,
+          regionalSummary: {
+            primaryRegion: null,
+            secondaryRegions: [],
+            emergingRegions: [],
+            verifiedCoverage: 0,
+          },
+        },
+      }
     );
     if (!reachResult.success) {
       sectionErrors.push({ section: "buildReach", error: reachResult.error });
@@ -1006,6 +905,25 @@ const runBuildProfile = async (
     console.log(
       `${logPrefix} Upgraded ${account.name} accountId=${accountIdStr} sections=[${uniqueSectionsBuilt.join(", ")}] duration=${formatDuration(Date.now() - buildStartedAt)}`
     );
+  }
+
+  // Auto-index Intelligence Hub + refresh linked report metadata (no duplicates)
+  if (profile && account?.userId && (profile.syncStatus === "ready" || sectionErrors.length === 0)) {
+    setImmediate(() => {
+      (async () => {
+        try {
+          await autoSavePoliticalProfileReport(account, profile, {
+            sectionsBuilt: uniqueSectionsBuilt,
+            skipQuota: true,
+          });
+          await syncAssociatedReportsMetadata(account, profile, {
+            extraKeywords: uniqueSectionsBuilt,
+          });
+        } catch (err) {
+          console.warn("[PROFILE SYNC] report hub sync failed:", err.message);
+        }
+      })();
+    });
   }
 
   return {

@@ -14,6 +14,8 @@ const HistoryLogs = lazy(() => import("./pages/HistoryLogs"));
 const SettingsEngine = lazy(() => import("./pages/SettingsEngine"));
 const Competitors = lazy(() => import("./pages/Competitors"));
 const Reports = lazy(() => import("./pages/Reports"));
+const ReportDetail = lazy(() => import("./pages/ReportDetail"));
+const SharedReport = lazy(() => import("./pages/SharedReport"));
 const Login = lazy(() => import("./pages/Login"));
 const Register = lazy(() => import("./pages/Register"));
 const GroupAnalytics = lazy(() => import("./pages/GroupAnalytics"));
@@ -45,6 +47,7 @@ function App() {
           <Route path="/register" element={<Register />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/shared/:token" element={<SharedReport />} />
 
           {/* Dedicated Error Paths */}
           <Route path="/error/*" element={<ErrorRouter />} />
@@ -59,6 +62,7 @@ function App() {
             <Route path="/settings" element={<SettingsEngine />} />
             <Route path="/competitors" element={<Competitors />} />
             <Route path="/reports" element={<Reports />} />
+            <Route path="/reports/:reportId" element={<ReportDetail />} />
             <Route path="/groups/:groupName" element={<GroupAnalytics />} />
             <Route path="/billing" element={<Billing />} />
             <Route path="/profile/:creatorId" element={<PoliticalProfile />} />

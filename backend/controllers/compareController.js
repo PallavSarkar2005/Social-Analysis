@@ -3,6 +3,7 @@ import axios from "axios";
 import { generateCreatorComparisonReport } from "../services/aiCompareService.js";
 import { getChannelByHandle, unescapeUrl } from "./analyzerController.js";
 import { youtubeGet } from "../utils/youtubeClient.js";
+import Account from "../models/Account.js";
 
 const extractXUsername = (url) => {
   const match = url.match(/x\.com\/([^/?]+)/i);
@@ -552,18 +553,34 @@ export const compareYoutubeCreators = async (req, res, next) => {
     console.log("Comparison completed. Overall Winner:", overallWinner);
     console.log("================ [COMPARE YOUTUBE CREATORS END] ================\n");
 
+    const comparisonPayload = {
+      winnerSubscribers,
+      winnerViews,
+      winnerEngagement,
+      winnerVideos,
+      overallWinner,
+    };
+
+    // Auto-index Intelligence Hub (idempotent)
+    setImmediate(() => {
+      import("../services/autoSaveReportService.js")
+        .then(({ autoSaveComparisonReport }) =>
+          autoSaveComparisonReport(req.user._id, {
+            creatorA,
+            creatorB,
+            comparison: comparisonPayload,
+            aiReport,
+          })
+        )
+        .catch(() => {});
+    });
+
     res.status(200).json({
       success: true,
       creatorA,
       creatorB,
       aiReport,
-      comparison: {
-        winnerSubscribers,
-        winnerViews,
-        winnerEngagement,
-        winnerVideos,
-        overallWinner,
-      },
+      comparison: comparisonPayload,
     });
   } catch (error) {
     console.error("Error at catch block in compareYoutubeCreators:", error.message);

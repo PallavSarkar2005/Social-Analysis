@@ -12,7 +12,9 @@ export const isVerifiedValue = (value) => {
     return true;
   }
   if (Array.isArray(value)) return value.some((entry) => isVerifiedValue(entry));
-  return true;
+  // Plain objects (e.g. evidence {type,label,detail,source}) are NOT displayable scalars.
+  // Treating them as verified caused React "Objects are not valid as a React child" crashes.
+  return false;
 };
 
 export const extractYear = (text) => {

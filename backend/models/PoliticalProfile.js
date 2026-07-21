@@ -174,15 +174,34 @@ const politicalProfileSchema = new mongoose.Schema(
     },
 
     influence: {
+      influenceScore: { type: Number, default: 0 },
       nationalReach: { type: Number, default: 0 },
       regionalReach: { type: Number, default: 0 },
+      regionalInfluence: { type: Number, default: 0 },
       digitalInfluence: { type: Number, default: 0 },
-      audienceGrowth: { type: Number, default: 0 },
+      politicalReach: { type: Number, default: 0 },
+      electionStrength: { type: Number, default: 0 },
+      mediaVisibility: { type: Number, default: 0 },
+      publicEngagement: { type: Number, default: 0 },
+      digitalPresence: { type: Number, default: 0 },
+      verifiedConfidence: { type: Number, default: 0 },
+      audienceGrowth: { type: Number, default: null },
+      audienceGrowthScore: { type: Number, default: null },
       engagementScore: { type: Number, default: 0 },
+      engagementRate: { type: Number, default: 0 },
       visibilityScore: { type: Number, default: 0 },
       trustScore: { type: Number, default: 0 },
       followerQualityScore: { type: Number, default: 0 },
+      followerQuality: { type: Number, default: 0 },
       explanation: { type: String, default: "" },
+      lastCalculated: { type: Date, default: null },
+      calculationVersion: { type: Number, default: 0 },
+      dataAvailable: { type: Boolean, default: false },
+      factors: { type: [String], default: [] },
+      politicalRole: { type: String, default: null },
+      electionWins: { type: Number, default: 0 },
+      electionContests: { type: Number, default: 0 },
+      metrics: { type: [mongoose.Schema.Types.Mixed], default: [] },
     },
 
     news: [
@@ -207,50 +226,54 @@ const politicalProfileSchema = new mongoose.Schema(
     geographicReach: [
       {
         state: { type: String, required: true },
-        concentration: { type: Number, default: 0 }, // Percent value e.g. 0-100
+        concentration: { type: Number, default: 0 },
         influenceScore: { type: Number, default: 0 },
+        followers: { type: Number, default: 0 },
+        confidence: { type: Number, default: 0 },
+        evidenceCount: { type: Number, default: 0 },
+        evidence: { type: [mongoose.Schema.Types.Mixed], default: [] },
+        politicalRole: { type: String, default: null },
+        electionWins: { type: Number, default: 0 },
+        electionHistory: { type: [mongoose.Schema.Types.Mixed], default: [] },
+        primarySources: { type: [String], default: [] },
+        source: { type: String, default: "" },
+        lastUpdated: { type: Date, default: null },
+        isHomeState: { type: Boolean, default: false },
+        isPrimary: { type: Boolean, default: false },
+        tier: { type: String, default: "monitoring" },
+        status: { type: String, default: "monitoring" },
       },
     ],
 
+    geographicMeta: {
+      status: { type: String, default: "monitoring" },
+      message: {
+        type: String,
+        default:
+          "Geographic monitoring active. State influence will populate as verified evidence syncs.",
+      },
+      lastCalculated: { type: Date, default: null },
+      calculationVersion: { type: Number, default: 0 },
+      evidenceCount: { type: Number, default: 0 },
+      verifiedCoverage: { type: Number, default: 0 },
+      regionalSummary: {
+        primaryRegion: { type: String, default: null },
+        secondaryRegions: { type: [String], default: [] },
+        emergingRegions: { type: [String], default: [] },
+        verifiedCoverage: { type: Number, default: 0 },
+      },
+    },
+
     audienceAnalytics: {
-      ageGroups: {
-        type: mongoose.Schema.Types.Mixed,
-        default: {
-          "18-24": 25,
-          "25-34": 40,
-          "35-44": 20,
-          "45+": 15,
-        },
-      },
-      gender: {
-        type: mongoose.Schema.Types.Mixed,
-        default: {
-          male: 75,
-          female: 24,
-          other: 1,
-        },
-      },
-      devices: {
-        type: mongoose.Schema.Types.Mixed,
-        default: {
-          mobile: 85,
-          desktop: 12,
-          tablet: 3,
-        },
-      },
-      languages: {
-        type: mongoose.Schema.Types.Mixed,
-        default: {
-          Hindi: 50,
-          English: 25,
-          Regional: 25,
-        },
-      },
-      peakWatchTime: { type: String, default: "7 PM - 10 PM" },
-      topCities: { type: [String], default: ["Mumbai", "Delhi", "Guwahati", "Bangalore"] },
-      topCountries: { type: [String], default: ["India", "United States", "UAE"] },
-      returningPct: { type: Number, default: 45 },
-      newPct: { type: Number, default: 55 },
+      ageGroups: { type: mongoose.Schema.Types.Mixed, default: {} },
+      gender: { type: mongoose.Schema.Types.Mixed, default: {} },
+      devices: { type: mongoose.Schema.Types.Mixed, default: {} },
+      languages: { type: mongoose.Schema.Types.Mixed, default: {} },
+      peakWatchTime: { type: String, default: "" },
+      topCities: { type: [String], default: [] },
+      topCountries: { type: [String], default: [] },
+      returningPct: { type: Number, default: null },
+      newPct: { type: Number, default: null },
     },
 
     aiInsights: {
@@ -265,6 +288,10 @@ const politicalProfileSchema = new mongoose.Schema(
         type: { type: String, default: "scrape" },
         confidence: { type: Number, default: 0 },
         fetchedAt: { type: Date, default: Date.now },
+        verified: { type: Boolean, default: true },
+        matchedIdentity: { type: Boolean, default: true },
+        lastChecked: { type: Date, default: null },
+        statusCode: { type: Number, default: null },
       },
     ],
 

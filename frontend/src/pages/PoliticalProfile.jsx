@@ -6,7 +6,7 @@ import {
   User, Calendar, MapPin, Award, Shield, Clock, ExternalLink, Globe,
   Briefcase, GraduationCap, Trophy, Newspaper, Send, ArrowLeft,
   ChevronRight, Sparkles, TrendingUp, Users, Eye, Video, BarChart2,
-  PieChart as PieIcon, ThumbsUp, MessageSquare, AlertCircle, Bot
+  PieChart as PieIcon, ThumbsUp, MessageSquare, AlertCircle, Bot, Info
 } from "lucide-react";
 import { ensureAccessToken } from "../api/client";
 import Sidebar from "../components/layout/Sidebar";
@@ -27,8 +27,15 @@ import RelationshipIntelligencePanel from "../components/profile/RelationshipInt
 import SectionFreshnessBar from "../components/profile/SectionFreshnessBar";
 import AISummaryPanel from "../components/profile/AISummaryPanel";
 import WidgetErrorBoundary from "../components/WidgetErrorBoundary";
+import ProfileContentBoundary from "../components/profile/ProfileContentBoundary";
 import { isVerifiedValue, safeArray } from "../utils/profileFacts";
 import { formatIndianDate } from "../utils/dateFormatter";
+import { safeText } from "../utils/safeData";
+import {
+  autoSaveReport,
+  buildPoliticalProfileReportPayload,
+  buildModuleReportPayload,
+} from "../utils/autoSaveReport";
 import {
   ResponsiveContainer, LineChart, Line, BarChart, Bar,
   XAxis, YAxis, Tooltip, PieChart, Pie, Cell, Legend
@@ -250,8 +257,135 @@ export default function PoliticalProfile() {
     prevSyncStatusRef.current = syncStatus;
   }, [syncStatus, creatorId, queryClient]);
 
+  // Derive hub slices early (hooks must run before any early return)
+  const hubElections = safeArray(electionsData?.data);
+  const hubNewsItems = safeArray(newsData?.data?.news);
+  const hubInfluence = influenceData?.data?.influence || null;
+  const hubGeographicMeta = influenceData?.data?.geographicMeta || null;
+  const hubAiSummary = aiInsightsData?.data?.summary || {};
+
+  // Auto-save Political Profile (+ module reports) into Intelligence Hub
+  useEffect(() => {
+    if (!profilePayload || syncStatus === "building" || syncStatus === "pending") return;
+
+    const name = biography.fullName || account.name || "Political Profile";
+    const profileId = profilePayload._id || profilePayload.id;
+    const accountId = account._id || account.id || creatorId;
+    const thumb =
+      account.thumbnails?.high?.url ||
+      account.thumbnails?.medium?.url ||
+      account.thumbnail ||
+      "";
+
+    autoSaveReport(
+      buildPoliticalProfileReportPayload({
+        profile: profilePayload,
+        account,
+        biography,
+        confidenceScore,
+        aiSummary: hubAiSummary,
+        sections: Object.keys(sectionMeta || {}),
+        engineVersion: profilePayload.builderVersion,
+        analysisVersion: profilePayload.profileSchemaVersion,
+      })
+    );
+
+    if (hubElections.length > 0) {
+      autoSaveReport(
+        buildModuleReportPayload({
+          type: "election",
+          title: name,
+          source: `election:${accountId}`,
+          profileId,
+          accountId,
+          politicianName: name,
+          summary: `${hubElections.length} election records indexed`,
+          confidence: confidenceScore,
+          thumbnail: thumb,
+          tags: [biography.party || account.party, biography.state || account.state].filter(Boolean),
+          modules: ["election"],
+          content: {
+            kind: "election",
+            profileId,
+            accountId,
+            count: hubElections.length,
+            recent: hubElections.slice(0, 8),
+          },
+        })
+      );
+    }
+
+    if (
+      hubInfluence &&
+      (hubInfluence.dataAvailable === true ||
+        Number(hubInfluence.influenceScore) > 0 ||
+        (Array.isArray(hubInfluence.metrics) && hubInfluence.metrics.length > 0))
+    ) {
+      autoSaveReport(
+        buildModuleReportPayload({
+          type: "influence",
+          title: name,
+          source: `influence:${accountId}`,
+          profileId,
+          accountId,
+          politicianName: name,
+          summary: hubInfluence.explanation || `Influence score ${hubInfluence.influenceScore ?? "n/a"}`,
+          confidence: confidenceScore,
+          thumbnail: thumb,
+          tags: [biography.party || account.party].filter(Boolean),
+          modules: ["influence"],
+          content: {
+            kind: "influence",
+            profileId,
+            accountId,
+            influenceScore: hubInfluence.influenceScore ?? null,
+            metrics: hubInfluence.metrics || [],
+            geographicMeta: hubGeographicMeta,
+          },
+        })
+      );
+    }
+
+    if (hubNewsItems.length > 0) {
+      autoSaveReport(
+        buildModuleReportPayload({
+          type: "news_sentiment",
+          title: name,
+          source: `news_sentiment:${accountId}`,
+          profileId,
+          accountId,
+          politicianName: name,
+          summary: `${hubNewsItems.length} news items · sentiment tracked`,
+          confidence: confidenceScore,
+          thumbnail: thumb,
+          tags: ["news", "sentiment"],
+          modules: ["news"],
+          content: {
+            kind: "news_sentiment",
+            profileId,
+            accountId,
+            count: hubNewsItems.length,
+            headlines: hubNewsItems.slice(0, 10).map((n) => n.headline || n.title),
+            sentiment: newsData?.data?.sentiment || null,
+          },
+        })
+      );
+    }
+  }, [
+    profilePayload?._id,
+    syncStatus,
+    confidenceScore,
+    creatorId,
+    biography.fullName,
+    account?._id,
+    hubElections.length,
+    hubNewsItems.length,
+    hubInfluence?.influenceScore,
+    typeof hubAiSummary === "string" ? hubAiSummary : hubAiSummary?.overview,
+  ]);
+
   const aiInsights = safeArray(aiInsightsData?.data?.insights);
-  const aiSummary = aiInsightsData?.data?.summary || {};
+  const aiSummary = hubAiSummary;
 
   if (bioLoading) {
     return (
@@ -286,6 +420,22 @@ export default function PoliticalProfile() {
   const elections = safeArray(electionsData?.data);
   const sentimentKeywords = safeArray(newsData?.data?.sentiment?.keywords);
   const geographicReach = safeArray(influenceData?.data?.geographicReach);
+  const geographicMeta = influenceData?.data?.geographicMeta || null;
+  const influenceMetrics = influenceData?.data?.influence || null;
+  const influenceAvailable = Boolean(
+    influenceMetrics &&
+      (influenceMetrics.dataAvailable === true ||
+        (Array.isArray(influenceMetrics.metrics) &&
+          influenceMetrics.metrics.some((m) => Number(m.score) > 0)) ||
+        (Array.isArray(influenceMetrics.factors) && influenceMetrics.factors.length > 0) ||
+        (influenceMetrics.dataAvailable == null &&
+          Number(
+            influenceMetrics.influenceScore ||
+              influenceMetrics.digitalInfluence ||
+              influenceMetrics.nationalReach ||
+              0
+          ) > 0))
+  );
 
   const contentDistributionMessage =
     chartsData?.data?.contentDistributionMessage ||
@@ -312,6 +462,7 @@ export default function PoliticalProfile() {
     <div className="flex min-h-screen bg-[#090a0f] text-slate-100 antialiased font-sans">
       <Sidebar />
 
+      <ProfileContentBoundary creatorId={creatorId}>
       <div className="flex-1 flex flex-col min-w-0 overflow-y-auto relative z-10 px-4 py-6 md:p-8 space-y-6">
         
         {/* Navigation back and quick breadcrumbs */}
@@ -370,15 +521,15 @@ export default function PoliticalProfile() {
             </div>
 
             <p className="text-sm text-indigo-400 font-semibold leading-normal">
-              {biography.currentPosition || biography.currentOffice || null}
+              {safeText(biography.currentPosition || biography.currentOffice) || null}
             </p>
 
             <div className="flex flex-wrap items-center justify-center md:justify-start gap-x-4 gap-y-2 text-xs text-slate-400 pt-1 font-sans">
               {isVerifiedValue(biography.state || account.state) && (
-                <span className="flex items-center gap-1"><MapPin className="w-3.5 h-3.5 text-slate-500" /> {biography.state || account.state}</span>
+                <span className="flex items-center gap-1"><MapPin className="w-3.5 h-3.5 text-slate-500" /> {safeText(biography.state || account.state)}</span>
               )}
               {isVerifiedValue(biography.party || account.party) && (
-                <span className="flex items-center gap-1"><Award className="w-3.5 h-3.5 text-slate-500" /> {biography.party || account.party}</span>
+                <span className="flex items-center gap-1"><Award className="w-3.5 h-3.5 text-slate-500" /> {safeText(biography.party || account.party)}</span>
               )}
               {verifiedAt && (
                 <span className="flex items-center gap-1"><Clock className="w-3.5 h-3.5 text-slate-500" /> Updated {formatIndianDate(verifiedAt)}</span>
@@ -451,7 +602,7 @@ export default function PoliticalProfile() {
                         <card.icon className="w-3.5 h-3.5 text-slate-500" />
                       </div>
                       <h3 className="text-xl font-extrabold text-white mt-3">
-                        {typeof card.val === "number" ? card.val.toLocaleString() : card.val}
+                        {typeof card.val === "number" ? card.val.toLocaleString() : safeText(card.val)}
                       </h3>
                     </div>
                   ))}
@@ -487,7 +638,7 @@ export default function PoliticalProfile() {
                     ].filter((item) => isVerifiedValue(item.val)).map((item, idx) => (
                       <div key={idx} className="space-y-1">
                         <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{item.label}</span>
-                        <p className="text-xs font-semibold text-slate-200">{item.val}</p>
+                        <p className="text-xs font-semibold text-slate-200">{safeText(item.val)}</p>
                       </div>
                     ))}
                   </div>
@@ -516,16 +667,29 @@ export default function PoliticalProfile() {
                     sectionMeta={sectionMeta}
                   />
                 </WidgetErrorBoundary>
-                {influenceData?.data?.influence && (
+                {influenceMetrics && (
                   <div className="bg-gradient-to-br from-indigo-950/20 to-purple-950/20 border border-white/[0.06] rounded-2xl p-6 text-left space-y-4">
                     <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Political Reach Index</h4>
-                    <div className="flex items-baseline gap-1.5">
-                      <span className="text-4xl font-extrabold text-white">{influenceData.data.influence.digitalInfluence}</span>
-                      <span className="text-xs text-slate-500">/100</span>
-                    </div>
-                    <p className="text-xs text-slate-300 leading-relaxed">
-                      {influenceData.data.influence.explanation}
-                    </p>
+                    {influenceAvailable ? (
+                      <>
+                        <div className="flex items-baseline gap-1.5">
+                          <span className="text-4xl font-extrabold text-white">
+                            {safeText(
+                              influenceMetrics.influenceScore ??
+                                influenceMetrics.digitalInfluence ??
+                                0
+                            )}
+                          </span>
+                          <span className="text-xs text-slate-500">/100</span>
+                        </div>
+                        <p className="text-xs text-slate-300 leading-relaxed">
+                          {safeText(influenceMetrics.explanation) ||
+                            "Calculated from stored channel telemetry."}
+                        </p>
+                      </>
+                    ) : (
+                      <p className="text-xs text-slate-400">Data unavailable</p>
+                    )}
                   </div>
                 )}
 
@@ -533,16 +697,18 @@ export default function PoliticalProfile() {
                 <div className="bg-[#121318]/20 border border-white/[0.06] rounded-2xl p-6 text-left space-y-4">
                   <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Similar Political Figures</h4>
                   <div className="space-y-3">
-                    {similarLeaders.map((item) => (
+                    {similarLeaders.map((item, idx) => (
                       <Link
-                        key={item._id}
-                        to={`/profile/${item._id}`}
+                        key={item?._id || item?.id || `similar-${idx}`}
+                        to={`/profile/${item?._id || item?.id || ""}`}
                         className="flex items-center gap-3 p-2.5 rounded-xl bg-white/[0.02] border border-white/[0.04] hover:bg-white/[0.06] transition"
                       >
                         <LeaderAvatar creator={item} size={32} />
                         <div className="min-w-0">
-                          <h5 className="text-xs font-bold text-white truncate">{item.name}</h5>
-                          <span className="text-[9px] text-slate-500 uppercase tracking-wider">{item.party} | {item.state}</span>
+                          <h5 className="text-xs font-bold text-white truncate">{safeText(item?.name) || "Leader"}</h5>
+                          <span className="text-[9px] text-slate-500 uppercase tracking-wider">
+                            {safeText(item?.party) || "—"} | {safeText(item?.state) || "—"}
+                          </span>
                         </div>
                         <ChevronRight className="w-3.5 h-3.5 text-slate-500 ml-auto" />
                       </Link>
@@ -720,33 +886,110 @@ export default function PoliticalProfile() {
           {activeTab === "influence" && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
               
-              {/* Detailed reach statistics */}
+              {/* Influence Intelligence metrics */}
               <div className="bg-[#121318]/20 border border-white/[0.06] rounded-2xl p-6 text-left space-y-6">
-                <div>
-                  <h3 className="text-sm font-bold text-white uppercase tracking-wider">Influence Score Board</h3>
-                  <p className="text-xs text-slate-400 mt-1">Multi-tier outreach and audience indexes</p>
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <h3 className="text-sm font-bold text-white uppercase tracking-wider">Influence Intelligence</h3>
+                    <p className="text-xs text-slate-400 mt-1">
+                      Where they lead, why it holds, and how confident we are
+                    </p>
+                  </div>
+                  {influenceMetrics?.lastCalculated && (
+                    <span className="text-[9px] text-slate-500 whitespace-nowrap pt-0.5">
+                      Updated {formatIndianDate(influenceMetrics.lastCalculated)}
+                    </span>
+                  )}
                 </div>
 
-                {influenceData?.data?.influence && (
+                {influenceMetrics?.explanation && (
+                  <p className="text-[11px] text-slate-400 leading-relaxed border border-white/[0.04] rounded-xl bg-white/[0.015] px-3 py-2">
+                    {safeText(influenceMetrics.explanation)}
+                  </p>
+                )}
+
+                {influenceLoading ? (
                   <div className="grid grid-cols-2 gap-4">
-                    {[
-                      { label: "National Reach", val: influenceData.data.influence.nationalReach },
-                      { label: "Regional Reach", val: influenceData.data.influence.regionalReach },
-                      { label: "Trust Score", val: influenceData.data.influence.trustScore },
-                      { label: "Follower Quality", val: influenceData.data.influence.followerQualityScore },
-                      { label: "Audience Growth", val: influenceData.data.influence.audienceGrowth },
-                      { label: "Engagement Rating", val: influenceData.data.influence.engagementScore },
-                    ].map((score, idx) => (
-                      <div key={idx} className="bg-white/[0.01] border border-white/[0.04] p-4 rounded-xl space-y-2">
-                        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{score.label}</span>
-                        <div className="flex items-center gap-2">
-                          <div className="flex-1 bg-white/[0.04] h-1.5 rounded-full overflow-hidden">
-                            <div className="bg-indigo-500 h-full rounded-full" style={{ width: `${score.val}%` }} />
-                          </div>
-                          <span className="text-xs font-bold text-white">{score.val}%</span>
-                        </div>
-                      </div>
+                    {Array.from({ length: 6 }).map((_, idx) => (
+                      <div key={idx} className="bg-white/[0.01] border border-white/[0.04] p-4 rounded-xl h-24 animate-pulse" />
                     ))}
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-4">
+                    {(Array.isArray(influenceMetrics?.metrics) && influenceMetrics.metrics.length > 0
+                      ? influenceMetrics.metrics
+                      : [
+                          { key: "politicalReach", label: "Political Reach", score: influenceMetrics?.politicalReach ?? influenceMetrics?.nationalReach, tooltip: "Political office, represented state, elections, and audience scale.", sources: [] },
+                          { key: "electionStrength", label: "Election Strength", score: influenceMetrics?.electionStrength, tooltip: "Verified wins relative to recorded election contests.", sources: [] },
+                          { key: "mediaVisibility", label: "Media Visibility", score: influenceMetrics?.mediaVisibility ?? influenceMetrics?.visibilityScore, tooltip: "Views, news coverage, and publishing cadence.", sources: [] },
+                          { key: "publicEngagement", label: "Public Engagement", score: influenceMetrics?.publicEngagement ?? influenceMetrics?.engagementScore, tooltip: "Engagement rate, average views, and mention activity.", sources: [] },
+                          { key: "digitalPresence", label: "Digital Presence", score: influenceMetrics?.digitalPresence ?? influenceMetrics?.digitalInfluence, tooltip: "Subscribers, platforms, and digital footprint.", sources: [] },
+                          { key: "verifiedConfidence", label: "Verified Confidence", score: influenceMetrics?.verifiedConfidence ?? influenceMetrics?.trustScore, tooltip: "Verification score, facts, and supporting sources.", sources: [] },
+                        ]
+                    ).map((metric, idx) => {
+                      const score =
+                        metric.score != null && Number.isFinite(Number(metric.score))
+                          ? Math.min(100, Math.max(0, Number(metric.score)))
+                          : null;
+                      const sources = Array.isArray(metric.sources)
+                        ? metric.sources.map((s) => safeText(s)).filter(Boolean)
+                        : [];
+                      return (
+                        <div
+                          key={metric.key || idx}
+                          className="group relative bg-white/[0.01] border border-white/[0.04] hover:border-indigo-500/25 p-4 rounded-xl space-y-2.5 transition"
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">
+                              {safeText(metric.label)}
+                            </span>
+                            {metric.tooltip && (
+                              <div className="relative">
+                                <Info className="w-3 h-3 text-slate-600 group-hover:text-indigo-400 transition" />
+                                <div className="pointer-events-none absolute right-0 top-5 z-30 w-52 rounded-lg border border-white/[0.08] bg-[#161822] p-2.5 text-[10px] text-slate-300 leading-relaxed opacity-0 shadow-xl transition group-hover:opacity-100">
+                                  {safeText(metric.tooltip)}
+                                  {sources.length > 0 && (
+                                    <p className="mt-1.5 text-[9px] text-slate-500">
+                                      Sources: {sources.join(" · ")}
+                                    </p>
+                                  )}
+                                  {metric.lastUpdated && (
+                                    <p className="mt-1 text-[9px] text-slate-600">
+                                      Updated {formatIndianDate(metric.lastUpdated)}
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                          {score != null ? (
+                            <>
+                              <div className="flex items-end justify-between gap-2">
+                                <span className="text-xl font-extrabold text-white tabular-nums leading-none">
+                                  {Math.round(score)}
+                                  <span className="text-[10px] font-semibold text-slate-500 ml-0.5">%</span>
+                                </span>
+                              </div>
+                              <div className="bg-white/[0.04] h-1.5 rounded-full overflow-hidden">
+                                <motion.div
+                                  className="h-full rounded-full bg-gradient-to-r from-indigo-600 to-indigo-400"
+                                  initial={{ width: 0 }}
+                                  animate={{ width: `${score}%` }}
+                                  transition={{ duration: 0.75, ease: "easeOut", delay: idx * 0.05 }}
+                                />
+                              </div>
+                              {sources.length > 0 && (
+                                <p className="text-[9px] text-slate-600 truncate">
+                                  {sources.slice(0, 2).join(" · ")}
+                                </p>
+                              )}
+                            </>
+                          ) : (
+                            <p className="text-[11px] text-slate-500 pt-1">Monitoring — awaiting verified inputs</p>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -756,6 +999,7 @@ export default function PoliticalProfile() {
                 <IndiaMap
                   data={geographicReach}
                   activeState={biography.state}
+                  geographicMeta={geographicMeta}
                 />
               </div>
 
@@ -774,28 +1018,57 @@ export default function PoliticalProfile() {
                 </div>
 
                 <div className="space-y-4">
-                  {newsItems.map((item, idx) => (
-                    <a
-                      key={idx}
-                      href={item.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="block p-4 rounded-xl bg-white/[0.02] border border-white/[0.04] hover:bg-white/[0.06] transition space-y-3 cursor-pointer"
-                    >
-                      <div className="flex justify-between items-start gap-4">
-                        <h4 className="text-xs font-bold text-white hover:text-indigo-400 transition leading-snug">
-                          {item.headline}
-                        </h4>
-                        <span className="shrink-0 text-[9px] bg-white/[0.04] border border-white/[0.08] px-2 py-0.5 rounded text-slate-400 font-medium">
-                          {item.source}
-                        </span>
+                  {newsItems.map((item, idx) => {
+                    const href =
+                      typeof item.url === "string" && /^https:\/\//i.test(item.url.trim())
+                        ? item.url.trim()
+                        : "";
+                    const headline = safeText(item.headline) || "Headline";
+                    const meta = (
+                      <>
+                        <div className="flex justify-between items-start gap-4">
+                          <h4
+                            className={`text-xs font-bold leading-snug transition ${
+                              href
+                                ? "text-white hover:text-indigo-300 cursor-pointer"
+                                : "text-white"
+                            }`}
+                          >
+                            {headline}
+                          </h4>
+                          <span className="shrink-0 text-[9px] bg-white/[0.04] border border-white/[0.08] px-2 py-0.5 rounded text-slate-400 font-medium">
+                            {safeText(item.source) || "Source"}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 text-[10px] text-slate-500">
+                          <Newspaper className="w-3.5 h-3.5" />
+                          <span>Published {item.publishedTime}</span>
+                        </div>
+                        {!href && (
+                          <p className="text-[10px] text-slate-500">Verified article unavailable</p>
+                        )}
+                      </>
+                    );
+
+                    return href ? (
+                      <a
+                        key={idx}
+                        href={href}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="block p-4 rounded-xl bg-white/[0.02] border border-white/[0.04] hover:bg-white/[0.06] transition space-y-3 cursor-pointer"
+                      >
+                        {meta}
+                      </a>
+                    ) : (
+                      <div
+                        key={idx}
+                        className="block p-4 rounded-xl bg-white/[0.02] border border-white/[0.04] space-y-3"
+                      >
+                        {meta}
                       </div>
-                      <div className="flex items-center gap-2 text-[10px] text-slate-500">
-                        <Newspaper className="w-3.5 h-3.5" />
-                        <span>Published {item.publishedTime}</span>
-                      </div>
-                    </a>
-                  ))}
+                    );
+                  })}
 
                   {newsItems.length === 0 && (
                     <p className="text-xs text-slate-500 italic">No recent news crawled for this political profile.</p>
@@ -961,6 +1234,7 @@ export default function PoliticalProfile() {
         </div>
 
       </div>
+      </ProfileContentBoundary>
     </div>
   );
 }

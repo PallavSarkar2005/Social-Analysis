@@ -60,7 +60,7 @@ By utilizing a hybrid **RAG (Retrieval-Augmented Generation)** framework backed 
 | Feature | Sub-components & Capabilities | Security / Performance |
 | :--- | :--- | :--- |
 | **Enterprise Authentication** | Google OAuth 2.0 Integration, Multi-device session controls, Auto-refresh JWT tokens, Remember Me cookie engine. | CSRF double-cookie submit tokens, rate-limited login endpoints, Mongo Sanitization against Injection. |
-| **Robust Image Upload** | Custom JPG/PNG/WEBP upload handler up to 5MB, static thumbnail routing, profile picture integration. | Express Multer engine, automatic fallback to default profile cards on upload failure. |
+| **Auto Profile Images** | Profile avatars resolved automatically from official public sources and YouTube channel metadata. | Wikimedia/dictionary resolution with YouTube thumbnail fallback — no manual uploads required. |
 | **YouTube Media Analyzer** | Video statistical auditing, channel narrative tracking, automatic database snapshot storage. | Intelligent Cache layer bypassing live API limits, dynamic refresh controls. |
 | **Political Intelligence Profiles** | News aggregation, bio summaries, timeline milestones, election history tracking, influence matrix. | Hybrid RAG Pipeline utilizing Groq with OpenAI high-performance fallback models. |
 | **State & Party Analytics** | Interactive India Maps, regional density analytics, party alignment tracking. | React Query pre-fetching, lazy-loaded interactive SVG modules. |
@@ -133,7 +133,7 @@ SocialIQ/
 │   ├── scrapers/                  # Custom RSS and web extraction modules
 │   ├── services/                  # Business services (AI client pipelines, email delivery)
 │   ├── tests/                     # Jest API testing configurations & mocks
-│   ├── uploads/                   # Statically served local profile photos
+│   ├── storage/                   # Local storage for temporary/cached assets
 │   ├── utils/                     # Encryption, helper functions, and schema validators
 │   └── server.js                  # Main server entrypoint
 │
@@ -235,7 +235,6 @@ Create your backend `.env` file containing the following variables:
 | `SERVER_URL` | Required | Backend API Base URL | `http://localhost:5000` |
 | `RAZORPAY_KEY_ID` | Optional | Razorpay key identifier for payments | `rzp_test_...` |
 | `RAZORPAY_SECRET` | Optional | Razorpay client payment signing secret | `your-razorpay-secret` |
-| `UPLOAD_PATH` | Optional | Path to write uploaded files to | `./uploads/` |
 
 ---
 
@@ -268,7 +267,7 @@ SocialIQ relies on a secure **hybrid token/cookie mechanism** for authorization:
 ## 11. Analyzer Workflow
 
 ```text
-[User input: YouTube URL] ➔ [Optional Image Upload] ➔ [Select Party / State]
+[User input: YouTube URL] ➔ [Select Party / State]
                                                                ⬇
 [Dynamic Cache Lookup] ➔ IF Cached ➔ [Load Stale Snapshots] ➔ [Dashboard Display]
       ⬇
@@ -320,7 +319,7 @@ For any creator tracked within SocialIQ, a profile is built via the following au
 ## 14. Dashboard Modules
 
 - **Dashboard:** Unified dashboard displaying metrics (Total Reach, Engagement, Active Channels).
-- **Analyzer:** Live input engine supporting custom image overrides, state metadata, and quick uploads.
+- **Analyzer:** Live input engine for YouTube URLs/handles with party and state metadata.
 - **Creator Compare:** Benchmarks up to 3 creators side-by-side on subscriber progression, engagement, and post rates.
 - **Competitors:** Automated mapping displaying competing channels within the same state/party.
 - **Snapshot History:** Detailed historical record of audited statistics over time.
@@ -362,7 +361,7 @@ SocialIQ is engineered to defend against threats outlined in the OWASP Top 10:
 2. **Dynamic Lazy Loading:** Code-splits routes, mounting views only when needed to optimize bundle sizes.
 3. **Request Deduplication:** Merges identical API queries triggered in parallel into a single flight.
 4. **Database Indexing:** Index structures created on `accountId`, `platform`, and `state` ensure fast retrieval as the dataset grows.
-5. **Image Cache Busting:** Automatically appends timestamps (`?t=timestamp`) to uploaded profile images to bypass browser cache issues.
+5. **Image Cache Busting:** Automatically appends timestamps (`?v=timestamp`) to profile image URLs to bypass browser cache issues.
 
 ---
 
@@ -401,7 +400,6 @@ $env:NODE_OPTIONS="--experimental-vm-modules"; npx jest tests/api.test.js --runI
 | `GET` | `/api/accounts` | Bearer Token | Fetch all monitored channel accounts |
 | `DELETE`| `/api/accounts/:id` | Bearer Token | Remove a creator from the workspace |
 | `POST` | `/api/analyzer/youtube`| Bearer Token | Analyze YouTube URL, retrieve channel statistics |
-| `POST` | `/api/media/upload` | Bearer Token | Upload JPG/PNG/WEBP custom thumbnail |
 
 ### Political Profiles Routes
 
