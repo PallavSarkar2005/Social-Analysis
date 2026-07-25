@@ -1,104 +1,51 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, memo } from "react";
 import { User } from "lucide-react";
-
-// API base URL — relative image paths (legacy /uploads/, etc.) are served from the backend origin.
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
-
-/**
- * Resolves a potentially relative image URL to an absolute URL.
- * Also unescapes HTML entities that the old XSS sanitizer may have injected
- * into stored URLs (e.g. &#x2F; → / , &amp; → &).
- * Handles: /uploads/... → http://localhost:5000/uploads/...
- * Passes through: https://... and http://... unchanged.
- *
- * @param {string} url  - The raw URL from the database
- * @param {number} [v]  - Optional version/timestamp for cache-busting
- */
-const resolveImgUrl = (url, v) => {
-  if (!url || typeof url !== "string" || url.trim() === "") return "";
-
-  // Unescape XSS-encoded entities from previously stored (mangled) data
-  let clean = url
-    .replace(/&#x2F;/g, "/")
-    .replace(/&#x27;/g, "'")
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"');
-
-  // Resolve relative paths to the full backend origin
-  if (!clean.startsWith("http://") && !clean.startsWith("https://") && !clean.startsWith("data:")) {
-    if (clean.startsWith("/")) clean = `${API_BASE}${clean}`;
-  }
-
-  // Append cache-buster when a version timestamp is provided
-  if (v) {
-    const sep = clean.includes("?") ? "&" : "?";
-    clean = `${clean}${sep}v=${v}`;
-  }
-
-  return clean;
-};
+import { resolveImageUrl } from "../../utils/imageUrl";
+import SafeImage from "./SafeImage";
 
 /**
- * LeaderAvatar — Production-grade creator avatar component.
+ * LeaderAvatar — Production-grade creator avatar.
  *
- * Image Priority Order (auto-fallback on error):
- *   1. profileImage   (active resolved profile image from DB)
- *   2. resolvedImage  (official public image e.g. Wikimedia Commons)
- *   3. thumbnail      (YouTube channel thumbnail)
- *   4. Default silhouette placeholder
- *
- * Handles broken URLs gracefully by sequentially trying the next source
- * without breaking the layout or showing empty space.
+ * Priority: profileImage → resolvedImage → thumbnail → silhouette
  */
-export default function LeaderAvatar({ creator, size = 48, className = "" }) {
-  // Build a deduplicated, filtered list of image sources in priority order
+function LeaderAvatar({ creator, size = 48, className = "", priority = false }) {
   const buildSources = (c) => {
-    const v = c?.imageUpdatedAt; // cache-buster version timestamp
+    const v = c?.imageUpdatedAt;
     const candidates = [
       c?.profileImage,
       c?.resolvedImage,
       c?.thumbnail,
+      c?.avatar,
+      c?.image,
+      c?.thumbnails?.high?.url,
+      c?.thumbnails?.medium?.url,
+      c?.thumbnails?.default?.url,
     ];
-    // Resolve, add cache-buster, deduplicate, filter empty
     const seen = new Set();
     return candidates
-    .map((url) => resolveImgUrl(url, v))
-    .filter((url) => {
-      if (!url || typeof url !== "string" || url.trim() === "") return false;
-      if (seen.has(url)) return false;
-      seen.add(url);
-      return true;
-    });
+      .map((url) => resolveImageUrl(url, v))
+      .filter((url) => {
+        if (!url || seen.has(url)) return false;
+        seen.add(url);
+        return true;
+      });
   };
 
   const [sources, setSources] = useState(() => buildSources(creator));
-  const [srcIndex, setSrcIndex] = useState(0);
 
-  // Rebuild source list when creator image props change (including imageUpdatedAt cache-buster)
   useEffect(() => {
-    const newSources = buildSources(creator);
-    setSources(newSources);
-    setSrcIndex(0);
+    setSources(buildSources(creator));
   }, [
     creator?.profileImage,
     creator?.resolvedImage,
     creator?.thumbnail,
+    creator?.avatar,
+    creator?.image,
+    creator?.thumbnails?.high?.url,
+    creator?.thumbnails?.medium?.url,
+    creator?.thumbnails?.default?.url,
     creator?.imageUpdatedAt,
   ]);
-
-  const activeSrc = sources[srcIndex];
-  const hasSrc = activeSrc && srcIndex < sources.length;
-
-  const handleImgError = () => {
-    if (srcIndex < sources.length - 1) {
-      setSrcIndex((prev) => prev + 1);
-    } else {
-      // All sources exhausted — show default silhouette
-      setSrcIndex(sources.length);
-    }
-  };
 
   const isNumber = typeof size === "number";
   const style = isNumber ? { width: size, height: size } : {};
@@ -109,29 +56,24 @@ export default function LeaderAvatar({ creator, size = 48, className = "" }) {
       className={`relative rounded-full overflow-hidden bg-slate-900 border border-white/[0.08] flex-shrink-0 flex items-center justify-center select-none ${sizeClass} ${className}`}
       style={style}
     >
-      {hasSrc ? (
-        <img
-          src={activeSrc}
+      {sources.length > 0 ? (
+        <SafeImage
+          sources={sources}
           alt={creator?.name || "Leader"}
-          className="w-full h-full object-cover transition-opacity duration-300"
-          loading="lazy"
-          onError={handleImgError}
+          className="absolute inset-0 w-full h-full"
+          imgClassName="w-full h-full object-cover"
+          size="thumb"
+          priority={priority}
+          fallback="avatar"
+          skeleton
         />
       ) : (
-        <div className="w-full h-full flex items-center justify-center text-slate-500 bg-white/[0.01] absolute inset-0">
-          <User className="text-slate-600 w-1/2 h-1/2" />
-        </div>
-      )}
-
-      {/* Always-present fallback silhouette for onError to reveal */}
-      {hasSrc && (
-        <div
-          className="hidden w-full h-full items-center justify-center text-slate-500 bg-white/[0.01] absolute inset-0"
-          aria-hidden="true"
-        >
+        <div className="w-full h-full flex items-center justify-center text-slate-500 bg-white/[0.01]">
           <User className="text-slate-600 w-1/2 h-1/2" />
         </div>
       )}
     </div>
   );
 }
+
+export default memo(LeaderAvatar);

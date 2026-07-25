@@ -39,7 +39,7 @@ export default function Error401() {
         <h1 className="text-4xl sm:text-5xl font-black text-white tracking-tight">401</h1>
         <h2 className="text-lg font-bold text-slate-300">Session Expired</h2>
         <p className="text-xs sm:text-sm text-slate-400 leading-relaxed">
-          Your credentials or token session is invalid, expired, or revoked. Please log in again to authenticate.
+          Your session is invalid, expired, or has been revoked. Please sign in again to continue.
         </p>
       </motion.div>
 

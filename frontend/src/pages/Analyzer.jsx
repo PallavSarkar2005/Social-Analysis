@@ -7,6 +7,7 @@ import { useAnalyzer } from "../hooks/useQueries";
 import { getVideoInsights } from "../api/aiApi";
 import { getChannelInsights } from "../api/aiChannelApi";
 import LeaderAvatar from "../components/common/LeaderAvatar";
+import SafeImage from "../components/common/SafeImage";
 import { formatIndianDate } from "../utils/dateFormatter";
 import { devError } from "../utils/devLog";
 
@@ -74,7 +75,7 @@ function Analyzer() {
 
     const cleanTarget = targetUrl.trim();
     if (!cleanTarget) {
-      setError("Please insert a valid YouTube channel/video link or handle.");
+      setError("Please enter a valid YouTube channel/video link or handle.");
       return;
     }
 
@@ -167,7 +168,7 @@ function Analyzer() {
               <div className="w-full max-w-5xl mx-auto space-y-6">
                 <div className="text-center space-y-1.5">
                   <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white">
-                    Analyse performance
+                    Analyze performance
                   </h1>
                   <p className="text-xs sm:text-sm text-slate-400 font-medium">
                     Paste content URLs to unlock instant telemetry matrix
@@ -299,11 +300,14 @@ function Analyzer() {
                   {/* Hero Media Entity */}
                   <div className="lg:col-span-1 bg-[#121318]/40 backdrop-blur-md rounded-2xl border border-white/[0.06] overflow-hidden shadow-2xl lg:sticky lg:top-6">
                     <div className="relative aspect-video bg-slate-950 overflow-hidden">
-                      <img
+                      <SafeImage
                         src={result.data.thumbnail}
                         alt={result.data.title}
-                        className="w-full h-full object-cover"
-                        loading="lazy"
+                        className="absolute inset-0 w-full h-full"
+                        imgClassName="w-full h-full object-cover"
+                        size="medium"
+                        fallback="media"
+                        priority
                       />
                       <div className="absolute top-3 left-3 bg-red-500/10 border border-red-500/30 backdrop-blur-md text-red-400 text-[10px] font-bold px-2.5 py-1 rounded-md tracking-wider uppercase">
                         YouTube Video
@@ -511,11 +515,17 @@ function Analyzer() {
                         className="bg-white/[0.01] rounded-xl border border-white/[0.05] overflow-hidden shadow-sm hover:border-white/[0.1] transition-colors"
                       >
                         <div className="aspect-video relative bg-slate-900">
-                          <img
-                            src={video.snippet.thumbnails.high?.url}
+                          <SafeImage
+                            src={
+                              video.snippet.thumbnails.medium?.url ||
+                              video.snippet.thumbnails.high?.url ||
+                              video.snippet.thumbnails.default?.url
+                            }
                             alt={video.snippet.title}
-                            className="w-full h-full object-cover"
-                            loading="lazy"
+                            className="absolute inset-0 w-full h-full"
+                            imgClassName="w-full h-full object-cover"
+                            size="medium"
+                            fallback="media"
                           />
                         </div>
                         <div className="p-4 space-y-3">

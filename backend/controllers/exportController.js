@@ -12,11 +12,11 @@ import {
   dossierToCsvDatasets,
 } from "../services/reportDossierService.js";
 import Account from "../models/Account.js";
-import Snapshot from "../models/Snapshot.js";
 import Content from "../models/Content.js";
 import TrackedCompetitor from "../models/TrackedCompetitor.js";
 import SavedReport from "../models/SavedReport.js";
 import { writeAuditLog } from "../services/reportService.js";
+import { getLatest } from "../services/analyticsEngine.js";
 
 const sendLegacyExport = (res, format, filename, csvData, xlsxData, pdfDataObj) => {
   if (format === "csv") {
@@ -151,33 +151,29 @@ export const exportCompetitors = async (req, res, next) => {
         accountId: comp.accountId,
         userId: req.user._id,
       });
-      let followers = 0;
-      let views = 0;
+      let followers = null;
+      let views = null;
 
       if (account) {
-        const snap = await Snapshot.findOne({ account: account._id }).sort({
-          capturedAt: -1,
-        });
-        if (snap) {
-          followers = snap.followers;
-          views = snap.views;
-        }
+        const latest = await getLatest(account._id, { userId: req.user._id });
+        followers = latest.metrics?.subscribers ?? null;
+        views = latest.metrics?.views ?? null;
       }
 
       rowData.push({
         Name: comp.accountName,
         Platform: comp.platform.toUpperCase(),
         AccountId: comp.accountId,
-        Followers: followers,
-        Views: views || "N/A",
+        Followers: followers ?? "N/A",
+        Views: views ?? "N/A",
         Tracked_Since: comp.trackedSince,
       });
 
       tableRows.push([
         comp.accountName,
         comp.platform.toUpperCase(),
-        followers.toLocaleString(),
-        views > 0 ? views.toLocaleString() : "N/A",
+        followers != null ? followers.toLocaleString() : "N/A",
+        views != null && views > 0 ? views.toLocaleString() : "N/A",
       ]);
     }
 

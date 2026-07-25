@@ -189,17 +189,54 @@ export async function upsertReport(userId, body) {
       profileId: payload.profileId || existing.profileId,
     };
 
-    Object.assign(existing, refreshFields);
-    await existing.save();
+    // Atomic update avoids VersionError when profile sync + client upsert race
+    let updated = null;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        updated = await SavedReport.findByIdAndUpdate(
+          existing._id,
+          { $set: refreshFields },
+          { returnDocument: "after", runValidators: true }
+        );
+        break;
+      } catch (err) {
+        const isVersionConflict =
+          err?.name === "VersionError" ||
+          /No matching document found/i.test(String(err?.message || ""));
+        if (!isVersionConflict || attempt === 2) throw err;
+        // Reload and retry once concurrent writers settle
+        existing = await SavedReport.findById(existing._id);
+        if (!existing) break;
+        if (existing.contentFingerprint === fingerprint) {
+          return {
+            report: existing,
+            created: false,
+            updated: false,
+            unchanged: true,
+          };
+        }
+        refreshFields.version = (existing.version || 1) + 1;
+      }
+    }
+
+    if (!updated) {
+      const fresh = await SavedReport.findById(existing._id);
+      return {
+        report: fresh || existing,
+        created: false,
+        updated: false,
+        unchanged: true,
+      };
+    }
 
     await writeAuditLog({
       userId,
-      reportId: existing._id,
+      reportId: updated._id,
       action: "updated",
-      metadata: { upsert: true, type: existing.type, source: existing.source },
+      metadata: { upsert: true, type: updated.type, source: updated.source },
     });
 
-    return { report: existing, created: false, updated: true, unchanged: false };
+    return { report: updated, created: false, updated: true, unchanged: false };
   }
 
   const report = await SavedReport.create(payload);
@@ -579,7 +616,7 @@ export async function patchReport(reportId, userId, body) {
   const report = await SavedReport.findOneAndUpdate(
     { _id: reportId, userId },
     { $set: updates },
-    { new: true, runValidators: true }
+    { returnDocument: "after", runValidators: true }
   );
 
   if (!report) return null;
@@ -615,7 +652,7 @@ export async function archiveOwnedReport(reportId, userId) {
       },
       $unset: { shareToken: "" },
     },
-    { new: true }
+    { returnDocument: "after" }
   );
   if (!report) return null;
 
@@ -692,7 +729,7 @@ export async function createShareLink(reportId, userId, options = {}) {
         },
         $unset: { shareToken: "" },
       },
-      { new: true }
+      { returnDocument: "after" }
     );
     if (!updated) return null;
     await writeAuditLog({
@@ -742,7 +779,7 @@ export async function revokeShareLink(reportId, userId) {
       },
       $unset: { shareToken: "" },
     },
-    { new: true }
+    { returnDocument: "after" }
   );
   if (!report) return null;
 

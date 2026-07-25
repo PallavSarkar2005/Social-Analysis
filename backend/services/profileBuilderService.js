@@ -30,6 +30,7 @@ import { calculateInfluenceMetrics } from "./influenceScoreService.js";
 import { buildGeographicInfluence } from "./geographicInfluenceService.js";
 import { autoSavePoliticalProfileReport } from "./autoSaveReportService.js";
 import { syncAssociatedReportsMetadata } from "./reportSyncService.js";
+import { captureSnapshot as captureAnalyticsSnapshot } from "./analyticsEngine.js";
 
 export { getOutdatedSections, getProfileUpgradePlan, isProfileOutdated } from "../config/profileBuilderVersion.js";
 
@@ -98,13 +99,8 @@ const parseGoogleNewsRss = (xmlString) => {
 
 const NEWS_EXTERNAL_TIMEOUT_MS = 12000;
 
-const defaultNewsSentiment = () => ({
-  positive: 33,
-  neutral: 34,
-  negative: 33,
-  keywords: ["Leader", "Elections", "Party"],
-  trending: ["Policy updates", "Campaign"],
-});
+/** Never fabricate sentiment percentages — null means insufficient verified data. */
+const defaultNewsSentiment = () => null;
 
 const withNewsTimeout = (promise, label) =>
   Promise.race([
@@ -145,7 +141,7 @@ Respond with ONLY a JSON object:
   } catch (error) {
     console.error(`${logPrefix} AI sentiment fallback:`, error.message);
     if (error.stack) console.error(error.stack);
-    return defaultNewsSentiment();
+    return null;
   }
 };
 
@@ -173,7 +169,7 @@ export const fetchNewsForAccount = async (account, { logPrefix = "[NEWS]" } = {}
     return null;
   }
 
-  let sentiment = defaultNewsSentiment();
+  let sentiment = null;
   try {
     console.log(`${logPrefix} AI sentiment start`);
     sentiment = await analyzeNewsSentiment(
@@ -184,6 +180,7 @@ export const fetchNewsForAccount = async (account, { logPrefix = "[NEWS]" } = {}
   } catch (error) {
     console.error(`${logPrefix} AI sentiment failed:`, error.message);
     if (error.stack) console.error(error.stack);
+    sentiment = null;
   }
 
   return { news: freshNews, newsSentiment: sentiment };
@@ -476,6 +473,14 @@ const applyOverviewCoreFields = (updatePayload, biographySync, overviewData) => 
   updatePayload.fieldConflicts = overviewData?.fieldConflicts ?? [];
   updatePayload.sectionMeta = overviewData?.sectionMeta ?? {};
   updatePayload.verificationCatalog = overviewData?.verificationCatalog ?? [];
+  // Persist enrichment timeline on overview builds so Timeline tab is not left empty
+  // when the dedicated timeline section is not in the current upgrade plan.
+  if (Array.isArray(overviewData?.timeline) && overviewData.timeline.length > 0) {
+    updatePayload.timeline = overviewData.timeline;
+  }
+  if (overviewData?.timelineIntelligence && typeof overviewData.timelineIntelligence === "object") {
+    updatePayload.timelineIntelligence = overviewData.timelineIntelligence;
+  }
   if (overviewData?.lastVerified) {
     updatePayload.lastVerified = overviewData.lastVerified;
   }
@@ -514,7 +519,7 @@ const runBuildProfile = async (
           syncStatus: profile?.syncStatus === "building" ? "ready" : profile?.syncStatus || "ready",
         },
       },
-      { new: true }
+      { returnDocument: "after" }
     );
     return { success: true, action: versionStamp.builderVersion ? "stamped" : "skipped", profile, account, upgradePlan };
   }
@@ -542,7 +547,7 @@ const runBuildProfile = async (
           lastSyncAttemptAt: new Date(),
         },
       },
-      { new: true, upsert: !profile }
+      { returnDocument: "after", upsert: !profile }
     );
     return {
       success: true,
@@ -877,7 +882,7 @@ const runBuildProfile = async (
       profile = await PoliticalProfile.findOneAndUpdate(
         { accountId: account._id },
         { $set: updatePayload },
-        { new: true }
+        { returnDocument: "after" }
       );
     }
   } catch (persistError) {
@@ -924,6 +929,25 @@ const runBuildProfile = async (
         }
       })();
     });
+  }
+
+  // Persist political/influence/sentiment metrics into AnalyticsEngine history
+  if (profile && account?.userId) {
+    try {
+      await captureAnalyticsSnapshot({
+        userId: account.userId,
+        accountId: account._id,
+        source: "profile_build",
+        force: true,
+        account,
+        politicalProfile: profile,
+      });
+    } catch (analyticsErr) {
+      console.warn(
+        `${logPrefix} AnalyticsEngine capture failed accountId=${accountIdStr}:`,
+        analyticsErr.message
+      );
+    }
   }
 
   return {

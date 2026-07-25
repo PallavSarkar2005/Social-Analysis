@@ -11,6 +11,9 @@ import {
   syncRecentYoutubeContent,
 } from "../services/youtubeAccountSyncService.js";
 import { resolveAccountState } from "../providers/shared/politicalIdentityUtils.js";
+import { captureSnapshot, getChannelHistory } from "../services/analyticsEngine.js";
+import { scheduleProfileSync } from "../services/profileBuilderService.js";
+import { enqueueAnalyticsJob } from "../services/analyticsJobQueue.js";
 
 
 /*
@@ -196,8 +199,23 @@ const analyzeYoutubeError = (error) => {
     if (reason === "quotaexceeded" || message.includes("quota exceeded") || message.includes("limit exceeded")) {
       return { status: 403, message: "YouTube quota exceeded" };
     }
-    if (reason === "keyinvalid" || message.includes("key not valid") || message.includes("invalid api key")) {
-      return { status: 400, message: "Invalid API key" };
+    if (
+      status === 401 ||
+      reason === "keyinvalid" ||
+      reason === "required" ||
+      message.includes("credentials_missing") ||
+      message.includes("api keys are not supported") ||
+      message.includes("key not valid") ||
+      message.includes("invalid api key") ||
+      message.includes("expected oauth2")
+    ) {
+      return {
+        status: 401,
+        message:
+          "YouTube API key was rejected by Google (CREDENTIALS_MISSING/invalid). " +
+          "Public channel lookups use API keys only — OAuth is not required. " +
+          "Verify YOUTUBE_API_KEY is a valid Google Cloud API key with YouTube Data API v3 enabled, then restart the backend.",
+      };
     }
     return { status: status || 500, message: `YouTube API Error: ${data?.error?.message || error.message}` };
   }
@@ -247,13 +265,7 @@ const getCoalescedYoutubeData = (channelId, url, forceRefresh) => {
 
 export const analyzeYoutubeUrl = async (req, res, next) => {
   try {
-    console.log("========== ANALYZER START ==========");
-    console.log("STEP 1: Request received. Method:", req.method, "URL:", req.originalUrl);
-    console.log("STEP 1.1: Request Body:", JSON.stringify(req.body));
-    console.log("STEP 1.2: Authenticated User (req.user):", req.user ? { _id: req.user._id, email: req.user.email } : "null");
-
     // Env Validation Check
-    console.log("STEP 2: Verifying YOUTUBE_API_KEY presence");
     const configuredKeys = [];
     if (process.env.YOUTUBE_API_KEY && process.env.YOUTUBE_API_KEY.trim() !== "") {
       configuredKeys.push(process.env.YOUTUBE_API_KEY);
@@ -581,8 +593,9 @@ export const analyzeYoutubeUrl = async (req, res, next) => {
     console.log("[DB] Synced recent YouTube content items:", syncedContentCount);
 
     const recentVideoMetrics = summarizeRecentVideoMetrics(accountData.recentVideos);
+    const capturedAt = new Date();
 
-    // Create Snapshot record for tracking history
+    // Legacy Snapshot (compatibility dual-write — do not remove)
     await Snapshot.create({
       account: account._id,
       userId: req.user._id,
@@ -597,17 +610,68 @@ export const analyzeYoutubeUrl = async (req, res, next) => {
       state: resolvedState,
       name: account.name,
       profileImage: account.profileImage || account.thumbnail,
-      capturedAt: new Date(),
+      capturedAt,
+    });
+
+    // AnalyticsEngine SSoT — first verified snapshot immediately (never wait for cron)
+    let analyticsCapture = null;
+    try {
+      analyticsCapture = await captureSnapshot({
+        userId: req.user._id,
+        accountId: account._id,
+        source: "manual",
+        force: true,
+        account,
+        contentStats: {
+          totalLikes: recentVideoMetrics.totalLikes,
+          totalComments: recentVideoMetrics.totalComments,
+          averageEngagement:
+            accountData.averageEngagement || recentVideoMetrics.averageEngagement,
+        },
+        capturedAt,
+      });
+    } catch (captureErr) {
+      console.warn(
+        `[Analyzer] AnalyticsEngine capture failed accountId=${account._id}:`,
+        captureErr.message
+      );
+      // Retry in background — do not fail the analyze response
+      enqueueAnalyticsJob(
+        "analyzer_capture_retry",
+        () =>
+          captureSnapshot({
+            userId: req.user._id,
+            accountId: account._id,
+            source: "manual",
+            force: true,
+            account,
+            contentStats: {
+              totalLikes: recentVideoMetrics.totalLikes,
+              totalComments: recentVideoMetrics.totalComments,
+              averageEngagement:
+                accountData.averageEngagement || recentVideoMetrics.averageEngagement,
+            },
+          }),
+        { attempts: 3, meta: { accountId: String(account._id) } }
+      );
+    }
+
+    // Background political profile build → second capture with influence/sentiment
+    scheduleProfileSync(account._id, {
+      logPrefix: "[Analyzer→Profile]",
+      trigger: "analyzer",
     });
 
     const profile = await PoliticalProfile.findOne({ accountId: account._id }).select("_id").lean();
-    // Fetch snapshot history
-    const history = await Snapshot.find({
-      account: account._id,
-      userId: req.user._id,
-    })
-      .sort({ capturedAt: 1 })
-      .lean();
+
+    // History from AnalyticsEngine (same dataset as Dashboard / History page)
+    let history = [];
+    try {
+      history = await getChannelHistory(account._id, { userId: req.user._id });
+    } catch (histErr) {
+      console.warn("[Analyzer] engine history read failed:", histErr.message);
+      history = [];
+    }
 
     return res.json({
       success: true,
@@ -623,8 +687,6 @@ export const analyzeYoutubeUrl = async (req, res, next) => {
         profileImage: account.profileImage || "",
         resolvedImage: account.resolvedImage || "",
         imageSource: account.imageSource || "youtube",
-        // imageUpdatedAt is used by the frontend as a cache-buster (?v=timestamp)
-        // so the browser always loads the latest image even if the filename didn't change
         imageUpdatedAt: account.imageUpdatedAt ? new Date(account.imageUpdatedAt).getTime() : Date.now(),
         subscribers: account.subscribers,
         totalViews: account.views,
@@ -634,10 +696,11 @@ export const analyzeYoutubeUrl = async (req, res, next) => {
         party: account.party,
         state: account.state,
         politicalProfileId: profile?._id || null,
+        analyticsSnapshotCreated: Boolean(analyticsCapture?.created || analyticsCapture?.snapshot),
         history: history.map((item) => ({
-          date: new Date(item.capturedAt).toLocaleDateString(),
-          followers: item.followers,
-          views: item.views,
+          date: item.date || new Date(item.capturedAt).toLocaleDateString(),
+          followers: item.followers ?? item.subscribers ?? null,
+          views: item.views ?? null,
         })),
       }
     });

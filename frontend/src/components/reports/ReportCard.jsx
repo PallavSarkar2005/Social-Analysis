@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { memo } from "react";
 import { motion } from "framer-motion";
 import {
   Calendar,
@@ -11,6 +11,7 @@ import {
   User,
 } from "lucide-react";
 import ReportTypeBadge from "./ReportTypeBadge";
+import SafeImage from "../common/SafeImage";
 import {
   getPoliticianLabel,
   getReportDisplayTitle,
@@ -46,15 +47,16 @@ function ProfileThumb({ report }) {
   const thumb = report.thumbnail || report.metadata?.thumbnail || report.metadata?.avatar;
   const label = getPoliticianLabel(report);
   const initial = (label || "?").trim().charAt(0).toUpperCase();
-  const [failed, setFailed] = useState(false);
 
-  if (thumb && !failed) {
+  if (thumb) {
     return (
-      <img
+      <SafeImage
         src={thumb}
-        alt=""
-        className="h-10 w-10 rounded-full object-cover border border-white/[0.08] bg-[#111319] shrink-0"
-        onError={() => setFailed(true)}
+        alt={label ? `${label} portrait` : "Report portrait"}
+        className="h-10 w-10 rounded-full border border-white/[0.08] bg-[#111319] shrink-0"
+        imgClassName="h-full w-full object-cover"
+        size="thumb"
+        fallback="avatar"
       />
     );
   }
@@ -66,7 +68,7 @@ function ProfileThumb({ report }) {
   );
 }
 
-export default function ReportCard({
+function ReportCard({
   report,
   exportingId,
   onOpen,
@@ -239,3 +241,5 @@ export default function ReportCard({
     </motion.article>
   );
 }
+
+export default memo(ReportCard);

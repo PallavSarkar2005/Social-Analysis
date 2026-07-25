@@ -14,14 +14,17 @@ import {
   Trophy,
   FileText,
 } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 
 import { useBillingStatus } from "../../hooks/useQueries";
+import { prefetchOnIntent } from "../../utils/routePrefetch";
 
 export default function Sidebar() {
   const location = useLocation();
   const [isOpen, setIsOpen] = useState(false);
   const { data: billingData } = useBillingStatus();
   const currentPlan = billingData?.subscription?.plan || "free";
+  const queryClient = useQueryClient();
 
   const menuItems = [
     { name: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
@@ -33,6 +36,7 @@ export default function Sidebar() {
     { name: "Snapshot History", path: "/history", icon: History },
   ];
 
+  const warm = (path) => prefetchOnIntent(queryClient, path);
   const toggleSidebar = () => setIsOpen(!isOpen);
 
   const SidebarContent = () => (
@@ -40,7 +44,7 @@ export default function Sidebar() {
       {/* Logo */}
       <div className="px-6 py-7 border-b border-white/[0.06] flex items-center justify-between">
         <div>
-          <Link to="/dashboard">
+          <Link to="/dashboard" onMouseEnter={() => warm("/dashboard")} onFocus={() => warm("/dashboard")}>
             <h1 className="text-xl font-black text-white tracking-wider flex items-center gap-2">
               Social<span className="text-indigo-400">IQ</span>
             </h1>
@@ -74,6 +78,8 @@ export default function Sidebar() {
                   key={item.path}
                   to={item.path}
                   onClick={() => setIsOpen(false)}
+                  onMouseEnter={() => warm(item.path)}
+                  onFocus={() => warm(item.path)}
                 >
                   <motion.div
                     whileHover={{ x: active ? 0 : 3 }}
@@ -112,7 +118,7 @@ export default function Sidebar() {
           <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 px-3">
             Active Core Pipeline
           </p>
-          <Link to="/ai-insights" onClick={() => setIsOpen(false)}>
+          <Link to="/ai-insights" onClick={() => setIsOpen(false)} onMouseEnter={() => warm("/ai-insights")} onFocus={() => warm("/ai-insights")}>
             <motion.div
               whileHover={{ scale: 1.01 }}
               className="flex items-center gap-3.5 px-4 py-3.5 rounded-xl bg-white/[0.02] border border-white/[0.04] shadow-inner cursor-pointer"
@@ -135,7 +141,7 @@ export default function Sidebar() {
 
       {/* Pro Upgrade & Settings */}
       <div className="p-4 border-t border-white/[0.06] bg-gradient-to-t from-black/20 to-transparent space-y-4">
-        <Link to="/billing" onClick={() => setIsOpen(false)} className="block">
+        <Link to="/billing" onClick={() => setIsOpen(false)} onMouseEnter={() => warm("/billing")} onFocus={() => warm("/billing")} className="block">
           <div className="rounded-2xl border border-indigo-500/30 bg-gradient-to-br from-indigo-600/20 via-[#111319] to-[#111319] p-4 relative overflow-hidden shadow-lg shadow-black/40 group cursor-pointer hover:border-indigo-500/60 transition">
             <div className="absolute -right-6 -top-6 w-20 h-20 bg-indigo-500/10 rounded-full blur-xl group-hover:bg-indigo-500/20 transition-all duration-500" />
             <h3 className="font-bold text-xs sm:text-sm text-white tracking-tight flex items-center justify-between">
@@ -143,13 +149,13 @@ export default function Sidebar() {
               <span className="text-[9px] uppercase font-bold tracking-widest text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 px-1.5 py-0.5 rounded">Billing</span>
             </h3>
             <p className="text-[11px] text-slate-400 leading-normal mt-1.5">
-              Click to view usage, remaining quotas and manage subscription.
+              Click to view usage, remaining quotas, and manage your subscription.
             </p>
           </div>
         </Link>
 
         {/* Global Settings */}
-        <Link to="/settings" onClick={() => setIsOpen(false)}>
+        <Link to="/settings" onClick={() => setIsOpen(false)} onMouseEnter={() => warm("/settings")} onFocus={() => warm("/settings")}>
           <motion.div
             whileHover={{ x: 2 }}
             className={`flex items-center gap-2.5 text-xs font-medium px-2 py-1 cursor-pointer transition-colors ${

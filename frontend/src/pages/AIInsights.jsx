@@ -394,7 +394,7 @@ Loaded pre-saved political telemetry analysis reports from local indexed storage
       return s;
     });
     saveSessions(finalSessions);
-    toast.success("Loaded offline insights cached reports.");
+    toast.success("Loaded cached offline insight reports.");
   };
 
   // Rendering Helper: Markdown + Code Blocks
@@ -593,7 +593,7 @@ Loaded pre-saved political telemetry analysis reports from local indexed storage
                   <div className="space-y-1">
                     <h3 className="text-sm font-bold text-white">Ask anything</h3>
                     <p className="text-xs text-slate-500 max-w-xs leading-relaxed">
-                      Index channel telemetries, footprints, leader rankings, or suggest political strategies.
+                      Index channel telemetry, footprints, leader rankings, or suggest political strategies.
                     </p>
                   </div>
                 </div>

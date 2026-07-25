@@ -143,6 +143,10 @@ const accountSchema = new mongoose.Schema(
 );
 
 accountSchema.index({ accountId: 1, userId: 1 }, { unique: true });
+accountSchema.index({ userId: 1, updatedAt: -1 });
+accountSchema.index({ userId: 1, party: 1 });
+accountSchema.index({ userId: 1, group: 1 });
+accountSchema.index({ userId: 1, platform: 1 });
 accountSchema.index({ party: 1 });
 accountSchema.index({ state: 1 });
 accountSchema.index({ group: 1 });

@@ -85,7 +85,7 @@ export default function DangerZone({ onDeleteAccount, onLogoutEverywhere }) {
             <div className="flex items-start gap-3 text-rose-500">
               <ShieldX size={24} className="flex-shrink-0" />
               <div>
-                <h3 className="text-sm font-semibold text-white">Delete Profile Verification</h3>
+                <h3 className="text-sm font-semibold text-white">Delete Account Verification</h3>
                 <p className="text-[10px] text-slate-400 mt-1">This operation is permanent. Enter your security password to confirm.</p>
               </div>
             </div>

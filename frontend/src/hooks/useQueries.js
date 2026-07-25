@@ -3,8 +3,11 @@ import {
   getDashboardOverview,
   getTopVideos,
   getForecast,
+  getAnalyticsSeries,
+  getAnalyticsLatest,
+  getAnalyticsCompare,
+  getCompareAccounts,
 } from "../api/analyticsApi";
-import { getCompareAccounts } from "../api/analyticsApi";
 import { getGroupsList, getGroupCreators } from "../api/groupApi";
 import {
   getAccounts,
@@ -25,7 +28,17 @@ import {
 import { getCompetitors, addCompetitor, deleteCompetitor } from "../api/competitorApi";
 import { devWarn } from "../utils/devLog";
 import { asArray } from "../utils/safeData";
-import { getBillingStatus, cancelSubscription as apiCancelSubscription, getInvoices } from "../api/billingApi";
+import {
+  getBillingStatus,
+  cancelSubscription as apiCancelSubscription,
+  resumeSubscription as apiResumeSubscription,
+  getInvoices,
+  getInvoice,
+  getBillingPlans,
+  createBillingOrder,
+  verifyBillingPayment,
+  applyCoupon,
+} from "../api/billingApi";
 import {
   getAccountStats,
   getPrivacyPreferences,
@@ -54,7 +67,8 @@ export const useDashboard = () => {
       const res = await getDashboardOverview();
       return res?.data ?? null;
     },
-    refetchInterval: 30000, // 30 seconds automatic refetch
+    staleTime: 60_000,
+    refetchInterval: 120_000,
   });
 
   const groupsQuery = useQuery({
@@ -63,7 +77,8 @@ export const useDashboard = () => {
       const res = await getGroupsList();
       return asArray(res?.data);
     },
-    refetchInterval: 30000,
+    staleTime: 60_000,
+    refetchInterval: 120_000,
   });
 
   const topContentQuery = useQuery({
@@ -72,7 +87,8 @@ export const useDashboard = () => {
       const res = await getTopVideos();
       return asArray(res?.data);
     },
-    refetchInterval: 45000,
+    staleTime: 90_000,
+    refetchInterval: 180_000,
   });
 
   const compareAccountsQuery = useQuery({
@@ -81,7 +97,8 @@ export const useDashboard = () => {
       const res = await getCompareAccounts();
       return asArray(res?.data);
     },
-    refetchInterval: 45000,
+    staleTime: 90_000,
+    refetchInterval: 180_000,
   });
 
   const syncMutation = useMutation({
@@ -90,6 +107,8 @@ export const useDashboard = () => {
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
       queryClient.invalidateQueries({ queryKey: ["compare-accounts"] });
       queryClient.invalidateQueries({ queryKey: ["accounts"] });
+      queryClient.invalidateQueries({ queryKey: ["analytics"] });
+      queryClient.invalidateQueries({ queryKey: ["snapshots"] });
     },
   });
 
@@ -127,6 +146,7 @@ export const useAccounts = () => {
       const res = await getAccounts();
       return res.data || [];
     },
+    staleTime: 60_000,
   });
 
   const deleteMutation = useMutation({
@@ -222,12 +242,9 @@ export const useParty = (groupName) => {
       const res = await getGroupCreators(groupName);
       return res.data || [];
     },
-    // Always fetch fresh data when component mounts (e.g. navigating to GroupAnalytics after analysis)
-    refetchOnMount: "always",
-    // Poll every 30s for live updates
-    refetchInterval: 30000,
-    // staleTime: 0 — data is always considered stale, triggering a background refetch on mount
-    staleTime: 0,
+    refetchOnMount: true,
+    refetchInterval: 120_000,
+    staleTime: 30_000,
     enabled: !!groupName,
   });
 };
@@ -261,6 +278,8 @@ export const useAnalyzer = () => {
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
       queryClient.invalidateQueries({ queryKey: ["compare-accounts"] });
       queryClient.invalidateQueries({ queryKey: ["reports"] });
+      queryClient.invalidateQueries({ queryKey: ["analytics"] });
+      queryClient.invalidateQueries({ queryKey: ["competitors"] });
       queryClient.invalidateQueries({
         predicate: (q) => q.queryKey[0]?.toString().startsWith("profile-"),
       });
@@ -288,10 +307,11 @@ export const useCompare = (creator1, creator2) => {
       return await compareYoutubeCreators(creator1, creator2);
     },
     enabled: !!creator1 && !!creator2,
+    staleTime: 60_000,
   });
 };
 
-// 7. Snapshots / Historical Growth Hook
+// 7. Snapshots / Historical Growth Hook (AnalyticsEngine history)
 export const useSnapshots = (accountId) => {
   return useQuery({
     queryKey: ["snapshots", accountId],
@@ -302,7 +322,7 @@ export const useSnapshots = (accountId) => {
         getForecast(accountId).catch((err) => {
           devWarn("Forecast failed, might not have enough historical snapshots yet:", err);
           return { success: true, data: { hasEnoughData: false } };
-        })
+        }),
       ]);
       return {
         history: histRes.data || [],
@@ -310,6 +330,53 @@ export const useSnapshots = (accountId) => {
       };
     },
     enabled: !!accountId,
+    staleTime: 60_000,
+    refetchInterval: 120_000,
+  });
+};
+export const useAnalyticsSeries = (
+  accountId,
+  { range = "all", metrics = "subscribers,views,engagementRate" } = {}
+) => {
+  return useQuery({
+    queryKey: ["analytics", "series", accountId, range, metrics],
+    queryFn: async () => {
+      if (!accountId) return null;
+      const res = await getAnalyticsSeries(accountId, { range, metrics });
+      return res?.data ?? null;
+    },
+    enabled: !!accountId,
+    staleTime: 60_000,
+    refetchInterval: 120_000,
+  });
+};
+
+export const useAnalyticsLatest = (accountId) => {
+  return useQuery({
+    queryKey: ["analytics", "latest", accountId],
+    queryFn: async () => {
+      if (!accountId) return null;
+      const res = await getAnalyticsLatest(accountId);
+      return res?.data ?? null;
+    },
+    enabled: !!accountId,
+    staleTime: 60_000,
+    refetchInterval: 120_000,
+  });
+};
+
+export const useAnalyticsCompare = (ids = []) => {
+  const idKey = Array.isArray(ids) ? ids.filter(Boolean).join(",") : String(ids || "");
+  return useQuery({
+    queryKey: ["analytics", "compare", idKey],
+    queryFn: async () => {
+      if (!idKey) return [];
+      const res = await getAnalyticsCompare(idKey.split(","));
+      return asArray(res?.data);
+    },
+    enabled: !!idKey,
+    staleTime: 60_000,
+    refetchInterval: 120_000,
   });
 };
 
@@ -323,7 +390,8 @@ export const useNotifications = () => {
       const res = await getNotifications();
       return res.data || [];
     },
-    refetchInterval: 20000, // 20s background refetch
+    staleTime: 30_000,
+    refetchInterval: 60_000,
   });
 
   const readMutation = useMutation({
@@ -364,6 +432,8 @@ export const useReports = (params = {}) => {
         count: res.count ?? (res.data || []).length,
       };
     },
+    staleTime: 45_000,
+    placeholderData: (prev) => prev,
   });
 
   const deleteMutation = useMutation({
@@ -411,6 +481,7 @@ export const useCompetitors = () => {
       const res = await getCompetitors();
       return res.data || [];
     },
+    staleTime: 60_000,
   });
 
   const addMutation = useMutation({
@@ -443,6 +514,15 @@ export const useBillingStatus = () => {
   return useQuery({
     queryKey: ["billing", "status"],
     queryFn: getBillingStatus,
+    staleTime: 60_000,
+  });
+};
+
+export const useBillingPlans = () => {
+  return useQuery({
+    queryKey: ["billing", "plans"],
+    queryFn: getBillingPlans,
+    staleTime: 30 * 60 * 1000,
   });
 };
 
@@ -450,6 +530,15 @@ export const useInvoices = () => {
   return useQuery({
     queryKey: ["billing", "invoices"],
     queryFn: getInvoices,
+    staleTime: 60_000,
+  });
+};
+
+export const useInvoice = (id) => {
+  return useQuery({
+    queryKey: ["billing", "invoice", id],
+    queryFn: () => getInvoice(id),
+    enabled: Boolean(id),
   });
 };
 
@@ -462,6 +551,37 @@ export const useCancelSubscription = () => {
     },
   });
 };
+
+export const useResumeSubscription = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: apiResumeSubscription,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["billing", "status"] });
+    },
+  });
+};
+
+export const useCreateBillingOrder = () =>
+  useMutation({
+    mutationFn: createBillingOrder,
+  });
+
+export const useVerifyBillingPayment = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: verifyBillingPayment,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["billing"] });
+    },
+  });
+};
+
+export const useApplyCoupon = () =>
+  useMutation({
+    mutationFn: applyCoupon,
+  });
+
 
 // 13. Appearance Preferences Hook (server-synced via AppearanceContext)
 // This is a lightweight read-only query — actual mutations go through AppearanceContext directly.

@@ -9,7 +9,9 @@ import { getNotifications, markAsRead, markAllAsRead } from "../../api/notificat
 import client from "../../api/client";
 import toast from "react-hot-toast";
 import PartyLogo from "../common/PartyLogo";
+import SafeImage from "../common/SafeImage";
 import { asArray, asObject } from "../../utils/safeData";
+import { useDebounce } from "../../hooks/useDebounce";
 
 export default function Navbar() {
   const { user, logout } = useAuth();
@@ -40,27 +42,45 @@ export default function Navbar() {
   const [realSearchOpen, setRealSearchOpen] = useState(false);
   const [searching, setSearching] = useState(false);
   const searchContainerRef = useRef(null);
+  const searchAbortRef = useRef(null);
+  const debouncedSearch = useDebounce(searchQuery, 280);
 
-  const handleSearchChange = async (e) => {
-    const val = e.target.value;
-    setSearchQuery(val);
-    if (!val.trim()) {
+  useEffect(() => {
+    if (!debouncedSearch.trim()) {
       setSearchResults(null);
+      setSearching(false);
       return;
     }
+
     setSearching(true);
-    try {
-      const res = await client.get(`/api/search?query=${encodeURIComponent(val)}`);
-      if (res.data?.success) {
-        setSearchResults(asObject(res.data.data));
-      } else {
-        setSearchResults(null);
+    if (searchAbortRef.current) searchAbortRef.current.abort();
+    const controller = new AbortController();
+    searchAbortRef.current = controller;
+
+    (async () => {
+      try {
+        const res = await client.get(
+          `/api/search?query=${encodeURIComponent(debouncedSearch)}`,
+          { signal: controller.signal }
+        );
+        if (res.data?.success) {
+          setSearchResults(asObject(res.data.data));
+        } else {
+          setSearchResults(null);
+        }
+      } catch (err) {
+        if (err?.name === "CanceledError" || err?.code === "ERR_CANCELED") return;
+        devWarn("Failed search execution", err);
+      } finally {
+        if (!controller.signal.aborted) setSearching(false);
       }
-    } catch (err) {
-      devWarn("Failed search execution", err);
-    } finally {
-      setSearching(false);
-    }
+    })();
+
+    return () => controller.abort();
+  }, [debouncedSearch]);
+
+  const handleSearchChange = (e) => {
+    setSearchQuery(e.target.value);
   };
 
   const fetchNotifications = async () => {
@@ -124,7 +144,7 @@ export default function Navbar() {
       await fetchNotifications();
     } catch (e) {
       devError(e);
-      toast.error("Failed to mark notifications read.");
+      toast.error("Failed to mark notifications as read.");
     }
   };
 
@@ -361,7 +381,7 @@ export default function Navbar() {
                       onClick={handleMarkAllRead}
                       className="text-[10px] text-indigo-400 hover:text-indigo-300 font-bold flex items-center gap-1 transition"
                     >
-                      <CheckCheck size={12} /> Mark all read
+                      <CheckCheck size={12} /> Mark all as read
                     </button>
                   )}
                 </div>
@@ -421,7 +441,14 @@ export default function Navbar() {
               {/* Avatar */}
               <div className="relative h-8 w-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-xs font-black shadow-md shadow-indigo-600/30 overflow-hidden">
                 {isAvatarUrl ? (
-                  <img src={user.avatar} alt="avatar" className="h-full w-full object-cover" loading="lazy" />
+                  <SafeImage
+                    src={user.avatar}
+                    alt={userName || "User avatar"}
+                    className="absolute inset-0 h-full w-full"
+                    imgClassName="h-full w-full object-cover"
+                    size="thumb"
+                    fallback="avatar"
+                  />
                 ) : (
                   userName.charAt(0).toUpperCase()
                 )}

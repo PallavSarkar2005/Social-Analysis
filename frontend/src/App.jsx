@@ -3,8 +3,9 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import ProtectedRoute from "./components/ProtectedRoute";
 import RouteTracker from "./errors/RouteTracker";
 import ErrorRouter from "./errors/ErrorRouter";
+import { AppShellSkeleton } from "./components/common/PageSkeleton";
 
-// Lazy loading all page views
+// Route-based code splitting — each page is its own chunk
 const LandingPage = lazy(() => import("./pages/LandingPage"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const Compare = lazy(() => import("./pages/Compare"));
@@ -22,25 +23,19 @@ const GroupAnalytics = lazy(() => import("./pages/GroupAnalytics"));
 const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 const Billing = lazy(() => import("./pages/Billing"));
+const Checkout = lazy(() => import("./pages/Checkout"));
+const CheckoutSuccess = lazy(() => import("./pages/CheckoutSuccess"));
+const CheckoutFailed = lazy(() => import("./pages/CheckoutFailed"));
+const InvoiceDetail = lazy(() => import("./pages/InvoiceDetail"));
 const Pricing = lazy(() => import("./pages/Pricing"));
 const PoliticalProfile = lazy(() => import("./pages/PoliticalProfile"));
-
-// Standard high-end loading fallback
-const SuspenseFallback = () => (
-  <div className="flex h-screen w-screen items-center justify-center bg-[#090a0f] text-slate-100 flex-col space-y-4">
-    <div className="w-10 h-10 border-4 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin" />
-    <span className="text-xs font-semibold text-slate-400 tracking-wider">Loading social telemetry dashboard...</span>
-  </div>
-);
 
 function App() {
   return (
     <BrowserRouter>
-      {/* Route tracker captures scroll heights and history logs in sessionStorage */}
       <RouteTracker />
-      <Suspense fallback={<SuspenseFallback />}>
+      <Suspense fallback={<AppShellSkeleton />}>
         <Routes>
-          {/* Public Routes */}
           <Route path="/" element={<LandingPage />} />
           <Route path="/pricing" element={<Pricing />} />
           <Route path="/login" element={<Login />} />
@@ -49,10 +44,8 @@ function App() {
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/shared/:token" element={<SharedReport />} />
 
-          {/* Dedicated Error Paths */}
           <Route path="/error/*" element={<ErrorRouter />} />
 
-          {/* Protected Dashboard Workspace */}
           <Route element={<ProtectedRoute />}>
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/compare" element={<Compare />} />
@@ -65,10 +58,13 @@ function App() {
             <Route path="/reports/:reportId" element={<ReportDetail />} />
             <Route path="/groups/:groupName" element={<GroupAnalytics />} />
             <Route path="/billing" element={<Billing />} />
+            <Route path="/billing/checkout" element={<Checkout />} />
+            <Route path="/billing/checkout/success" element={<CheckoutSuccess />} />
+            <Route path="/billing/checkout/failed" element={<CheckoutFailed />} />
+            <Route path="/billing/invoices/:invoiceId" element={<InvoiceDetail />} />
             <Route path="/profile/:creatorId" element={<PoliticalProfile />} />
           </Route>
 
-          {/* Fallback to 404 Not Found Page */}
           <Route path="*" element={<Navigate to="/error/404" replace />} />
         </Routes>
       </Suspense>

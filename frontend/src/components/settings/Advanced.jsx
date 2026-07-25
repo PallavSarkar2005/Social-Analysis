@@ -44,7 +44,7 @@ export default function Advanced() {
 
   const toggles = [
     { key: "debugMode", label: "Debug Mode Console", desc: "Log all incoming and outgoing REST client requests directly to web developer tools." },
-    { key: "forceCacheBypass", label: "Force Cache Bypass", desc: "Ignore redis and local storage caching, forcing direct queries to the scrapers.", icon: <Cpu size={13} className="text-indigo-400" /> },
+    { key: "forceCacheBypass", label: "Force Cache Bypass", desc: "Ignore Redis and local storage caching, forcing direct queries to the scrapers.", icon: <Cpu size={13} className="text-indigo-400" /> },
     { key: "experimentalFeatures", label: "Experimental Workspace Features", desc: "Opt-in to beta graphs, layout overlays, and advanced AI models before official release.", icon: <Sparkles size={13} className="text-indigo-400" /> },
   ];
 

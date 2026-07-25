@@ -1,7 +1,8 @@
-import { motion } from "framer-motion";
+import { memo } from "react";
 import { formatIndianDate } from "../../utils/dateFormatter";
+import SafeImage from "../common/SafeImage";
 
-export default function RecentVideosGrid({ videos }) {
+function RecentVideosGrid({ videos }) {
   if (!videos?.length) return null;
 
   return (
@@ -10,19 +11,26 @@ export default function RecentVideosGrid({ videos }) {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
         {videos.map((video) => {
-          const videoId = video.id?.videoId || video.contentId || Math.random().toString();
+          const videoId = video.id?.videoId || video.contentId || video._id;
+          const thumb =
+            video.snippet?.thumbnails?.medium?.url ||
+            video.snippet?.thumbnails?.high?.url ||
+            video.snippet?.thumbnails?.default?.url ||
+            video.thumbnail;
+
           return (
-            <motion.div
+            <div
               key={videoId}
-              whileHover={{ y: -4 }}
-              className="bg-white/[0.01] border border-white/[0.04] hover:border-white/[0.08] rounded-xl overflow-hidden shadow-sm transition"
+              className="bg-white/[0.01] border border-white/[0.04] hover:border-white/[0.08] rounded-xl overflow-hidden shadow-sm transition hover:-translate-y-1 will-change-transform"
             >
               <div className="aspect-video relative bg-slate-900 overflow-hidden">
-                <img
-                  src={video.snippet?.thumbnails?.high?.url || video.thumbnail}
-                  alt={video.snippet?.title || video.title}
-                  className="w-full h-full object-cover"
-                  loading="lazy"
+                <SafeImage
+                  src={thumb}
+                  alt={video.snippet?.title || video.title || "Video"}
+                  className="absolute inset-0 w-full h-full"
+                  imgClassName="w-full h-full object-cover"
+                  size="medium"
+                  fallback="media"
                 />
               </div>
 
@@ -34,10 +42,12 @@ export default function RecentVideosGrid({ videos }) {
                   {formatIndianDate(video.snippet?.publishedAt || video.publishedAt)}
                 </p>
               </div>
-            </motion.div>
+            </div>
           );
         })}
       </div>
     </div>
   );
 }
+
+export default memo(RecentVideosGrid);

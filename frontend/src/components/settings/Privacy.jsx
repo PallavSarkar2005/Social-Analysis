@@ -5,7 +5,7 @@ import { usePrivacyPreferences, useUpdatePrivacyPreferences } from "../../hooks/
 
 const FIELDS = [
   { key: "publicProfile", label: "Public Profile Registry", desc: "Allow other workspace members to look up your creator details and dashboard links.", icon: <Eye size={13} className="text-indigo-400" /> },
-  { key: "searchVisibility", label: "Search Engines Visibility", desc: "Allow search engine crawlers (Google, Bing) to index your public portfolio." },
+  { key: "searchVisibility", label: "Search Engine Visibility", desc: "Allow search engine crawlers (Google, Bing) to index your public portfolio." },
   { key: "analyticsSharing", label: "Anonymous Analytics Sharing", desc: "Share anonymous usage trends to help us improve features and optimize database queries.", icon: <BarChart2 size={13} className="text-indigo-400" /> },
   { key: "telemetry", label: "Advanced Diagnostics & Telemetry", desc: "Transmit console warnings and network load logs to our DevSecOps telemetry center." },
   { key: "personalizedAI", label: "Personalized AI Optimization", desc: "Allow local LLM engines (Groq) to cache your text strategies to generate custom recommendations.", icon: <Sparkles size={13} className="text-indigo-400" /> },

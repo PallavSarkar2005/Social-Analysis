@@ -57,8 +57,81 @@ const normalizeText = (value) =>
     .replace(/\s+/g, " ")
     .trim();
 
+/**
+ * Strip Wikipedia-style tenure annotations from party labels and drop
+ * affiliations that could not yet apply in the event year.
+ *
+ * Examples:
+ *   "BJP (2015–present)" + eventYear 2001 → ""  (anachronistic)
+ *   "BJP (2015–present)" + eventYear 2016 → "BJP"
+ *   "Indian National Congress (1991–2015)" + 2001 → "Indian National Congress"
+ *   "Bharatiya Janata Party (–present)" → "Bharatiya Janata Party"
+ */
+export function cleanPartyLabel(party = "", eventYear = null) {
+  let p = String(party || "").trim();
+  if (!p) return "";
+
+  // Capture tenure start/end before stripping
+  // (2015–present), (2015-present), (2015—2024), (since 2015), (–present)
+  const tenureRe =
+    /\(\s*(?:since\s+)?(\d{4})?\s*[–\-—to]{1,3}\s*(?:present|now|\d{4})?\s*\)|\(\s*since\s+(\d{4})\s*\)/i;
+  const tenureMatch = p.match(tenureRe);
+  let tenureStart = null;
+  let tenureEnd = null;
+  if (tenureMatch) {
+    tenureStart = tenureMatch[1] || tenureMatch[2] ? Number(tenureMatch[1] || tenureMatch[2]) : null;
+    const endRaw = tenureMatch[0].match(/[–\-—to]{1,3}\s*(\d{4}|present|now)\s*\)/i)?.[1];
+    if (endRaw && /^\d{4}$/.test(endRaw)) tenureEnd = Number(endRaw);
+  }
+
+  // Always remove tenure / date-range parentheticals from the display name
+  p = p
+    .replace(/\(\s*(?:since\s+)?\d{0,4}\s*[–\-—to]{1,3}\s*(?:present|now|\d{4})?\s*\)/gi, "")
+    .replace(/\(\s*since\s+\d{4}\s*\)/gi, "")
+    .replace(/\(\s*[–\-—]+\s*(?:present|now)?\s*\)/gi, "")
+    .replace(/\s{2,}/g, " ")
+    .replace(/\s*,\s*$/g, "")
+    .trim();
+
+  if (!p) return "";
+
+  const y = eventYear != null ? Number(String(eventYear).replace(/[^\d]/g, "").slice(0, 4)) : null;
+  if (y && Number.isFinite(y)) {
+    // Current-affiliation annotation that starts after this event → do not show
+    if (tenureStart != null && y < tenureStart) return "";
+    // Historical tenure that ended before this event → do not show
+    if (tenureEnd != null && y > tenureEnd) return "";
+  }
+
+  return p;
+}
+
+/** Clean "Party: …" segments inside timeline descriptions. */
+export function cleanPartyInText(text = "", eventYear = null) {
+  let d = String(text || "");
+  if (!d) return "";
+
+  d = d.replace(/\bParty:\s*([^·|\n]+)/gi, (_, rawParty) => {
+    const cleaned = cleanPartyLabel(rawParty, eventYear);
+    return cleaned ? `Party: ${cleaned}` : "";
+  });
+
+  // Orphan tenure leftovers after year-stripping: "(–present)", "(-present)"
+  d = d
+    .replace(/\(\s*[–\-—]+\s*(?:present|now)?\s*\)/gi, "")
+    .replace(/\(\s*present\s*\)/gi, "")
+    .replace(/\s*·\s*·+/g, " · ")
+    .replace(/^\s*·\s*/g, "")
+    .replace(/\s*·\s*$/g, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+
+  return d;
+}
+
 const eventText = (event) =>
   normalizeText([event?.title, event?.description, event?.value].filter(Boolean).join(" "));
+
 
 /** Convert ISO / messy DOB strings into a single readable date (e.g. "25 March 1965"). */
 export function formatReadableDate(value) {
@@ -280,11 +353,13 @@ const buildElectionCard = (row, source) => {
   if (!year) return null;
 
   const result = parseElectionResult(row.position);
+  const party = cleanPartyLabel(row.party || "", year) || null;
+  const type = normalizeElectionTypeLabel(row.election || "Election");
   const election = {
     year,
-    type: row.election || "Election",
+    type,
     constituency: row.constituency || null,
-    party: row.party || null,
+    party,
     result,
     margin: row.margin != null && row.margin > 0 ? Number(row.margin) : null,
     voteShare: row.votePct != null && row.votePct > 0 ? Number(row.votePct) : null,
@@ -594,8 +669,12 @@ const mergeTwoEvents = (current, candidate) => {
 /**
  * Collapse events that describe the same milestone (year + office/election/role),
  * keeping the richest description and collecting supporting sources.
+ * @param {object[]} events
+ * @param {{ sort?: boolean }} [options] — set sort:false to preserve input order
+ *   (used for Birth → Education → Party story prefixes).
  */
-export const collapseSemanticDuplicates = (events = []) => {
+export const collapseSemanticDuplicates = (events = [], options = {}) => {
+  const { sort = true } = options;
   const merged = [];
   for (const raw of events || []) {
     if (!raw?.year) continue;
@@ -631,6 +710,7 @@ export const collapseSemanticDuplicates = (events = []) => {
       merged.push(event);
     }
   }
+  if (!sort) return merged;
   return merged.sort(
     (a, b) =>
       Number(a.year) - Number(b.year) ||
@@ -720,33 +800,180 @@ const appointmentOverlapsElection = (appointment, elections) => {
   });
 };
 
+const looksLikePersonName = (text = "") => {
+  const t = String(text || "").trim();
+  if (!t || t.length < 3) return false;
+  if (
+    /\b(election|assembly|sabha|vidhan|lok|rajya|mla|mp|won|contested|party|constituency|minister|general|legislative|parliamentary|parliament|re-?elected|bye|joined|affiliated|education|birth|college|school|appointed|became|retired)\b/i.test(
+      t
+    )
+  ) {
+    return false;
+  }
+  // 1–4 capitalized name tokens (e.g. "Yogi Adityanath", "Narendra Modi")
+  return /^[A-Z][A-Za-z.'-]*(?:\s+[A-Z][A-Za-z.']*){0,3}$/.test(t);
+};
+
+const collapseRepeatedWords = (text = "") => {
+  let t = String(text || "").trim();
+  if (!t) return "";
+  let prev = "";
+  while (prev !== t) {
+    prev = t;
+    t = t.replace(/\b([\w'’-]+)(?:\s+\1\b)+/gi, "$1");
+  }
+  return t.replace(/\s{2,}/g, " ").trim();
+};
+
+const isMangledElectionTitle = (title = "") => {
+  const t = String(title || "").trim();
+  if (!t) return true;
+  if (/^(won\s+){2,}/i.test(t)) return true;
+  if (/^won\s+re$/i.test(t) || /^won\s*-?\s*$/i.test(t)) return true;
+  if (/^contested\s+re$/i.test(t)) return true;
+  if (/^won\s+(parliamentary|assembly|general|lok sabha|rajya sabha)$/i.test(t)) return true;
+  if (looksLikePersonName(t)) return true;
+  return false;
+};
+
+/**
+ * Normalize the election TYPE label (not the display title).
+ * Must NEVER return values that start with "Won"/"Contested" — those are display
+ * prefixes. Historical bug: buildElectionDisplayTitle did `Won ${type}` while type
+ * already started with "Won", writing "Won Won Re" into Mongo and compounding on rebuild.
+ */
+export const normalizeElectionTypeLabel = (typeRaw = "") => {
+  let t = String(typeRaw || "").trim();
+  if (!t) return "Election";
+
+  // Strip display-title prefixes first (source of "Won Won Re" corruption)
+  t = t
+    .replace(/^(won\s+)+/i, "")
+    .replace(/^(contested\s+)+/i, "")
+    .replace(/^(re-elected\s+(as\s+)?)/i, "")
+    .trim();
+
+  if (!t || looksLikePersonName(t)) return "Election";
+
+  // Bare remnant after stripping "Won" from "Won Re" / "Won Won Re"
+  if (/^re$/i.test(t)) return "Re-election";
+
+  const isReElection = /\bre[-\s]?elections?\b/i.test(t);
+  const isByeElection = /\bbye[-\s]?elections?\b/i.test(t);
+
+  t = t
+    .replace(/\s*[—–\-]\s*(Elected|Re-elected|Winner|Won).*$/i, "")
+    .replace(/\bElected MLA\b/gi, "")
+    .trim();
+
+  if (isReElection || /^re$/i.test(t)) return "Re-election";
+  if (isByeElection) return "Bye-election";
+  if (!t || looksLikePersonName(t)) return "Election";
+  // Guard: never persist a type that still looks like a Won-title
+  if (/^won\b/i.test(t)) return "Election";
+  return t;
+};
+
+const finalizeElectionTitle = (title = "") => {
+  let t = collapseRepeatedWords(String(title || "").trim());
+  t = t
+    .replace(/^(won\s+)+/i, "Won ")
+    .replace(/\bWon\s+India\s+Lok\s+Sabha\b/i, "Won the Indian Lok Sabha")
+    .replace(/\bWon\s+Indian\s+Lok\s+Sabha\b/i, "Won the Indian Lok Sabha")
+    .replace(/\bWon\s+the\s+Indian\s+Lok\s+Sabha(?!\s+Election)\b/i, "Won the Indian Lok Sabha Election")
+    .replace(/^Won\s+Parliamentary$/i, "Won Parliamentary Election")
+    .replace(/^Won\s+Assembly$/i, "Won Assembly Election")
+    .replace(/^Won\s+General$/i, "Won General Election")
+    .replace(/^Won\s+Lok\s+Sabha$/i, "Won the Indian Lok Sabha Election")
+    .replace(/^Re-elected\s+MP$/i, "Re-elected as Member of Parliament")
+    .replace(/^Re-elected\s+MLA$/i, "Re-elected as MLA")
+    .replace(/\belection\s+election\b/gi, "Election")
+    .replace(/\bthe\s+the\b/gi, "the")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+  return t;
+};
+
+const buildElectionDisplayTitle = (cleanType, family, result, winIndexInFamily) => {
+  if (result === "Lost") {
+    if (family === "lok-sabha") return "Contested the Indian Lok Sabha Election";
+    if (family === "assembly") return "Contested Assembly Election";
+    if (/^re[-\s]?election$/i.test(cleanType)) return "Contested Re-election";
+    if (/^election$/i.test(cleanType)) return "Contested Election";
+    const base = collapseRepeatedWords(
+      String(cleanType)
+        .replace(/\belections?\b/gi, "")
+        .replace(/\s*[-\s]+$/g, "")
+        .replace(/\s{2,}/g, " ")
+        .trim()
+    );
+    if (!base || base.length < 3 || /^(re|bye|won)$/i.test(base)) return "Contested Election";
+    return finalizeElectionTitle(`Contested ${base}`);
+  }
+
+  if (result !== "Won") {
+    if (looksLikePersonName(cleanType) || !cleanType) return "Election";
+    return finalizeElectionTitle(cleanType);
+  }
+
+  if (winIndexInFamily > 0) {
+    return family === "lok-sabha"
+      ? "Re-elected as Member of Parliament"
+      : "Re-elected as MLA";
+  }
+  if (/^re[-\s]?election$/i.test(cleanType)) {
+    return family === "lok-sabha" ? "Won Lok Sabha Re-election" : "Won Re-election";
+  }
+  if (/^bye[-\s]?election$/i.test(cleanType)) return "Won Bye-election";
+  if (/^election$/i.test(cleanType)) {
+    if (family === "lok-sabha") return "Won the Indian Lok Sabha Election";
+    if (family === "assembly") return "Won Assembly Election";
+    return "Won Election";
+  }
+
+  // Strip "election" carefully — do not turn "Re-election" into "Re"
+  let base = String(cleanType)
+    .replace(/^(won\s+)+/i, "")
+    .replace(/\bre[-\s]?elections?\b/gi, "RE_ELECTION_TOKEN")
+    .replace(/\bbye[-\s]?elections?\b/gi, "BYE_ELECTION_TOKEN")
+    .replace(/\belections?\b/gi, "")
+    .replace(/RE_ELECTION_TOKEN/g, "Re-election")
+    .replace(/BYE_ELECTION_TOKEN/g, "Bye-election")
+    .replace(/\bIndia\b/g, "Indian")
+    .replace(/\s*[-\s]+$/g, "")
+    .replace(/^\s*[-\s]+/g, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+
+  base = collapseRepeatedWords(base);
+
+  if (!base || base.length < 3 || /^(re|bye|the|a|an|won)$/i.test(base)) {
+    if (family === "lok-sabha") return "Won the Indian Lok Sabha Election";
+    if (family === "assembly") return "Won Assembly Election";
+    return "Won Election";
+  }
+
+  if (/\bindian\s+lok\s+sabha\b/i.test(base) || /\blok\s+sabha\b/i.test(base)) {
+    return finalizeElectionTitle("Won the Indian Lok Sabha Election");
+  }
+  if (/parliamentary/i.test(base)) {
+    return finalizeElectionTitle("Won Parliamentary Election");
+  }
+  if (/assembly|vidhan|rajya sabha/i.test(base)) {
+    return finalizeElectionTitle(`Won ${base} Election`);
+  }
+  if (/re-election|bye-election/i.test(base)) return finalizeElectionTitle(`Won ${base}`);
+  return finalizeElectionTitle(`Won ${base}`);
+};
+
 const polishElectionEvent = (event, winIndexInFamily) => {
   const result = event.election?.result || parseElectionResult(`${event.title} ${event.description}`);
   const typeRaw = event.election?.type || event.title || "Election";
-  const cleanType = String(typeRaw)
-    .replace(/\s*[—–\-]\s*(Elected|Re-elected|Winner|Won).*$/i, "")
-    .replace(/\bElected MLA\b/gi, "")
-    .trim() || "Election";
-  const family = normalizeElectionFamily(`${cleanType} ${event.title}`);
+  const cleanType = normalizeElectionTypeLabel(typeRaw);
+  const family = normalizeElectionFamily(`${cleanType} ${event.title} ${event.description || ""}`);
   const constituency = event.election?.constituency;
-  const party = event.election?.party;
-
-  let title;
-  if (result === "Won") {
-    if (winIndexInFamily > 0) {
-      title = family === "lok-sabha" ? "Re-elected MP" : "Re-elected MLA";
-    } else {
-      const base = cleanType.replace(/\belection\b/gi, "").replace(/\s+/g, " ").trim() || "Election";
-      title = /assembly|vidhan|lok sabha|rajya sabha/i.test(base)
-        ? `Won ${base} Election`
-        : `Won ${base}`;
-      title = title.replace(/\belection\s+election\b/gi, "Election").replace(/\s+/g, " ").trim();
-    }
-  } else if (result === "Lost") {
-    title = `Contested ${cleanType.replace(/\belection\b/gi, "").trim() || cleanType}`;
-  } else {
-    title = cleanType;
-  }
+  const party = cleanPartyLabel(event.election?.party || "", event.year) || null;
+  const title = buildElectionDisplayTitle(cleanType, family, result, winIndexInFamily);
 
   const details = [
     constituency ? `Constituency: ${constituency}` : null,
@@ -762,11 +989,13 @@ const polishElectionEvent = (event, winIndexInFamily) => {
   return {
     ...event,
     title,
-    description: details.join(" · ") || event.description || "",
+    description: details.join(" · ") || cleanPartyInText(event.description || "", event.year),
     election: {
       ...(event.election || {}),
+      // Persist normalized TYPE only — never a "Won …" display title
       type: cleanType,
       result,
+      party,
     },
   };
 };
@@ -938,7 +1167,9 @@ const buildPartyEvent = (biography, sources, facts) => {
   const year = extractYear(biography.dateJoinedParty) || partyFact?.year;
   if (!year) return null;
 
-  const party = biography.party || partyFact?.value || partyFact?.description;
+  const rawParty = biography.party || partyFact?.value || partyFact?.description;
+  // For join events, strip tenure annotations but keep the party name (year badge carries the join year)
+  const party = cleanPartyLabel(rawParty, null);
   const title = isVerifiedValue(party) ? `Joined ${party}` : "Party Entry";
 
   return createEvent({
@@ -1019,14 +1250,17 @@ const buildCurrentOfficeEvent = (biography, elections, existingEvents, sources) 
       .find(Boolean) ||
     [...(elections || [])]
       .filter((row) => /winner|won|elected/i.test(String(row.position || "")))
-      .sort((a, b) => (b.year || 0) - (a.year || 0))[0]?.year;
+      .sort((a, b) => (b.year || 0) - (a.year || 0))[0]?.year ||
+    extractYear(biography.dateFirstElected) ||
+    extractYear(biography.dateJoinedParty);
 
   if (year) year = String(year);
-  if (!year) return null;
+  // Last resort: keep current office visible on career timeline even without a precise year
+  if (!year) year = String(new Date().getFullYear());
 
   const description = [
     isVerifiedValue(biography.constituency) ? `Constituency: ${biography.constituency}` : null,
-    isVerifiedValue(biography.party) ? `Party: ${biography.party}` : null,
+    isVerifiedValue(biography.party) ? `Party: ${cleanPartyLabel(biography.party, year)}` : null,
   ]
     .filter(Boolean)
     .join(" · ");
@@ -1077,7 +1311,7 @@ const ingestStoredTimeline = (storedTimeline = [], sources = []) => {
         createEvent({
           year: entry.year,
           title: entry.title,
-          description: entry.description || "",
+          description: entry.description || entry.narrative || "",
           source: { name: entry.source, url: entry.sourceUrl, confidence: entry.confidence },
           category: entry.category,
           id: entry.id,
@@ -1100,8 +1334,13 @@ const assembleStoryTimeline = (pools, biography, elections, sources) => {
     storedCurrent;
   const polishedCurrent = current ? polishAppointmentTitle({ ...current, category: "currentOffice" }) : null;
 
-  // Build journey without current office, then attach current as the closing card
-  let timeline = collapseSemanticDuplicates([birth, education, party, ...middle].filter(Boolean));
+  // Story prefix: Education → Party (birth is excluded from career timeline)
+  const prefixMerged = collapseSemanticDuplicates([education, party].filter(Boolean), { sort: false });
+  const orderedPrefix = [
+    ...prefixMerged.filter((e) => isEducationEvent(e)),
+    ...prefixMerged.filter((e) => isPartyEvent(e) && !isEducationEvent(e)),
+  ];
+  let timeline = [...orderedPrefix, ...middle];
 
   if (polishedCurrent) {
     const key = semanticMilestoneKey(polishedCurrent);
@@ -1124,7 +1363,7 @@ const assembleStoryTimeline = (pools, biography, elections, sources) => {
 const collectRawEvents = ({ biography, rawTimeline, elections, sources, facts, storedTimeline }) => {
   const events = [];
 
-  events.push(buildBirthEvent(biography, sources, facts));
+  // Birth is intentionally omitted from the career timeline
   events.push(buildEducationEvent(biography, sources, facts));
   events.push(buildPartyEvent(biography, sources, facts));
   events.push(...buildElectionEvents(elections, sources));
@@ -1132,25 +1371,22 @@ const collectRawEvents = ({ biography, rawTimeline, elections, sources, facts, s
 
   for (const fact of facts || []) {
     const mapped = factToTimelineEvent(fact);
-    if (mapped) events.push(mapped);
+    if (mapped && mapped.category !== "birth" && !isBirthEvent(mapped)) events.push(mapped);
   }
 
-  events.push(...ingestStoredTimeline(storedTimeline, sources));
+  events.push(
+    ...ingestStoredTimeline(storedTimeline, sources).filter(
+      (e) => e && e.category !== "birth" && !isBirthEvent(e)
+    )
+  );
 
   for (const raw of rawTimeline || []) {
     const text = String(raw.event || "").trim();
     const year = extractYear(raw.year) || extractYear(text);
     if (!year || !isVerifiedValue(text)) continue;
     if (/\b(born|birth)\b/i.test(text)) {
-      events.push(
-        createEvent({
-          year,
-          title: "Birth",
-          description: text,
-          source: resolveSource(sources, ["wikipedia"]),
-          category: "birth",
-        })
-      );
+      // Skip birth milestones — career timeline starts at education / party / elections
+      continue;
     } else if (/\b(joined|affiliated)\b/i.test(text)) {
       events.push(
         createEvent({
@@ -1168,7 +1404,7 @@ const collectRawEvents = ({ biography, rawTimeline, elections, sources, facts, s
 };
 
 /**
- * Build a clean storytelling timeline: Birth → Education → Party → Elections & Appointments → Current Role.
+ * Build a clean storytelling timeline: Education → Party → Elections & Appointments → Current Role.
  */
 export const buildIntelligenceTimeline = ({
   biography = {},
@@ -1199,17 +1435,26 @@ export const buildIntelligenceTimeline = ({
 export function cleanTimelineTitle(title = "", year = null) {
   let t = String(title || "").trim();
   if (!t) return "";
+  t = collapseRepeatedWords(t);
   t = t
     .replace(/\s*[—–]\s*/g, " — ")
     .replace(/\s+-\s+/g, " — ")
+    .replace(/^(won\s+)+/i, "Won ")
     .replace(/\b(election)\s+\1\b/gi, "$1")
     .replace(/\b(won)\s+\1\b/gi, "$1")
     .replace(/\b(re-elected)\s+\1\b/gi, "$1")
     .replace(/\b(became)\s+\1\b/gi, "$1")
+    .replace(/\belection\s+election\b/gi, "Election")
+    .replace(/\bWon\s+India\s+Lok\s+Sabha\b/i, "Won the Indian Lok Sabha")
+    .replace(/\bWon\s+Indian\s+Lok\s+Sabha\b/i, "Won the Indian Lok Sabha")
+    .replace(/\bWon\s+the\s+Indian\s+Lok\s+Sabha(?!\s+Election)\b/i, "Won the Indian Lok Sabha Election")
+    .replace(/^Won\s+Parliamentary$/i, "Won Parliamentary Election")
+    .replace(/^Won\s+Assembly$/i, "Won Assembly Election")
+    .replace(/^Won\s+Re$/i, "Won Re-election")
+    .replace(/^Re-elected\s+MP$/i, "Re-elected as Member of Parliament")
+    .replace(/^Re-elected\s+MLA$/i, "Re-elected as MLA")
     .replace(/\s{2,}/g, " ")
     .trim();
-  // "Won … Election Election" → single Election
-  t = t.replace(/\belection\s+election\b/gi, "Election");
 
   // Year badge already shows the year — strip echoes from the title
   const y = year != null ? String(year).replace(/[^\d]/g, "").slice(0, 4) : "";
@@ -1227,7 +1472,7 @@ export function cleanTimelineTitle(title = "", year = null) {
       .trim();
   }
 
-  return t;
+  return collapseRepeatedWords(t);
 }
 
 export function cleanTimelineDescription(description = "", { title = "", year = null, category = "" } = {}) {
@@ -1265,6 +1510,9 @@ export function cleanTimelineDescription(description = "", { title = "", year = 
       .replace(/\b\d{1,2}\/\d{1,2}\/\d{2,4}\b/g, "");
   }
 
+  // Scrub tenure leftovers created when a year was stripped from "(2015–present)" → "(–present)"
+  d = cleanPartyInText(d, year);
+
   // Strip title fragment from the start of description
   if (title) {
     const escaped = title.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -1291,35 +1539,140 @@ export function cleanTimelineDescription(description = "", { title = "", year = 
 /**
  * Final presentation pass for timeline events used by profile UI + dossiers.
  * Also collapses semantic duplicates so legacy stored timelines clean up on read.
+ * Preserves storytelling order: Education → Party → chronological middle → Current office.
+ * Birth milestones are excluded from the career timeline.
  */
 export function polishTimelineEventsForDisplay(events = []) {
-  const collapsed = collapseSemanticDuplicates(events || []);
+  const education = [];
+  const party = [];
+  const current = [];
+  const middle = [];
+
+  for (const raw of events || []) {
+    if (!raw) continue;
+    // Career timeline never shows birth
+    if (isBirthEvent(raw) || raw.category === "birth") continue;
+    if (isEducationEvent(raw)) education.push(raw);
+    else if (isPartyEvent(raw)) party.push(raw);
+    else if (isCurrentOfficeEvent(raw)) current.push(raw);
+    else middle.push(raw);
+  }
+
+  const ordered = [
+    ...collapseSemanticDuplicates(education, { sort: false }),
+    ...collapseSemanticDuplicates(party, { sort: false }),
+    ...collapseSemanticDuplicates(middle),
+    ...collapseSemanticDuplicates(current, { sort: false }),
+  ];
+
   const cleaned = [];
   let prevFingerprint = "";
 
-  for (const raw of collapsed) {
+  for (const raw of ordered) {
     if (!raw) continue;
+    if (isBirthEvent(raw) || raw.category === "birth") continue;
+
     const year =
       raw.year != null ? String(raw.year).replace(/[^\d]/g, "").slice(0, 4) || String(raw.year) : null;
-    let title = cleanTimelineTitle(raw.title || "", year);
+
+    // Clean party tenure annotations before year-stripping can produce "(–present)"
+    let preTitle = String(raw.title || "");
+    let preDescription = String(raw.description || raw.narrative || "");
+    let electionPayload = raw.election || null;
+
+    // Repair only mangled election titles (e.g. "Yogi Adityanath", "Won Re") —
+    // never rewrite Education / Joined Party / Current Office cards.
+    const shouldRepairElectionTitle =
+      (raw.category === "election" || Boolean(electionPayload) || /party:|constituency:/i.test(preDescription)) &&
+      isMangledElectionTitle(preTitle);
+
+    if (shouldRepairElectionTitle) {
+      const repaired = polishElectionEvent(
+        {
+          ...raw,
+          title: looksLikePersonName(preTitle) ? electionPayload?.type || "Election" : preTitle,
+          election: {
+            ...(electionPayload || {}),
+            type: normalizeElectionTypeLabel(
+              looksLikePersonName(electionPayload?.type || "")
+                ? "Election"
+                : electionPayload?.type || preTitle
+            ),
+            party: electionPayload?.party,
+            constituency: electionPayload?.constituency,
+            result: electionPayload?.result || parseElectionResult(`${preTitle} ${preDescription}`),
+          },
+        },
+        0
+      );
+      preTitle = repaired.title;
+      preDescription = repaired.description || preDescription;
+      electionPayload = repaired.election;
+    }
+
+    if (electionPayload || raw.category === "election" || /party:/i.test(preDescription)) {
+      const cleanedParty = cleanPartyLabel(electionPayload?.party || "", year);
+      if (electionPayload) {
+        electionPayload = {
+          ...electionPayload,
+          party: cleanedParty || null,
+        };
+      }
+      preDescription = cleanPartyInText(preDescription, year);
+    }
+
+    // Party-join titles: "Joined BJP (2015–present)" → "Joined BJP"
+    if (raw.category === "joinedParty" || isPartyEvent(raw)) {
+      preTitle = preTitle.replace(
+        /\b(joined|affiliated with|affiliated)\s+(.+)$/i,
+        (_, verb, partyPart) => {
+          const cleaned = cleanPartyLabel(partyPart, null);
+          return cleaned ? `${verb} ${cleaned}` : verb;
+        }
+      );
+      preDescription = cleanPartyInText(
+        preDescription.replace(
+          /\b(joined|affiliated with|affiliated)\s+(.+)$/i,
+          (_, verb, partyPart) => {
+            const cleaned = cleanPartyLabel(partyPart, null);
+            return cleaned ? `${verb} ${cleaned}` : verb;
+          }
+        ),
+        year
+      );
+    }
+
+    let title = cleanTimelineTitle(preTitle, year);
+    // Final guard — only for election cards
+    if (
+      (raw.category === "election" || electionPayload) &&
+      isMangledElectionTitle(title)
+    ) {
+      title = buildElectionDisplayTitle(
+        normalizeElectionTypeLabel(electionPayload?.type || "Election"),
+        normalizeElectionFamily(`${electionPayload?.type || ""} ${title}`),
+        electionPayload?.result || "Won",
+        0
+      );
+    }
     if (!title && !year) continue;
 
-    const category = raw.category || "";
-    let description = cleanTimelineDescription(raw.description || raw.narrative || "", {
+    const category =
+      raw.category === "election" || electionPayload
+        ? raw.category || "election"
+        : raw.category || "";
+    let description = cleanTimelineDescription(preDescription, {
       title,
       year,
       category,
     });
 
-    if (category === "birth" || isBirthEvent({ ...raw, title, description })) {
-      title = "Birth";
-      description = cleanBirthDescription(raw.description || raw.narrative || description, { year });
-    }
-
     if ((category === "joinedParty" || isPartyEvent({ ...raw, title, description })) && title === "Party Entry") {
-      const joined = String(description || "").match(/^joined\s+(.+)$/i)?.[1]?.trim();
+      const joined =
+        String(description || "").match(/^(?:joined|affiliated with)\s+(.+)$/i)?.[1]?.trim() ||
+        cleanPartyLabel(description, null);
       if (joined) {
-        title = `Joined ${joined}`;
+        title = `Joined ${cleanPartyLabel(joined, null) || joined}`;
         description = "";
       }
     }
@@ -1340,6 +1693,7 @@ export function polishTimelineEventsForDisplay(events = []) {
       title,
       description,
       category: category || raw.category,
+      election: electionPayload,
     };
 
     const prev = cleaned[cleaned.length - 1];
@@ -1384,30 +1738,111 @@ export const buildCareerTimelinePackage = (params) => ({
   timelineIntelligence: {},
 });
 
-export const sanitizeTimelineForResponse = (timeline = []) => {
+const hasMeaningfulElection = (election) => {
+  if (!election || typeof election !== "object") return false;
+  return Boolean(
+    isPresent(election.type) ||
+      isPresent(election.constituency) ||
+      isPresent(election.party) ||
+      isPresent(election.result) ||
+      election.margin != null ||
+      election.voteShare != null
+  );
+};
+
+const hydrateElectionPayload = (entry, elections = []) => {
+  if (hasMeaningfulElection(entry?.election)) return entry.election;
+  if (entry?.category !== "election" && !isElectionLikeEvent(entry || {})) return null;
+
+  const year = String(entry?.year || "");
+  const candidates = (elections || []).filter((row) => String(row?.year) === year);
+  if (candidates.length === 1) {
+    const rebuilt = buildElectionEvents(candidates, [])[0];
+    if (hasMeaningfulElection(rebuilt?.election)) return rebuilt.election;
+  }
+  if (candidates.length > 1) {
+    const titleNorm = normalizeText(entry?.title || "");
+    const match =
+      candidates.find((row) => {
+        const typeNorm = normalizeText(row.election || "");
+        const constNorm = normalizeText(row.constituency || "");
+        return (
+          (typeNorm && titleNorm.includes(typeNorm)) ||
+          (constNorm && (titleNorm.includes(constNorm) || normalizeText(entry?.description || "").includes(constNorm)))
+        );
+      }) || candidates[0];
+    const rebuilt = buildElectionEvents([match], [])[0];
+    if (hasMeaningfulElection(rebuilt?.election)) return rebuilt.election;
+  }
+
+  // Rebuild from title/description when nested election was stripped by schema
+  try {
+    const rebuilt = toElectionEvent(entry);
+    if (hasMeaningfulElection(rebuilt?.election)) return rebuilt.election;
+  } catch {
+    /* ignore */
+  }
+  return null;
+};
+
+export const sanitizeTimelineForResponse = (timeline = [], options = {}) => {
   if (!Array.isArray(timeline)) return [];
+  const elections = options.elections || [];
 
   return polishTimelineEventsForDisplay(timeline)
     .filter(
       (entry) =>
+        entry?.category !== "birth" &&
+        !isBirthEvent(entry) &&
         isPresent(entry?.year) &&
         isPresent(entry?.title) &&
         isPresent(entry?.category) &&
-        TIMELINE_CATEGORIES.includes(entry.category)
+        TIMELINE_CATEGORIES.includes(entry.category) &&
+        !looksLikePersonName(entry.title)
     )
-    .map((entry) => ({
-      id: entry.id || generateFactId(entry),
-      year: String(entry.year),
-      date: entry.date || null,
-      category: entry.category,
-      title: entry.title,
-      description: entry.description || "",
-      source: entry.source || "",
-      sourceUrl: isPresent(entry.sourceUrl) ? entry.sourceUrl : null,
-      confidence: Number(entry.confidence) || 0,
-      verifiedBy: Array.isArray(entry.verifiedBy) ? entry.verifiedBy : [],
-      election: entry.election || null,
-    }));
+    .map((entry) => {
+      let election =
+        entry.category === "election" || isElectionLikeEvent(entry)
+          ? hydrateElectionPayload(entry, elections)
+          : null;
+
+      if (election) {
+        const party = cleanPartyLabel(election.party || "", entry.year) || null;
+        // Never expose corrupted type strings like "Won Won Re" to the client
+        const type = normalizeElectionTypeLabel(election.type || entry.title || "Election");
+        election = { ...election, party, type };
+      }
+
+      let description = cleanPartyInText(entry.description || "", entry.year);
+      // Rebuild election detail line when nested party was corrected
+      if (election && entry.category === "election") {
+        const details = [
+          election.constituency ? `Constituency: ${election.constituency}` : null,
+          election.party ? `Party: ${election.party}` : null,
+          election.margin != null && Number(election.margin) > 0
+            ? `Margin: +${Number(election.margin).toLocaleString()}`
+            : null,
+          election.voteShare != null && Number(election.voteShare) > 0
+            ? `Vote share: ${election.voteShare}%`
+            : null,
+        ].filter(Boolean);
+        if (details.length) description = details.join(" · ");
+      }
+
+      return {
+        id: entry.id || generateFactId(entry),
+        year: String(entry.year),
+        date: entry.date || null,
+        category: entry.category,
+        title: entry.title,
+        description,
+        source: entry.source || "",
+        sourceUrl: isPresent(entry.sourceUrl) ? entry.sourceUrl : null,
+        confidence: Number(entry.confidence) || 0,
+        verifiedBy: Array.isArray(entry.verifiedBy) ? entry.verifiedBy : [],
+        election,
+      };
+    });
 };
 
 export const sanitizeTimelineIntelligenceForResponse = () => ({});

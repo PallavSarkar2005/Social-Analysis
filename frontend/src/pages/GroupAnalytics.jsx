@@ -208,7 +208,9 @@ function CreatorRow({ creator, theme, index, onGroupChange, onDelete }) {
       </td>
       <td className="py-4 px-5 text-right">
         <span className={`text-sm font-bold ${growthColor(creator.growth)}`}>
-          {growthSign(creator.growth)}{creator.growth?.toFixed(1)}%
+          {creator.growth == null
+            ? "—"
+            : `${growthSign(creator.growth)}${Number(creator.growth).toFixed(1)}%`}
         </span>
       </td>
       <td className="py-4 px-5 text-right">
@@ -216,7 +218,9 @@ function CreatorRow({ creator, theme, index, onGroupChange, onDelete }) {
           className="text-sm font-bold"
           style={{ color: creator.engagementRate > 0 ? theme.accent : '#94a3b8' }}
         >
-          {creator.engagementRate > 0 ? `${creator.engagementRate.toFixed(2)}%` : '—'}
+          {creator.engagementRate != null && creator.engagementRate > 0
+            ? `${Number(creator.engagementRate).toFixed(2)}%`
+            : "—"}
         </span>
       </td>
       <td className="py-4 px-5 text-right">

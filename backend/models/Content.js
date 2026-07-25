@@ -53,5 +53,8 @@ const contentSchema = new mongoose.Schema(
 
 // Compound index to allow different users to track the same contentId
 contentSchema.index({ contentId: 1, userId: 1 }, { unique: true });
+contentSchema.index({ userId: 1, views: -1 });
+contentSchema.index({ userId: 1, account: 1, publishedAt: -1 });
+contentSchema.index({ account: 1, views: -1 });
 
 export default mongoose.model("Content", contentSchema);

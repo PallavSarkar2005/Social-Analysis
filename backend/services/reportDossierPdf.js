@@ -2,6 +2,7 @@ import PDFDocument from "pdfkit";
 import https from "https";
 import http from "http";
 import { resolveNewsDisplayLink } from "../utils/newsArticleUrl.js";
+import { cleanTimelineTitle } from "./politicalTimelineService.js";
 
 const PAGE = { width: 595.28, height: 841.89, margin: 42 };
 const CONTENT_BOTTOM = PAGE.height - 48; // leave room for footer
@@ -267,7 +268,8 @@ function renderTimeline(doc, events) {
   for (const e of events || []) {
     ensureSpace(doc, 28);
     const y = doc.y;
-    const title = String(e.title || "").trim();
+    // Clean legacy hub titles (e.g. "Won Won Re") left in older dossier snapshots
+    const title = cleanTimelineTitle(String(e.title || "").trim(), e.year);
     let description = String(e.description || "").trim();
     if (
       description &&

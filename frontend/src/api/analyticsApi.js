@@ -20,8 +20,25 @@ export const getCompareAccounts = async () => {
   return res.data;
 };
 
-export const getGrowthData = async (accountId) => {
-  const res = await client.get(`/api/analytics/growth/${accountId}`);
+export const getGrowthData = async (accountId, params = {}) => {
+  const res = await client.get(`/api/analytics/growth/${accountId}`, { params });
+  return res.data;
+};
+
+export const getAnalyticsSeries = async (accountId, params = {}) => {
+  const res = await client.get(`/api/analytics/series/${accountId}`, { params });
+  return res.data;
+};
+
+export const getAnalyticsLatest = async (accountId) => {
+  const res = await client.get(`/api/analytics/latest/${accountId}`);
+  return res.data;
+};
+
+export const getAnalyticsCompare = async (ids = []) => {
+  const res = await client.get("/api/analytics/compare-metrics", {
+    params: { ids: Array.isArray(ids) ? ids.join(",") : ids },
+  });
   return res.data;
 };
 

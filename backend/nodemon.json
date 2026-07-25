@@ -1,14 +1,5 @@
 {
-  "ignore": [
-    "storage/*",
-    "storage/**",
-    "tmp/*",
-    "tmp/**",
-    "datasets/*",
-    "datasets/**",
-    "request_queues/*",
-    "request_queues/**",
-    "key_value_stores/*",
-    "key_value_stores/**"
-  ]
+  "watch": ["server.js", "config", "controllers", "routes", "services", "utils", "middleware", "models", "jobs", ".env"],
+  "ext": "js,json,env",
+  "ignore": ["storage", "tmp", "node_modules", "tests", "scripts"]
 }

@@ -220,12 +220,13 @@ const getChannelIdByHandleSafe = async (handleOrQuery) => {
   // 1. Try resolving using forHandle if it starts with @
   if (clean.startsWith("@")) {
     try {
+      const handleWithoutAt = clean.slice(1);
       const { data } = await youtubeGet(
         "getChannelIdByHandleSafe",
         "https://www.googleapis.com/youtube/v3/channels",
         {
           part: "id",
-          forHandle: clean,
+          forHandle: handleWithoutAt,
         }
       );
       

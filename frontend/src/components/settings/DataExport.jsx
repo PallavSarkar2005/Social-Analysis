@@ -84,7 +84,7 @@ export default function DataExport({ user }) {
             <p className="text-[10px] text-slate-400 leading-relaxed">Extract historical records of tracked creators and engagement metrics into a CSV file.</p>
           </div>
           <button onClick={handleExportCSV} disabled={exportingCsv} className="w-full h-9 rounded-xl bg-white/[0.02] border border-white/[0.06] hover:bg-white/[0.04] text-slate-300 hover:text-white transition flex items-center justify-center gap-2 text-xs font-semibold disabled:opacity-50">
-            {exportingCsv ? <RefreshCw size={12} className="animate-spin" /> : <Download size={12} />} Export Sheets (CSV)
+            {exportingCsv ? <RefreshCw size={12} className="animate-spin" /> : <Download size={12} />} Export CSV
           </button>
         </div>
       </div>

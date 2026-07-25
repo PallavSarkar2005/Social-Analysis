@@ -58,6 +58,11 @@ export const validateRegister = [
       "Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, one number, and one special character"
     )
     .custom(checkCommonPassword),
+  // Block privilege escalation via mass assignment
+  body("role").not().exists().withMessage("Role cannot be set during registration"),
+  body("plan").not().exists().withMessage("Plan cannot be set during registration"),
+  body("isAdmin").not().exists().withMessage("Invalid registration field"),
+  body("isEmailVerified").not().exists().withMessage("Invalid registration field"),
   validateResult,
 ];
 
@@ -127,7 +132,15 @@ export const validateGoogleSignIn = [
   body("idToken")
     .trim()
     .notEmpty()
-    .withMessage("Google ID Token is required"),
+    .withMessage("Google ID Token is required")
+    .isLength({ min: 20, max: 4096 })
+    .withMessage("Invalid Google ID Token format")
+    .custom((value) => {
+      if (value === "dummy-developer-token") {
+        throw new Error("Invalid Google ID Token");
+      }
+      return true;
+    }),
   validateResult,
 ];
 

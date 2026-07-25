@@ -12,6 +12,7 @@ import { ensureAccessToken } from "../api/client";
 import Sidebar from "../components/layout/Sidebar";
 import LeaderAvatar from "../components/common/LeaderAvatar";
 import IndiaMap from "../components/common/IndiaMap";
+import { AppShellSkeleton } from "../components/common/PageSkeleton";
 import {
   getProfileBiography, getProfileNews,
   getProfileCharts, getProfileElections, getProfileInfluence,
@@ -28,6 +29,9 @@ import SectionFreshnessBar from "../components/profile/SectionFreshnessBar";
 import AISummaryPanel from "../components/profile/AISummaryPanel";
 import WidgetErrorBoundary from "../components/WidgetErrorBoundary";
 import ProfileContentBoundary from "../components/profile/ProfileContentBoundary";
+import AnalyticsChart from "../components/charts/AnalyticsChart";
+import InsufficientData from "../components/charts/InsufficientData";
+import { METRIC_COLORS } from "../config/metricColors";
 import { isVerifiedValue, safeArray } from "../utils/profileFacts";
 import { formatIndianDate } from "../utils/dateFormatter";
 import { safeText } from "../utils/safeData";
@@ -248,6 +252,7 @@ export default function PoliticalProfile() {
   useEffect(() => {
     const prev = prevSyncStatusRef.current;
     if ((prev === "building" || prev === "pending") && syncStatus === "ready") {
+      queryClient.invalidateQueries({ queryKey: ["profile-bio", creatorId] });
       queryClient.invalidateQueries({ queryKey: ["profile-elections", creatorId] });
       queryClient.invalidateQueries({ queryKey: ["profile-news", creatorId] });
       queryClient.invalidateQueries({ queryKey: ["profile-charts", creatorId] });
@@ -388,12 +393,7 @@ export default function PoliticalProfile() {
   const aiSummary = hubAiSummary;
 
   if (bioLoading) {
-    return (
-      <div className="flex h-screen w-screen items-center justify-center bg-[#090a0f] text-slate-100 flex-col space-y-4">
-        <div className="w-10 h-10 border-4 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin" />
-        <span className="text-xs font-semibold text-slate-400 tracking-wider">Analyzing political footprint...</span>
-      </div>
-    );
+    return <AppShellSkeleton />;
   }
 
   if (bioError || !profilePayload) {
@@ -440,23 +440,19 @@ export default function PoliticalProfile() {
   const contentDistributionMessage =
     chartsData?.data?.contentDistributionMessage ||
     "No YouTube content distribution data is available for this profile.";
-  const hasGrowthSeries = timeSeries.length > 0;
-  const hasSingleGrowthPoint = timeSeries.length === 1;
-  const hasUploadsDistribution = uploadsDistribution.length > 0;
-  const hasCategories = categories.length > 0;
+  const chartAvailability = chartsData?.data?.availability || {};
+  const hasUploadsDistribution = chartAvailability.uploads?.available === true;
+  const hasCategories = chartAvailability.categories?.available === true;
 
-  // Pie chart news data mapping
-  const sentimentDistribution = newsData?.data?.sentiment
+  // Sentiment pie — only real verified sentiment; never fabricate 33/34/33
+  const hasVerifiedSentiment = Boolean(newsData?.data?.sentiment);
+  const sentimentDistribution = hasVerifiedSentiment
     ? [
         { name: "Positive", value: newsData.data.sentiment.positive },
         { name: "Neutral", value: newsData.data.sentiment.neutral },
         { name: "Negative", value: newsData.data.sentiment.negative },
       ]
-    : [
-        { name: "Positive", value: 33 },
-        { name: "Neutral", value: 34 },
-        { name: "Negative", value: 33 },
-      ];
+    : [];
 
   return (
     <div className="flex min-h-screen bg-[#090a0f] text-slate-100 antialiased font-sans">
@@ -744,7 +740,7 @@ export default function PoliticalProfile() {
                 <SectionFreshnessBar meta={moduleMeta.timeline || sectionMeta.timeline} label="Timeline" />
                 <PoliticalTimelinePanel
                   events={profileTimeline}
-                  isLoading={bioLoading}
+                  isLoading={bioLoading || (isBuilding && profileTimeline.length === 0)}
                   sources={sources}
                 />
               </div>
@@ -755,98 +751,85 @@ export default function PoliticalProfile() {
           {activeTab === "charts" && (
             <div className="space-y-6">
               
-              {/* Chart Grid */}
+              {/* Chart Grid — AnalyticsEngine snapshots only */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 
-                {/* Subscriber Growth Chart */}
                 <div className="bg-[#121318]/20 border border-white/[0.06] rounded-2xl p-6 space-y-4">
                   <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest text-left">Subscriber Growth Over Time</h4>
-                  <div className="h-[220px]">
-                    {hasGrowthSeries ? (
-                      <ResponsiveContainer width="100%" height="100%">
-                        <LineChart data={timeSeries}>
-                          <XAxis dataKey="date" stroke="rgba(255,255,255,0.3)" fontSize={10} />
-                          <YAxis stroke="rgba(255,255,255,0.3)" fontSize={10} />
-                          <Tooltip contentStyle={{ backgroundColor: "#161822", borderColor: "rgba(255,255,255,0.08)" }} />
-                          <Line
-                            type="monotone"
-                            dataKey="subscribers"
-                            stroke="#6366f1"
-                            strokeWidth={2}
-                            dot={hasSingleGrowthPoint ? { r: 4, fill: "#6366f1", strokeWidth: 0 } : false}
-                          />
-                        </LineChart>
-                      </ResponsiveContainer>
-                    ) : (
-                      <ChartEmptyState
-                        title="No subscriber trend yet"
-                        message="No stored YouTube snapshots are available for this profile yet."
-                      />
-                    )}
-                  </div>
-                  {hasSingleGrowthPoint && (
-                    <p className="text-[11px] text-slate-500">
-                      Historical trend will build as more analyses are collected.
-                    </p>
-                  )}
+                  <AnalyticsChart
+                    data={timeSeries}
+                    series={[
+                      {
+                        dataKey: "subscribers",
+                        name: "Subscribers",
+                        metric: "subscribers",
+                        color: METRIC_COLORS.subscribers,
+                      },
+                    ]}
+                    type="line"
+                    height={220}
+                    availability={chartAvailability}
+                    emptyReason={
+                      chartAvailability.subscribers?.reason ||
+                      "No verified historical subscriber data available yet."
+                    }
+                  />
                 </div>
 
-                {/* Views Growth Chart */}
                 <div className="bg-[#121318]/20 border border-white/[0.06] rounded-2xl p-6 space-y-4">
                   <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest text-left">Views Growth Over Time</h4>
-                  <div className="h-[220px]">
-                    {hasGrowthSeries ? (
-                      <ResponsiveContainer width="100%" height="100%">
-                        <LineChart data={timeSeries}>
-                          <XAxis dataKey="date" stroke="rgba(255,255,255,0.3)" fontSize={10} />
-                          <YAxis stroke="rgba(255,255,255,0.3)" fontSize={10} />
-                          <Tooltip contentStyle={{ backgroundColor: "#161822", borderColor: "rgba(255,255,255,0.08)" }} />
-                          <Line
-                            type="monotone"
-                            dataKey="views"
-                            stroke="#a855f7"
-                            strokeWidth={2}
-                            dot={hasSingleGrowthPoint ? { r: 4, fill: "#a855f7", strokeWidth: 0 } : false}
-                          />
-                        </LineChart>
-                      </ResponsiveContainer>
-                    ) : (
-                      <ChartEmptyState
-                        title="No view trend yet"
-                        message="No stored YouTube snapshots are available for this profile yet."
-                      />
-                    )}
-                  </div>
-                  {hasSingleGrowthPoint && (
-                    <p className="text-[11px] text-slate-500">
-                      Historical trend will build as more analyses are collected.
-                    </p>
+                  <AnalyticsChart
+                    data={timeSeries}
+                    series={[
+                      {
+                        dataKey: "views",
+                        name: "Views",
+                        metric: "views",
+                        color: METRIC_COLORS.views,
+                      },
+                    ]}
+                    type="line"
+                    height={220}
+                    availability={chartAvailability}
+                    emptyReason={
+                      chartAvailability.views?.reason ||
+                      "No verified historical view data available yet."
+                    }
+                  />
+                </div>
+
+                <div className="bg-[#121318]/20 border border-white/[0.06] rounded-2xl p-6 space-y-4">
+                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest text-left">Monthly Upload Frequency</h4>
+                  {hasUploadsDistribution ? (
+                    <AnalyticsChart
+                      data={uploadsDistribution}
+                      series={[
+                        {
+                          dataKey: "uploads",
+                          name: "Uploads",
+                          metric: "uploads",
+                          color: METRIC_COLORS.uploads,
+                        },
+                      ]}
+                      type="bar"
+                      xKey="month"
+                      height={220}
+                      minPoints={1}
+                      availability={{ uploads: { available: true } }}
+                    />
+                  ) : (
+                    <InsufficientData
+                      title="Insufficient verified data"
+                      reason={
+                        chartAvailability.uploads?.reason ||
+                        "No verified upload deltas between snapshots yet."
+                      }
+                      metric="uploads"
+                      minHeight={220}
+                    />
                   )}
                 </div>
 
-                {/* Monthly Uploads Distribution */}
-                <div className="bg-[#121318]/20 border border-white/[0.06] rounded-2xl p-6 space-y-4">
-                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest text-left">Monthly Upload Frequency</h4>
-                  <div className="h-[220px]">
-                    {hasUploadsDistribution ? (
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={uploadsDistribution}>
-                          <XAxis dataKey="month" stroke="rgba(255,255,255,0.3)" fontSize={10} />
-                          <YAxis stroke="rgba(255,255,255,0.3)" fontSize={10} />
-                          <Tooltip contentStyle={{ backgroundColor: "#161822", borderColor: "rgba(255,255,255,0.08)" }} />
-                          <Bar dataKey="uploads" fill="#4f46e5" radius={[4, 4, 0, 0]} />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    ) : (
-                      <ChartEmptyState
-                        title="No upload cadence yet"
-                        message="Run another analysis later to calculate upload frequency."
-                      />
-                    )}
-                  </div>
-                </div>
-
-                {/* Content Categories Donut Chart */}
                 <div className="bg-[#121318]/20 border border-white/[0.06] rounded-2xl p-6 space-y-4">
                   <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest text-left">Content Distribution</h4>
                   <div className="h-[220px] flex items-center justify-center">
@@ -869,9 +852,14 @@ export default function PoliticalProfile() {
                         </PieChart>
                       </ResponsiveContainer>
                     ) : (
-                      <ChartEmptyState
-                        title="No content breakdown available"
-                        message={contentDistributionMessage}
+                      <InsufficientData
+                        title="Insufficient verified data"
+                        reason={
+                          chartAvailability.categories?.reason ||
+                          contentDistributionMessage
+                        }
+                        metric="categories"
+                        minHeight={200}
                       />
                     )}
                   </div>
@@ -1014,7 +1002,7 @@ export default function PoliticalProfile() {
               <div className="lg:col-span-2 bg-[#121318]/20 border border-white/[0.06] rounded-2xl p-6 text-left space-y-6">
                 <div>
                   <h3 className="text-sm font-bold text-white uppercase tracking-wider">Recent Press & News Timeline</h3>
-                  <p className="text-xs text-slate-400 mt-1">Verified search index reports from trusted news publishers</p>
+                  <p className="text-xs text-slate-400 mt-1">Verified reports from trusted news publishers</p>
                 </div>
 
                 <div className="space-y-4">
@@ -1083,6 +1071,8 @@ export default function PoliticalProfile() {
                 <div className="bg-[#121318]/20 border border-white/[0.06] rounded-2xl p-6 text-left space-y-6">
                   <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Headline Sentiment Breakdown</h4>
                   
+                  {hasVerifiedSentiment ? (
+                  <>
                   <div className="h-[180px] flex items-center justify-center">
                     <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
@@ -1118,6 +1108,15 @@ export default function PoliticalProfile() {
                       <span className="text-sm font-extrabold text-white mt-0.5">{sentimentDistribution[2].value}%</span>
                     </div>
                   </div>
+                  </>
+                  ) : (
+                    <InsufficientData
+                      title="Insufficient verified data"
+                      reason="No verified news sentiment analysis is available for this profile yet. Sentiment charts appear after background news analysis completes."
+                      metric="sentiment"
+                      minHeight={180}
+                    />
+                  )}
                 </div>
 
                 {/* Common Keywords / Trends */}

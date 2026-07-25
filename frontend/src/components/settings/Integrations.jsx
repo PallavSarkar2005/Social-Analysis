@@ -19,7 +19,7 @@ const TYPE_LABELS = {
 const DISPLAY_NAMES = {
   youtube: "YouTube Analytics v3",
   twitter: "Twitter / X API",
-  instagram: "Instagram Meta Graphs",
+  instagram: "Instagram Meta Graph API",
   drive: "Google Drive Backup",
   slack: "Slack Notifications",
   discord: "Discord Webhooks",

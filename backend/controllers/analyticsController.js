@@ -1,7 +1,15 @@
-import Snapshot from "../models/Snapshot.js";
 import Content from "../models/Content.js";
 import Account from "../models/Account.js";
-import { calculateForecast } from "../services/forecastService.js";
+import mongoose from "mongoose";
+import {
+  getDashboardOverview as engineDashboardOverview,
+  getTimeSeries,
+  getLatest,
+  getCompareMetrics,
+  getForecastForAccount,
+  getGrowthDeltas,
+  computeEngagementRate,
+} from "../services/analyticsEngine.js";
 
 /*
 ========================
@@ -30,19 +38,36 @@ HIGHEST ENGAGEMENT
 */
 export const getHighestEngagement = async (req, res, next) => {
   try {
-    const videos = await Content.find({ userId: req.user._id });
-
-    const ranked = videos
-      .map((video) => ({
-        ...video.toObject(),
-        engagement:
-          ((video.likes + video.comments) / Math.max(video.views, 1)) * 100,
-      }))
-      .sort((a, b) => b.engagement - a.engagement);
+    const ranked = await Content.aggregate([
+      { $match: { userId: new mongoose.Types.ObjectId(String(req.user._id)) } },
+      {
+        $addFields: {
+          engagement: {
+            $cond: [
+              { $gt: ["$views", 0] },
+              {
+                $multiply: [
+                  {
+                    $divide: [
+                      { $add: [{ $ifNull: ["$likes", 0] }, { $ifNull: ["$comments", 0] }] },
+                      "$views",
+                    ],
+                  },
+                  100,
+                ],
+              },
+              0,
+            ],
+          },
+        },
+      },
+      { $sort: { engagement: -1 } },
+      { $limit: 10 },
+    ]);
 
     res.json({
       success: true,
-      data: ranked.slice(0, 10),
+      data: ranked,
     });
   } catch (error) {
     next(error);
@@ -58,7 +83,6 @@ export const getChannelSummary = async (req, res, next) => {
   try {
     const { accountId } = req.params;
 
-    // Verify account belongs to user
     const account = await Account.findOne({ _id: accountId, userId: req.user._id });
     if (!account) {
       return res.status(404).json({
@@ -67,20 +91,13 @@ export const getChannelSummary = async (req, res, next) => {
       });
     }
 
-    const latestSnapshot = await Snapshot.findOne({
-      account: accountId,
-      userId: req.user._id,
-    }).sort({
-      capturedAt: -1,
-    });
-
+    const latest = await getLatest(accountId, { userId: req.user._id });
     const videos = await Content.find({
       account: accountId,
       userId: req.user._id,
     });
 
     const videosTracked = videos.length;
-
     const totalViews = videos.reduce((sum, video) => sum + video.views, 0);
     const totalLikes = videos.reduce((sum, video) => sum + video.likes, 0);
     const totalComments = videos.reduce((sum, video) => sum + video.comments, 0);
@@ -91,33 +108,32 @@ export const getChannelSummary = async (req, res, next) => {
 
     let avgEngagement =
       videosTracked > 0
-        ? (
-            videos.reduce(
-              (sum, video) =>
-                sum +
-                ((video.likes + video.comments) / Math.max(video.views, 1)) * 100,
-              0
-            ) / videosTracked
-          ).toFixed(2)
+        ? Number(
+            (
+              videos.reduce(
+                (sum, video) =>
+                  sum + computeEngagementRate(video.likes, video.comments, video.views),
+                0
+              ) / videosTracked
+            ).toFixed(2)
+          )
         : 0;
 
-    if (Number(avgEngagement) === 0 && latestSnapshot?.engagementRate > 0) {
-      avgEngagement = Number(latestSnapshot.engagementRate.toFixed(2));
-    }
-    if (Number(avgEngagement) === 0 && account.engagement > 0) {
-      avgEngagement = Number(account.engagement.toFixed(2));
+    if (avgEngagement === 0 && latest.metrics?.engagementRate) {
+      avgEngagement = Number(latest.metrics.engagementRate);
     }
 
     res.json({
       success: true,
       data: {
-        followers: latestSnapshot?.followers || 0,
-        totalViews: latestSnapshot?.views || 0,
+        followers: latest.metrics?.subscribers ?? 0,
+        totalViews: latest.metrics?.views ?? 0,
         avgViews,
         avgLikes,
         avgComments,
-        avgEngagement: Number(avgEngagement),
+        avgEngagement,
         videosTracked,
+        engineVersion: latest.engineVersion,
       },
     });
   } catch (error) {
@@ -132,68 +148,13 @@ COMPARE ACCOUNTS
 */
 export const compareAccounts = async (req, res, next) => {
   try {
-    const accounts = await Account.find({ userId: req.user._id });
-
-    const comparison = [];
-
-    for (const account of accounts) {
-      const latestSnapshot = await Snapshot.findOne({
-        account: account._id,
-        userId: req.user._id,
-      }).sort({
-        capturedAt: -1,
-      });
-
-      const videos = await Content.find({
-        account: account._id,
-        userId: req.user._id,
-      });
-
-      const avgViews =
-        videos.length > 0
-          ? Math.round(
-              videos.reduce((sum, video) => sum + video.views, 0) / videos.length
-            )
-          : 0;
-
-      let avgEngagement =
-        videos.length > 0
-          ? (
-              videos.reduce(
-                (sum, video) =>
-                  sum +
-                  ((video.likes + video.comments) / Math.max(video.views, 1)) * 100,
-                0
-              ) / videos.length
-            ).toFixed(2)
-          : 0;
-
-      if (Number(avgEngagement) === 0 && latestSnapshot?.engagementRate > 0) {
-        avgEngagement = Number(latestSnapshot.engagementRate.toFixed(2));
-      }
-      if (Number(avgEngagement) === 0 && account.engagement > 0) {
-        avgEngagement = Number(account.engagement.toFixed(2));
-      }
-
-
-      comparison.push({
-        accountId: account._id,
-        name: account.name,
-        followers: latestSnapshot?.followers || 0,
-        totalViews: latestSnapshot?.views || 0,
-        avgViews,
-        avgEngagement,
-        videosTracked: videos.length,
-        state: account.state || "Unknown State",
-        party: account.party || "Independent",
-      });
-    }
-
-    comparison.sort((a, b) => b.followers - a.followers);
+    const accounts = await Account.find({ userId: req.user._id }).select("_id").lean();
+    const ids = accounts.map((a) => a._id);
+    const { data } = await getCompareMetrics(ids, { userId: req.user._id });
 
     res.json({
       success: true,
-      data: comparison,
+      data,
     });
   } catch (error) {
     next(error);
@@ -202,14 +163,15 @@ export const compareAccounts = async (req, res, next) => {
 
 /*
 ========================
-GROWTH DATA
+GROWTH DATA / TIME SERIES
 ========================
 */
 export const getGrowthData = async (req, res, next) => {
   try {
     const { accountId } = req.params;
+    const range = req.query.range || "all";
+    const metrics = req.query.metrics || "subscribers,views,engagementRate";
 
-    // Verify account belongs to user
     const account = await Account.findOne({ _id: accountId, userId: req.user._id });
     if (!account) {
       return res.status(404).json({
@@ -218,22 +180,115 @@ export const getGrowthData = async (req, res, next) => {
       });
     }
 
-    const snapshots = await Snapshot.find({
-      account: accountId,
+    const result = await getTimeSeries(accountId, {
       userId: req.user._id,
-    }).sort({
-      capturedAt: 1,
+      metrics,
+      range,
     });
-
-    const data = snapshots.map((snapshot) => ({
-      date: snapshot.capturedAt.toISOString().split("T")[0],
-      followers: snapshot.followers,
-      views: snapshot.views,
-    }));
 
     res.json({
       success: true,
-      data,
+      data: result.series.map((p) => ({
+        date: p.date || (p.capturedAt && new Date(p.capturedAt).toISOString().split("T")[0]),
+        followers: p.subscribers ?? p.followers,
+        subscribers: p.subscribers,
+        views: p.views,
+        engagementRate: p.engagementRate,
+      })),
+      availability: result.availability,
+      engineVersion: result.engineVersion,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/*
+========================
+ANALYTICS SERIES (canonical)
+========================
+*/
+export const getAnalyticsSeries = async (req, res, next) => {
+  try {
+    const { accountId } = req.params;
+    const range = req.query.range || "all";
+    const metrics = req.query.metrics || "subscribers,views,engagementRate";
+
+    const account = await Account.findOne({ _id: accountId, userId: req.user._id });
+    if (!account) {
+      return res.status(404).json({
+        success: false,
+        message: "Account not found or unauthorized",
+      });
+    }
+
+    const result = await getTimeSeries(accountId, {
+      userId: req.user._id,
+      metrics,
+      range,
+    });
+
+    res.json({
+      success: true,
+      data: result,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/*
+========================
+LATEST METRICS
+========================
+*/
+export const getAnalyticsLatest = async (req, res, next) => {
+  try {
+    const { accountId } = req.params;
+    const account = await Account.findOne({ _id: accountId, userId: req.user._id });
+    if (!account) {
+      return res.status(404).json({
+        success: false,
+        message: "Account not found or unauthorized",
+      });
+    }
+
+    const latest = await getLatest(accountId, { userId: req.user._id });
+    const growth = await getGrowthDeltas(accountId, { userId: req.user._id });
+
+    res.json({
+      success: true,
+      data: { ...latest, growth },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/*
+========================
+ENGINE COMPARE BY IDS
+========================
+*/
+export const getAnalyticsCompare = async (req, res, next) => {
+  try {
+    const ids = String(req.query.ids || "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+    if (!ids.length) {
+      return res.status(400).json({
+        success: false,
+        message: "Provide ids query param (comma-separated account IDs)",
+      });
+    }
+
+    const result = await getCompareMetrics(ids, { userId: req.user._id });
+    res.json({
+      success: true,
+      data: result.data,
+      engineVersion: result.engineVersion,
     });
   } catch (error) {
     next(error);
@@ -249,7 +304,6 @@ export const getPostingFrequency = async (req, res, next) => {
   try {
     const { accountId } = req.params;
 
-    // Verify account belongs to user
     const account = await Account.findOne({ _id: accountId, userId: req.user._id });
     if (!account) {
       return res.status(404).json({
@@ -271,24 +325,38 @@ export const getPostingFrequency = async (req, res, next) => {
           videosPerWeek: 0,
           videosPerMonth: 0,
           mostActiveDay: "N/A",
+          available: false,
+          reason: "No verified content metadata available yet.",
         },
       });
     }
 
-    const dates = videos.map((video) => new Date(video.publishedAt));
+    const dates = videos
+      .map((video) => new Date(video.publishedAt))
+      .filter((d) => Number.isFinite(d.getTime()));
+
+    if (!dates.length) {
+      return res.json({
+        success: true,
+        data: {
+          videosTracked: videos.length,
+          videosPerWeek: 0,
+          videosPerMonth: 0,
+          mostActiveDay: "N/A",
+          available: false,
+          reason: "Content items lack verified publishedAt dates.",
+        },
+      });
+    }
+
     const oldest = new Date(Math.min(...dates));
     const newest = new Date(Math.max(...dates));
 
-    const days = Math.max(
-      1,
-      (newest - oldest) / (1000 * 60 * 60 * 24)
-    );
-
+    const days = Math.max(1, (newest - oldest) / (1000 * 60 * 60 * 24));
     const weeks = days / 7;
     const months = days / 30;
 
     const dayCount = {};
-
     dates.forEach((date) => {
       const day = date.toLocaleDateString("en-US", { weekday: "long" });
       dayCount[day] = (dayCount[day] || 0) + 1;
@@ -305,6 +373,7 @@ export const getPostingFrequency = async (req, res, next) => {
         videosPerWeek: (videos.length / weeks).toFixed(2),
         videosPerMonth: (videos.length / months).toFixed(2),
         mostActiveDay,
+        available: true,
       },
     });
   } catch (error) {
@@ -321,7 +390,6 @@ export const getTopContent = async (req, res, next) => {
   try {
     const { accountId } = req.params;
 
-    // Verify account belongs to user
     const account = await Account.findOne({ _id: accountId, userId: req.user._id });
     if (!account) {
       return res.status(404).json({
@@ -355,7 +423,6 @@ export const getBestPostingTime = async (req, res, next) => {
   try {
     const { accountId } = req.params;
 
-    // Verify account belongs to user
     const account = await Account.findOne({ _id: accountId, userId: req.user._id });
     if (!account) {
       return res.status(404).json({
@@ -369,33 +436,57 @@ export const getBestPostingTime = async (req, res, next) => {
       userId: req.user._id,
     });
 
-    const hourMap = {};
+    if (!videos.length) {
+      return res.json({
+        success: true,
+        data: {
+          available: false,
+          reason: "No verified content for posting-time analysis.",
+          bestHour: null,
+          bestDay: null,
+        },
+      });
+    }
 
-    videos.forEach((video) => {
-      const hour = new Date(video.publishedAt).getUTCHours();
+    const hourCount = {};
+    const dayCount = {};
 
-      if (!hourMap[hour]) {
-        hourMap[hour] = {
-          views: 0,
-          count: 0,
-        };
-      }
+    for (const video of videos) {
+      if (!video.publishedAt) continue;
+      const d = new Date(video.publishedAt);
+      if (!Number.isFinite(d.getTime())) continue;
+      const hour = d.getUTCHours();
+      const day = d.toLocaleDateString("en-US", { weekday: "long" });
+      hourCount[hour] = (hourCount[hour] || 0) + 1;
+      dayCount[day] = (dayCount[day] || 0) + 1;
+    }
 
-      hourMap[hour].views += video.views;
-      hourMap[hour].count += 1;
-    });
+    const hours = Object.keys(hourCount);
+    const days = Object.keys(dayCount);
+    if (!hours.length || !days.length) {
+      return res.json({
+        success: true,
+        data: {
+          available: false,
+          reason: "Content items lack verified publishedAt timestamps.",
+          bestHour: null,
+          bestDay: null,
+        },
+      });
+    }
 
-    const result = Object.entries(hourMap).map(([hour, data]) => ({
-      hour,
-      avgViews: data.views / data.count,
-    }));
-
-    result.sort((a, b) => b.avgViews - a.avgViews);
+    const bestHour = hours.reduce((a, b) => (hourCount[a] > hourCount[b] ? a : b));
+    const bestDay = days.reduce((a, b) => (dayCount[a] > dayCount[b] ? a : b));
 
     res.json({
       success: true,
-      bestTime: result[0],
-      allTimes: result,
+      data: {
+        available: true,
+        bestHour: Number(bestHour),
+        bestDay,
+        hourDistribution: hourCount,
+        dayDistribution: dayCount,
+      },
     });
   } catch (error) {
     next(error);
@@ -411,7 +502,6 @@ export const getGrowthRate = async (req, res, next) => {
   try {
     const { accountId } = req.params;
 
-    // Verify account belongs to user
     const account = await Account.findOne({ _id: accountId, userId: req.user._id });
     if (!account) {
       return res.status(404).json({
@@ -420,44 +510,45 @@ export const getGrowthRate = async (req, res, next) => {
       });
     }
 
-    const snapshots = await Snapshot.find({
-      account: accountId,
+    const { series } = await getTimeSeries(accountId, {
       userId: req.user._id,
-    }).sort({
-      capturedAt: 1,
+      metrics: ["subscribers", "views"],
+      range: "all",
     });
 
-    if (snapshots.length < 2) {
+    const withSub = series.filter((p) => p.subscribers != null);
+    if (withSub.length < 2) {
       return res.json({
         success: true,
         data: {
           growthRate: 0,
           message: "Not enough snapshots",
+          available: false,
         },
       });
     }
 
-    const first = snapshots[0];
-    const last = snapshots[snapshots.length - 1];
-
-    const followerGrowth = last.followers - first.followers;
-    const viewGrowth = last.views - first.views;
+    const first = withSub[0];
+    const last = withSub[withSub.length - 1];
+    const followerGrowth = last.subscribers - first.subscribers;
+    const viewGrowth = (last.views ?? 0) - (first.views ?? 0);
 
     const followerGrowthPercent =
-      first.followers > 0
-        ? ((followerGrowth / first.followers) * 100).toFixed(2)
+      first.subscribers > 0
+        ? Number(((followerGrowth / first.subscribers) * 100).toFixed(2))
         : 0;
 
     res.json({
       success: true,
       data: {
-        startingFollowers: first.followers,
-        currentFollowers: last.followers,
+        startingFollowers: first.subscribers,
+        currentFollowers: last.subscribers,
         followerGrowth,
         followerGrowthPercent,
-        startingViews: first.views,
-        currentViews: last.views,
+        startingViews: first.views ?? null,
+        currentViews: last.views ?? null,
         viewGrowth,
+        available: true,
       },
     });
   } catch (error) {
@@ -472,141 +563,10 @@ DASHBOARD OVERVIEW
 */
 export const getDashboardOverview = async (req, res, next) => {
   try {
-    const activeAccounts = await Account.find({ userId: req.user._id, isCompetitor: { $ne: true } });
-    const activeAccountIds = activeAccounts.map((acc) => acc._id);
-
-    const totalAccounts = activeAccounts.length;
-    const totalVideos = await Content.countDocuments({ userId: req.user._id, account: { $in: activeAccountIds } });
-
-    const now = new Date();
-    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-
-    let todayFollowers = 0;
-    let todaySubscribers = 0;
-    let todayViews = 0;
-    let totalEngRateSum = 0;
-
-    let lastWeekFollowers = 0;
-    let lastWeekSubscribers = 0;
-    let lastWeekViews = 0;
-    let lastWeekEngRateSum = 0;
-
-    let lastMonthFollowers = 0;
-    let lastMonthSubscribers = 0;
-    let lastMonthViews = 0;
-    let lastMonthEngRateSum = 0;
-
-    let youtubeCount = 0;
-    let xCount = 0;
-
-    for (const account of activeAccounts) {
-      const latest = await Snapshot.findOne({ account: account._id, userId: req.user._id }).sort({ capturedAt: -1 });
-      const weekAgo = await Snapshot.findOne({ account: account._id, userId: req.user._id, capturedAt: { $lte: sevenDaysAgo } }).sort({ capturedAt: -1 })
-                     || await Snapshot.findOne({ account: account._id, userId: req.user._id }).sort({ capturedAt: 1 });
-      const monthAgo = await Snapshot.findOne({ account: account._id, userId: req.user._id, capturedAt: { $lte: thirtyDaysAgo } }).sort({ capturedAt: -1 })
-                     || await Snapshot.findOne({ account: account._id, userId: req.user._id }).sort({ capturedAt: 1 });
-
-      const lFollowers = latest?.followers || 0;
-      const lViews = latest?.views || 0;
-      const lEng = latest?.engagementRate || 0;
-
-      const wFollowers = weekAgo?.followers || 0;
-      const wViews = weekAgo?.views || 0;
-      const wEng = weekAgo?.engagementRate || 0;
-
-      const mFollowers = monthAgo?.followers || 0;
-      const mViews = monthAgo?.views || 0;
-      const mEng = monthAgo?.engagementRate || 0;
-
-      if (account.platform === "youtube") {
-        todaySubscribers += lFollowers;
-        lastWeekSubscribers += wFollowers;
-        lastMonthSubscribers += mFollowers;
-
-        todayViews += lViews;
-        lastWeekViews += wViews;
-        lastMonthViews += mViews;
-        youtubeCount++;
-      } else if (account.platform === "x") {
-        todayFollowers += lFollowers;
-        lastWeekFollowers += wFollowers;
-        lastMonthFollowers += mFollowers;
-        xCount++;
-      }
-
-      totalEngRateSum += lEng;
-      lastWeekEngRateSum += wEng;
-      lastMonthEngRateSum += mEng;
-    }
-
-    const accountCount = activeAccounts.length;
-    const todayEngagement = accountCount > 0 ? parseFloat((totalEngRateSum / accountCount).toFixed(2)) : 0;
-    const lastWeekEngagement = accountCount > 0 ? parseFloat((lastWeekEngRateSum / accountCount).toFixed(2)) : 0;
-    const lastMonthEngagement = accountCount > 0 ? parseFloat((lastMonthEngRateSum / accountCount).toFixed(2)) : 0;
-
-    const getGrowthPct = (current, previous) => {
-      if (!previous) return 0;
-      return parseFloat((((current - previous) / previous) * 100).toFixed(2));
-    };
-
-    const growthMetrics = {
-      subscribers: {
-        current: todaySubscribers,
-        lastWeek: {
-          value: todaySubscribers - lastWeekSubscribers,
-          percentage: getGrowthPct(todaySubscribers, lastWeekSubscribers),
-        },
-        lastMonth: {
-          value: todaySubscribers - lastMonthSubscribers,
-          percentage: getGrowthPct(todaySubscribers, lastMonthSubscribers),
-        },
-      },
-      followers: {
-        current: todayFollowers,
-        lastWeek: {
-          value: todayFollowers - lastWeekFollowers,
-          percentage: getGrowthPct(todayFollowers, lastWeekFollowers),
-        },
-        lastMonth: {
-          value: todayFollowers - lastMonthFollowers,
-          percentage: getGrowthPct(todayFollowers, lastMonthFollowers),
-        },
-      },
-      views: {
-        current: todayViews,
-        lastWeek: {
-          value: todayViews - lastWeekViews,
-          percentage: getGrowthPct(todayViews, lastWeekViews),
-        },
-        lastMonth: {
-          value: todayViews - lastMonthViews,
-          percentage: getGrowthPct(todayViews, lastMonthViews),
-        },
-      },
-      engagement: {
-        current: todayEngagement,
-        lastWeek: {
-          value: parseFloat((todayEngagement - lastWeekEngagement).toFixed(2)),
-          percentage: getGrowthPct(todayEngagement, lastWeekEngagement),
-        },
-        lastMonth: {
-          value: parseFloat((todayEngagement - lastMonthEngagement).toFixed(2)),
-          percentage: getGrowthPct(todayEngagement, lastMonthEngagement),
-        },
-      },
-    };
-
+    const data = await engineDashboardOverview(req.user._id);
     res.json({
       success: true,
-      data: {
-        totalAccounts,
-        totalVideos,
-        totalFollowers: todayFollowers + todaySubscribers, // combined dashboard followers
-        totalViews: todayViews,
-        avgEngagement: todayEngagement,
-        growth: growthMetrics,
-      },
+      data,
     });
   } catch (error) {
     next(error);
@@ -615,7 +575,7 @@ export const getDashboardOverview = async (req, res, next) => {
 
 /*
 ========================
-METRICS FORECASTING
+METRICS FORECASTING (labeled projection)
 ========================
 */
 export const getForecast = async (req, res, next) => {
@@ -630,8 +590,7 @@ export const getForecast = async (req, res, next) => {
       });
     }
 
-    const snapshots = await Snapshot.find({ account: accountId, userId: req.user._id }).sort({ capturedAt: 1 });
-    const forecast = calculateForecast(snapshots);
+    const forecast = await getForecastForAccount(accountId, { userId: req.user._id });
 
     res.json({
       success: true,

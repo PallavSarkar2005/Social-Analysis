@@ -2,7 +2,11 @@ import PoliticalProfile from "../models/PoliticalProfile.js";
 import Account from "../models/Account.js";
 import { REPORT_DOSSIER_TEMPLATE_VERSION } from "../config/reportDossierVersion.js";
 import PROFILE_BUILDER_VERSIONS from "../config/profileBuilderVersion.js";
-import { buildIntelligenceTimeline, polishTimelineEventsForDisplay } from "./politicalTimelineService.js";
+import {
+  buildIntelligenceTimeline,
+  polishTimelineEventsForDisplay,
+  sanitizeTimelineForResponse,
+} from "./politicalTimelineService.js";
 import {
   verifySources,
   filterVerifiedEvidenceSources,
@@ -10,6 +14,7 @@ import {
   urlMatchesIdentity,
 } from "./sourceVerificationService.js";
 import { resolveNewsDisplayLink } from "../utils/newsArticleUrl.js";
+import { getLatest as getAnalyticsLatest } from "./analyticsEngine.js";
 
 const hasText = (v) => typeof v === "string" && v.trim().length > 0;
 const hasNum = (v) => v != null && !Number.isNaN(Number(v));
@@ -316,34 +321,67 @@ function buildTimelineSection(profile) {
       year: e.year || e.yearLabel || null,
     }));
 
-  const events = polishTimelineEventsForDisplay(
+  // Rebuild then sanitize — same pipeline as profile API so Intelligence Hub
+  // never persists corrupted titles like "Won Won Re" into report.dossier.
+  const events = sanitizeTimelineForResponse(
     buildIntelligenceTimeline({
       biography: profile.biography || {},
       elections: profile.elections || [],
       sources: profile.sources || [],
       facts: profile.facts || profile.verifiedFacts || [],
       storedTimeline,
-    })
+    }),
+    { elections: profile.elections || [] }
   );
 
   if (!Array.isArray(events) || events.length === 0) {
-    // Last-resort simple chronological dedupe of stored events
-    const fallback = polishTimelineEventsForDisplay(
-      storedTimeline
-        .filter((e) => e && (hasText(e.title) || hasText(e.year)))
-        .map((e) => ({
-          year: e.year || null,
-          date: e.date || null,
-          title: e.title || "Career event",
-          description: e.narrative || e.description || "",
-          source: e.source || "",
-          sourceUrl: e.sourceUrl || "",
-          category: e.category || "",
-          confidence: e.confidence ?? null,
-        }))
-        .sort((a, b) => String(a.year || "").localeCompare(String(b.year || "")))
-    );
-    return fallback.length ? { events: fallback } : null;
+    // Last-resort: sanitize stored timeline directly
+    const fallback = sanitizeTimelineForResponse(storedTimeline, {
+      elections: profile.elections || [],
+    });
+    if (!fallback.length) {
+      const polished = polishTimelineEventsForDisplay(
+        storedTimeline
+          .filter((e) => e && (hasText(e.title) || hasText(e.year)))
+          .map((e) => ({
+            year: e.year || null,
+            date: e.date || null,
+            title: e.title || "Career event",
+            description: e.narrative || e.description || "",
+            source: e.source || "",
+            sourceUrl: e.sourceUrl || "",
+            category: e.category || "",
+            confidence: e.confidence ?? null,
+          }))
+          .sort((a, b) => String(a.year || "").localeCompare(String(b.year || "")))
+      );
+      return polished.length
+        ? {
+            events: polished.map((e) => ({
+              year: e.year || null,
+              date: e.date || null,
+              title: e.title || "Career event",
+              description: e.description || "",
+              source: "",
+              sourceUrl: "",
+              category: e.category || "",
+              confidence: e.confidence ?? null,
+            })),
+          }
+        : null;
+    }
+    return {
+      events: fallback.map((e) => ({
+        year: e.year || null,
+        date: e.date || null,
+        title: e.title || "Career event",
+        description: e.description || "",
+        source: "",
+        sourceUrl: "",
+        category: e.category || "",
+        confidence: e.confidence ?? null,
+      })),
+    };
   }
 
   const mapped = [];
@@ -352,10 +390,11 @@ function buildTimelineSection(profile) {
     if (!e || (!hasText(e.title) && !hasText(e.year))) continue;
     const year = e.year || e.yearLabel || null;
     const title = e.title || "Career event";
+    // Drop residual corrupted display titles if any slip through
+    if (/^(won\s+){2,}/i.test(title) || /^won\s+re$/i.test(title)) continue;
     const key = `${year}|${String(title).toLowerCase().trim()}`;
     if (key === prevKey) continue;
     prevKey = key;
-    // Skip empty descriptions and omit source noise from dossier cards
     mapped.push({
       year,
       date: e.date || null,
@@ -755,10 +794,45 @@ function buildMetadataSection(report, modulesIncluded, sizeEstimate) {
 }
 
 /**
+ * Channel / telemetry metrics from AnalyticsEngine — same values as Dashboard/Profile.
+ */
+function buildChannelAnalyticsSection(analyticsLatest) {
+  if (!analyticsLatest?.available || !analyticsLatest.metrics) return null;
+  const m = analyticsLatest.metrics;
+  const rows = [
+    { key: "subscribers", label: "Subscribers", value: m.subscribers },
+    { key: "views", label: "Total Views", value: m.views },
+    { key: "videos", label: "Videos", value: m.videos },
+    { key: "engagementRate", label: "Engagement Rate %", value: m.engagementRate },
+    { key: "averageEngagement", label: "Avg Engagement %", value: m.averageEngagement },
+    { key: "influenceScore", label: "Influence Score", value: m.influenceScore },
+    { key: "politicalReach", label: "Political Reach", value: m.politicalReach },
+    { key: "digitalPresence", label: "Digital Presence", value: m.digitalPresence },
+    { key: "mediaVisibility", label: "Media Visibility", value: m.mediaVisibility },
+    { key: "verifiedConfidence", label: "Verified Confidence", value: m.verifiedConfidence },
+    { key: "sentimentPositive", label: "Sentiment Positive %", value: m.sentimentPositive },
+    { key: "sentimentNeutral", label: "Sentiment Neutral %", value: m.sentimentNeutral },
+    { key: "sentimentNegative", label: "Sentiment Negative %", value: m.sentimentNegative },
+    { key: "electionWins", label: "Election Wins", value: m.electionWins },
+    { key: "electionContested", label: "Elections Contested", value: m.electionContested },
+  ].filter((r) => hasNum(r.value));
+
+  if (!rows.length) return null;
+
+  return {
+    label: "Channel Analytics",
+    capturedAt: analyticsLatest.capturedAt || null,
+    source: analyticsLatest.source || null,
+    engineVersion: analyticsLatest.engineVersion ?? null,
+    metrics: rows,
+  };
+}
+
+/**
  * Assemble a political intelligence dossier from Mongo profile + report shell.
  * Only includes sections with verified/available data.
  */
-export function assemblePoliticalDossier({ report, profile, account }) {
+export function assemblePoliticalDossier({ report, profile, account, analyticsLatest = null }) {
   const biography = profile?.biography || {};
   const confidence = profile?.confidenceScore ?? report.confidence ?? null;
 
@@ -841,6 +915,12 @@ export function assemblePoliticalDossier({ report, profile, account }) {
   if (evidenceSources) {
     sections.evidenceSources = evidenceSources;
     modulesIncluded.push("evidenceSources");
+  }
+
+  const channelAnalytics = buildChannelAnalyticsSection(analyticsLatest);
+  if (channelAnalytics) {
+    sections.channelAnalytics = channelAnalytics;
+    modulesIncluded.push("channelAnalytics");
   }
 
   const sizeEstimate = Buffer.byteLength(JSON.stringify(sections), "utf8");
@@ -1073,6 +1153,11 @@ export async function ensureReportDossier(report, { force = false, allowNetwork 
           report: report.toObject ? report.toObject() : report,
           profile: hydratedProfile,
           account,
+          analyticsLatest: account?._id
+            ? await getAnalyticsLatest(account._id, {
+                userId: account.userId || report.userId,
+              }).catch(() => null)
+            : null,
         })
       : assembleGenericDossier(report.toObject ? report.toObject() : report);
 
@@ -1179,6 +1264,16 @@ export function dossierToCsvDatasets(dossier) {
       Confidence: item.confidenceLabel || "",
       Updated: item.lastUpdated || "",
       URL: item.url || "",
+    }));
+  }
+
+  if (s.channelAnalytics?.metrics?.length) {
+    datasets.channelAnalytics = s.channelAnalytics.metrics.map((m) => ({
+      Metric: m.label,
+      Key: m.key,
+      Value: m.value,
+      CapturedAt: s.channelAnalytics.capturedAt || "",
+      Source: s.channelAnalytics.source || "",
     }));
   }
 

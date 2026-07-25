@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { Sparkles, Upload, RotateCcw, Save, Trash2, ShieldCheck, Clock } from "lucide-react";
 import toast from "react-hot-toast";
 import { formatIndianDateTime } from "../../utils/dateFormatter";
+import SafeImage from "../common/SafeImage";
 
 const emptyForm = {
   name: "",
@@ -112,7 +113,7 @@ export default function Profile({ user, onUpdateProfile }) {
       setSaving(true);
       await onUpdateProfile(formData);
     } catch {
-      toast.error("Failed to update profile changes.");
+      toast.error("Failed to save profile changes.");
     } finally {
       setSaving(false);
     }
@@ -132,10 +133,13 @@ export default function Profile({ user, onUpdateProfile }) {
           <label className="text-xs font-semibold text-slate-300 block">Profile Picture</label>
           <div className="flex flex-col sm:flex-row items-center gap-6">
             <div className="relative group">
-              <img
+              <SafeImage
                 src={croppedPreview || formData.avatar || `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(formData.name || "user")}`}
-                alt="Avatar"
-                className="w-24 h-24 rounded-full border border-white/[0.08] object-cover bg-slate-800"
+                alt={formData.name || "Profile avatar"}
+                className="w-24 h-24 rounded-full border border-white/[0.08] bg-slate-800"
+                imgClassName="w-full h-full object-cover"
+                size="medium"
+                fallback="avatar"
               />
               <button
                 type="button"

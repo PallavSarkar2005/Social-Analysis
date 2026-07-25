@@ -7,6 +7,7 @@ import { sanitizeBiographyForResponse, sanitizeVerifiedFactsForResponse, sanitiz
 import { sanitizeTimelineForResponse, sanitizeTimelineIntelligenceForResponse } from "../services/politicalTimelineService.js";
 import { scheduleProfileSync } from "../services/profileBuilderService.js";
 import { deriveModules, deriveModuleDataFlags, buildModuleMetaFromLegacy } from "../services/sectionMetaService.js";
+import { getChartDatasets, getChannelHistory } from "../services/analyticsEngine.js";
 
 const getAiClient = () => {
   const apiKey = process.env.GROQ_API_KEY || process.env.OPENAI_API_KEY;
@@ -85,7 +86,7 @@ const buildProfileReadResponse = (account, profile) => {
       ? sanitizeVerifiedFactsForResponse(profile.verifiedFacts)
       : [],
     fieldProvenance: profile?.fieldProvenance || {},
-    timeline: profile ? sanitizeTimelineForResponse(profile.timeline) : [],
+    timeline: profile ? sanitizeTimelineForResponse(profile.timeline, { elections: profile.elections }) : [],
     timelineIntelligence: profile
       ? sanitizeTimelineIntelligenceForResponse(profile.timelineIntelligence)
       : sanitizeTimelineIntelligenceForResponse(),
@@ -234,7 +235,7 @@ export const getNews = async (req, res) => {
   }
 };
 
-// 4. GET /api/profile/:creatorId/charts
+// 4. GET /api/profile/:creatorId/charts — AnalyticsEngine single source of truth
 export const getCharts = async (req, res, next) => {
   console.log("ENTER getCharts");
   try {
@@ -242,87 +243,11 @@ export const getCharts = async (req, res, next) => {
     const account = await resolveAccount(creatorId);
     if (!account) return res.status(404).json({ success: false, message: "Account not found" });
 
-    const [snapshots, contents] = await Promise.all([
-      Snapshot.find({
-        account: account._id,
-        userId: req.user._id,
-      }).sort({ capturedAt: 1 }).lean(),
-      Content.find({
-        account: account._id,
-        userId: req.user._id,
-      })
-        .select("type")
-        .lean(),
-    ]);
-
-    // Build all chart datasets from the same chronologically sorted snapshot history.
-    const timeSeries = snapshots.map((s) => ({
-      capturedAt: new Date(s.capturedAt).toISOString(),
-      date: new Date(s.capturedAt).toLocaleDateString(),
-      subscribers: s.followers,
-      views: s.views,
-      engagement: s.engagementRate || 0,
-    }));
-
-    const uploadsByMonth = new Map();
-    for (let i = 1; i < snapshots.length; i++) {
-      const previous = snapshots[i - 1];
-      const current = snapshots[i];
-      const previousVideos = Number(previous.videos || 0);
-      const currentVideos = Number(current.videos || 0);
-      const uploadsDelta = currentVideos - previousVideos;
-
-      if (uploadsDelta <= 0) continue;
-
-      const capturedAt = new Date(current.capturedAt);
-      const monthKey = `${capturedAt.getFullYear()}-${String(capturedAt.getMonth() + 1).padStart(2, "0")}`;
-      const monthLabel = capturedAt.toLocaleDateString("en-US", {
-        month: "short",
-        year: "numeric",
-      });
-
-      if (!uploadsByMonth.has(monthKey)) {
-        uploadsByMonth.set(monthKey, {
-          month: monthLabel,
-          uploads: 0,
-        });
-      }
-
-      uploadsByMonth.get(monthKey).uploads += uploadsDelta;
-    }
-
-    const uploadsDistribution = Array.from(uploadsByMonth.values());
-
-    const contentTypeCounts = new Map();
-    for (const content of contents) {
-      const normalizedType = content.type === "short" ? "Shorts" : content.type === "video" ? "Videos" : null;
-      if (!normalizedType) continue;
-      contentTypeCounts.set(normalizedType, (contentTypeCounts.get(normalizedType) || 0) + 1);
-    }
-
-    const totalContentItems = Array.from(contentTypeCounts.values()).reduce((sum, count) => sum + count, 0);
-    const categories = Array.from(contentTypeCounts.entries())
-      .map(([name, value]) => ({
-        name,
-        value,
-        percentage: totalContentItems > 0 ? Number(((value / totalContentItems) * 100).toFixed(2)) : 0,
-      }))
-      .sort((a, b) => b.value - a.value);
-
-    const contentDistributionMessage = contents.length === 0
-      ? "No synced YouTube content metadata is available for this profile yet."
-      : categories.length === 0
-        ? "Stored YouTube content items do not include distribution metadata yet."
-        : "";
+    const data = await getChartDatasets(account._id, { userId: req.user._id });
 
     res.json({
       success: true,
-      data: {
-        timeSeries,
-        uploadsDistribution,
-        categories,
-        contentDistributionMessage,
-      },
+      data,
     });
     console.log("SUCCESS getCharts");
   } catch (error) {
@@ -530,7 +455,7 @@ export const getAiInsights = async (req, res, next) => {
   }
 };
 
-// 8. GET /api/profile/:creatorId/history
+// 8. GET /api/profile/:creatorId/history — AnalyticsEngine history
 export const getHistory = async (req, res, next) => {
   console.log("ENTER getHistory");
   try {
@@ -538,22 +463,17 @@ export const getHistory = async (req, res, next) => {
     const account = await resolveAccount(creatorId);
     if (!account) return res.status(404).json({ success: false, message: "Account not found" });
 
-    const snapshots = await Snapshot.find({
-      account: account._id,
-      userId: req.user._id,
-    })
-      .sort({ capturedAt: -1 })
-      .limit(10)
-      .lean();
+    const rows = await getChannelHistory(account._id, { userId: req.user._id });
+    const latestTen = rows.slice(-10).reverse();
 
     res.json({
       success: true,
-      data: snapshots.map((s) => ({
-        id: s._id,
-        date: new Date(s.capturedAt).toLocaleDateString(),
-        subscribers: s.followers,
-        views: s.views,
-        engagement: s.engagementRate || 0,
+      data: latestTen.map((s) => ({
+        id: s.id,
+        date: s.date,
+        subscribers: s.subscribers ?? s.followers ?? null,
+        views: s.views ?? null,
+        engagement: s.engagementRate ?? null,
       })),
     });
     console.log("SUCCESS getHistory");

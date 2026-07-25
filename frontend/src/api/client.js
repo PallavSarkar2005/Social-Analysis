@@ -7,17 +7,44 @@ import {
 } from "./authToken.js";
 import { devError, devWarn } from "../utils/devLog.js";
 
-// Load environment variables dynamically, falling back to localhost:5000 in development
 const baseURL = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 const client = axios.create({
   baseURL,
-  timeout: 30000, // Scraper calls or AI analysis might take up to 30 seconds
-  withCredentials: true, // Enable cookies for cross-origin requests
+  timeout: 30000,
+  withCredentials: true,
   headers: {
     "Content-Type": "application/json",
+    Accept: "application/json",
   },
 });
+
+/** In-flight GET deduplication — identical concurrent requests share one promise */
+const inflightGets = new Map();
+
+function getDedupeKey(config) {
+  const method = (config.method || "get").toLowerCase();
+  if (method !== "get") return null;
+  if (config._skipDedupe) return null;
+  const params = config.params ? JSON.stringify(config.params) : "";
+  return `${method}:${config.url}:${params}`;
+}
+
+const originalRequest = client.request.bind(client);
+client.request = function dedupedRequest(config) {
+  const key = getDedupeKey(config);
+  if (!key) return originalRequest(config);
+
+  if (inflightGets.has(key)) {
+    return inflightGets.get(key);
+  }
+
+  const promise = originalRequest(config).finally(() => {
+    inflightGets.delete(key);
+  });
+  inflightGets.set(key, promise);
+  return promise;
+};
 
 let isRefreshing = false;
 let failedQueue = [];
@@ -62,7 +89,7 @@ const requestCsrfToken = async ({ force = false } = {}) => {
 
   csrfFetchPromise = (async () => {
     try {
-      const response = await client.get("/api/auth/csrf");
+      const response = await client.get("/api/auth/csrf", { _skipDedupe: true });
       const responseToken = response.data?.csrfToken || null;
       if (responseToken) {
         csrfTokenInMemory = responseToken;
@@ -83,10 +110,7 @@ const requestCsrfToken = async ({ force = false } = {}) => {
   return csrfFetchPromise;
 };
 
-/** Returns cached CSRF token when available. */
 export const fetchCsrfToken = () => requestCsrfToken();
-
-/** Always fetches a fresh CSRF token from the server. */
 export const refreshCsrfToken = () => requestCsrfToken({ force: true });
 
 const AUTH_MUTATION_PATHS = [
@@ -130,7 +154,9 @@ export const ensureAccessToken = async () => {
   return result.success ? getAccessToken() : null;
 };
 
-// Request Interceptor
+const RETRYABLE_METHODS = new Set(["get", "head", "options"]);
+const MAX_NETWORK_RETRIES = 2;
+
 client.interceptors.request.use(
   async (config) => {
     const token = getAccessToken();
@@ -140,7 +166,6 @@ client.interceptors.request.use(
 
     const safeMethods = ["get", "head", "options"];
 
-    // Ensure a synchronizer token exists before any state-changing request.
     if (!safeMethods.includes(config.method?.toLowerCase())) {
       const url = config.url || "";
       const csrfToken = isAuthMutation(url)
@@ -161,7 +186,6 @@ client.interceptors.request.use(
   },
 );
 
-// Response Interceptor
 client.interceptors.response.use(
   (response) => {
     const url = response.config?.url || "";
@@ -172,6 +196,33 @@ client.interceptors.response.use(
   },
   async (error) => {
     const originalRequest = error.config;
+    const status = error.response?.status;
+
+    if (
+      originalRequest &&
+      RETRYABLE_METHODS.has((originalRequest.method || "").toLowerCase()) &&
+      !originalRequest._networkRetryCount
+    ) {
+      originalRequest._networkRetryCount = 0;
+    }
+    const networkRetry = originalRequest?._networkRetryCount ?? 0;
+    const isTransient =
+      !error.response ||
+      status === 408 ||
+      status === 429 ||
+      (status >= 500 && status < 600);
+    if (
+      originalRequest &&
+      RETRYABLE_METHODS.has((originalRequest.method || "").toLowerCase()) &&
+      isTransient &&
+      networkRetry < MAX_NETWORK_RETRIES &&
+      !originalRequest._skipNetworkRetry
+    ) {
+      originalRequest._networkRetryCount = networkRetry + 1;
+      const delay = 300 * 2 ** networkRetry;
+      await new Promise((r) => setTimeout(r, delay));
+      return client(originalRequest);
+    }
 
     devError("[API Response Error]", {
       url: originalRequest?.url,
@@ -179,7 +230,6 @@ client.interceptors.response.use(
       message: error.response?.data?.message || error.message,
     });
 
-    // Retry once after refreshing CSRF when the header/cookie pair is out of sync.
     if (
       isCsrfError(error) &&
       originalRequest &&
@@ -197,7 +247,6 @@ client.interceptors.response.use(
       }
     }
 
-    // Check if error is 401 (Unauthorized) and not already retried
     if (
       error.response?.status === 401 &&
       !originalRequest._retry &&
@@ -247,13 +296,9 @@ client.interceptors.response.use(
       }
     }
 
-    // Smart error page redirection for hard infrastructure failures
-    const status = error.response?.status;
     const message = (error.message || "").toLowerCase();
     const url = originalRequest?.url || "";
 
-    // Skip redirects for auth, CSRF, refresh, profile reads, and background hub auto-save.
-    // Auto-save must never eject the user from an analysis page on quota / server errors.
     const skipRedirect =
       url.includes("/auth/") ||
       url.includes("/csrf") ||
@@ -265,7 +310,6 @@ client.interceptors.response.use(
     if (!skipRedirect && typeof window !== "undefined") {
       const currentPath = window.location.pathname;
 
-      // Only redirect if not already on an error page to avoid redirect loops
       if (!currentPath.startsWith("/error")) {
         if (!navigator.onLine) {
           window.location.href = "/error/offline";

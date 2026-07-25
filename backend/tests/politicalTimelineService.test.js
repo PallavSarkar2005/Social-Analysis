@@ -2,6 +2,8 @@ import {
   buildIntelligenceTimeline,
   buildCareerTimelinePackage,
   cleanBirthDescription,
+  cleanPartyLabel,
+  cleanPartyInText,
   cleanTimelineDescription,
   cleanTimelineTitle,
   collapseSemanticDuplicates,
@@ -10,6 +12,7 @@ import {
   normalizeTimelineEvent,
   polishTimelineEventsForDisplay,
   refineStoredTimeline,
+  sanitizeTimelineForResponse,
 } from "../services/politicalTimelineService.js";
 
 describe("Storytelling political timeline", () => {
@@ -31,7 +34,7 @@ describe("Storytelling political timeline", () => {
     expect(pools.party.category).toBe("joinedParty");
   });
 
-  it("follows Birth → Education → Party → Elections → Current Position", () => {
+  it("follows Education → Party → Elections → Current Position (no birth)", () => {
     const timeline = buildIntelligenceTimeline({
       biography: {
         dob: "12 March 1969",
@@ -49,9 +52,9 @@ describe("Storytelling political timeline", () => {
       sources: [{ name: "Wikipedia", url: "https://en.wikipedia.org", confidence: 70 }],
     });
 
-    expect(timeline[0].title).toBe("Birth");
-    expect(timeline[1].title).toBe("Education");
-    expect(timeline[2].title).toMatch(/^Joined BJP$/i);
+    expect(timeline.some((e) => e.category === "birth" || e.title === "Birth")).toBe(false);
+    expect(timeline[0].title).toBe("Education");
+    expect(timeline[1].title).toMatch(/^Joined BJP$/i);
 
     const electionEvents = timeline.filter((e) => e.category === "election");
     expect(electionEvents).toHaveLength(3);
@@ -86,7 +89,8 @@ describe("Storytelling political timeline", () => {
     });
 
     expect(timeline.some((e) => e.title === "Education")).toBe(false);
-    expect(timeline[0].title).toBe("Birth");
+    expect(timeline.some((e) => e.category === "birth" || e.title === "Birth")).toBe(false);
+    expect(timeline[0].category).toBe("election");
   });
 
   it("places appointments chronologically among elections", () => {
@@ -120,7 +124,8 @@ describe("Storytelling political timeline", () => {
       { currentOffice: "Chief Minister" }
     );
 
-    expect(refined.filter((e) => e.title === "Birth")).toHaveLength(1);
+    expect(refined.filter((e) => e.title === "Birth")).toHaveLength(0);
+    expect(refined.some((e) => e.category === "birth")).toBe(false);
     expect(refined[refined.length - 1].category).toBe("currentOffice");
   });
 
@@ -130,6 +135,7 @@ describe("Storytelling political timeline", () => {
       elections: [],
     });
     expect(timeline.length).toBeGreaterThan(0);
+    expect(timeline.some((e) => e.category === "birth")).toBe(false);
     expect(timelineIntelligence).toEqual({});
   });
 
@@ -241,7 +247,7 @@ describe("Storytelling political timeline", () => {
     expect(y2023.some((e) => /cabinet minister/i.test(e.title))).toBe(true);
   });
 
-  it("cleans mangled birth dates and keeps birth once", () => {
+  it("cleans mangled birth dates (birth excluded from career timeline)", () => {
     expect(formatReadableDate("1965-03-25")).toBe("25 March 1965");
     expect(cleanBirthDescription("(-03-25) 25 March 1965 · (-03-25) 25 March 1965", { year: 1965 })).toBe(
       "25 March 1965"
@@ -262,9 +268,10 @@ describe("Storytelling political timeline", () => {
     expect(cleanBirthDescription(wikiDump, { year: 1974, name: "Rekha Jindal" })).toBe(
       "19 July 1974\nJulana, Haryana, India"
     );
-    expect(polishTimelineEventsForDisplay([{ year: "1974", category: "birth", title: "Birth", description: wikiDump }])[0].description).toBe(
-      "19 July 1974\nJulana, Haryana, India"
-    );
+    // Birth cards are stripped from career timeline polish
+    expect(
+      polishTimelineEventsForDisplay([{ year: "1974", category: "birth", title: "Birth", description: wikiDump }])
+    ).toHaveLength(0);
 
     const timeline = buildIntelligenceTimeline({
       biography: {
@@ -280,11 +287,7 @@ describe("Storytelling political timeline", () => {
       sources: [],
     });
     const births = timeline.filter((e) => e.category === "birth" || e.title === "Birth");
-    expect(births).toHaveLength(1);
-    expect(births[0].description).toMatch(/25 March 1965/);
-    expect(births[0].description).toMatch(/Ujjain/);
-    expect(births[0].description).not.toMatch(/-03-25/);
-    expect(births[0].description.match(/25 March 1965/g) || []).toHaveLength(1);
+    expect(births).toHaveLength(0);
   });
 
   it("collapses multi-source duplicates while remaining chronological", () => {
@@ -349,8 +352,36 @@ describe("Storytelling political timeline", () => {
     const elections = timeline.filter((e) => e.category === "election");
     expect(elections).toHaveLength(3);
     expect(elections[0].title).toMatch(/^Won /);
-    expect(elections[1].title).toBe("Re-elected MLA");
-    expect(elections[2].title).toBe("Re-elected MLA");
+    expect(elections[1].title).toBe("Re-elected as MLA");
+    expect(elections[2].title).toBe("Re-elected as MLA");
+  });
+
+  it("never emits repeated or truncated election titles", () => {
+    expect(cleanTimelineTitle("Won Won Won Re")).toBe("Won Re-election");
+    expect(cleanTimelineTitle("Won Parliamentary")).toBe("Won Parliamentary Election");
+    expect(cleanTimelineTitle("Won India Lok Sabha Election")).toBe(
+      "Won the Indian Lok Sabha Election"
+    );
+
+    const polished = polishTimelineEventsForDisplay([
+      {
+        year: "2014",
+        category: "election",
+        title: "Won Won Won Re",
+        description: "Party: BJP",
+        election: { year: "2014", type: "Re-election", party: "BJP", result: "Won" },
+      },
+      {
+        year: "2019",
+        category: "election",
+        title: "Won Parliamentary",
+        description: "Party: BJP",
+        election: { year: "2019", type: "Parliamentary", party: "BJP", result: "Won" },
+      },
+    ]);
+    expect(polished.every((e) => !/won\s+won/i.test(e.title))).toBe(true);
+    expect(polished.every((e) => !/^won\s+re$/i.test(e.title))).toBe(true);
+    expect(polished.some((e) => /parliamentary election/i.test(e.title))).toBe(true);
   });
 
   it("strips repeated years and redundant description text for display", () => {
@@ -392,8 +423,31 @@ describe("Storytelling political timeline", () => {
     expect(party.title).toBe("Joined BJP");
     expect(party.description).toBe("");
     expect(election.description).toBe("Constituency: Ujjain");
-    expect(birth.description).toMatch(/12\s*March\s*1969/i);
-    expect(birth.date).toBeNull();
+    expect(birth).toBeUndefined();
+  });
+
+  it("repairs mangled election titles like Won Re and person-name cards", () => {
+    const polished = polishTimelineEventsForDisplay([
+      {
+        year: "2014",
+        category: "election",
+        title: "Won Re",
+        description: "Party: BJP",
+        election: { year: "2014", type: "Re-election", party: "BJP", result: "Won" },
+      },
+      {
+        year: "2014",
+        category: "election",
+        title: "Yogi Adityanath",
+        description: "Party: BJP",
+        election: { year: "2014", type: "Yogi Adityanath", party: "BJP", result: "Won" },
+      },
+    ]);
+
+    expect(polished.every((e) => e.title !== "Won Re")).toBe(true);
+    expect(polished.every((e) => e.title !== "Yogi Adityanath")).toBe(true);
+    expect(polished.some((e) => /won/i.test(e.title))).toBe(true);
+    expect(polished.every((e) => !/^won\s+re$/i.test(e.title))).toBe(true);
   });
 
   it("normalizes birth events consistently", () => {
@@ -404,5 +458,74 @@ describe("Storytelling political timeline", () => {
       description: "1 Jan 1980",
     });
     expect(normalized.title).toBe("Birth");
+  });
+
+  it("strips Wikipedia tenure ranges and never shows future affiliation on past elections", () => {
+    expect(cleanPartyLabel("Bharatiya Janata Party (2015–present)", 2001)).toBe("");
+    expect(cleanPartyLabel("Bharatiya Janata Party (2015–present)", 2016)).toBe(
+      "Bharatiya Janata Party"
+    );
+    expect(cleanPartyLabel("Indian National Congress (1991–2015)", 2001)).toBe(
+      "Indian National Congress"
+    );
+    expect(cleanPartyLabel("Bharatiya Janata Party (–present)")).toBe("Bharatiya Janata Party");
+    expect(
+      cleanPartyInText("Constituency: Jalukbari · Party: Bharatiya Janata Party (2015–present)", 2001)
+    ).toBe("Constituency: Jalukbari");
+    expect(
+      cleanPartyInText("Constituency: Jalukbari · Party: Bharatiya Janata Party (2015–present)", 2016)
+    ).toBe("Constituency: Jalukbari · Party: Bharatiya Janata Party");
+
+    const polished = polishTimelineEventsForDisplay([
+      {
+        year: "2001",
+        category: "election",
+        title: "Won Assam Legislative Assembly Election",
+        description: "Constituency: Jalukbari · Party: Bharatiya Janata Party (2015–present)",
+        election: {
+          year: "2001",
+          type: "Assam Legislative Assembly",
+          constituency: "Jalukbari",
+          party: "Bharatiya Janata Party (2015–present)",
+          result: "Won",
+        },
+      },
+      {
+        year: "2015",
+        category: "joinedParty",
+        title: "Party Entry",
+        description: "Affiliated with Bharatiya Janata Party (2015–present)",
+      },
+      {
+        year: "2016",
+        category: "election",
+        title: "Re-elected MLA",
+        description: "Constituency: Jalukbari · Party: Bharatiya Janata Party (2015–present)",
+        election: {
+          year: "2016",
+          type: "Assam Legislative Assembly",
+          constituency: "Jalukbari",
+          party: "Bharatiya Janata Party (2015–present)",
+          result: "Won",
+        },
+      },
+    ]);
+
+    const e2001 = polished.find((e) => e.year === "2001");
+    expect(e2001.description).toBe("Constituency: Jalukbari");
+    expect(e2001.description).not.toMatch(/2015|present/i);
+    expect(e2001.election?.party).toBeFalsy();
+
+    const join = polished.find((e) => e.category === "joinedParty");
+    expect(join.title).toMatch(/Joined Bharatiya Janata Party/i);
+    expect(join.title).not.toMatch(/present/i);
+    expect(join.description || "").not.toMatch(/present|\(–/i);
+
+    const e2016 = polished.find((e) => e.year === "2016");
+    expect(e2016.description).toMatch(/Party: Bharatiya Janata Party/);
+    expect(e2016.description).not.toMatch(/2015|present/i);
+
+    const sanitized = sanitizeTimelineForResponse(polished);
+    expect(sanitized.find((e) => e.year === "2001").description).not.toMatch(/present/i);
   });
 });

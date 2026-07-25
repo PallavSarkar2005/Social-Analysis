@@ -94,7 +94,7 @@ export default function Reports() {
   const handleDelete = async (report) => {
     const displayTitle = getReportDisplayTitle(report);
     const archive = window.confirm(
-      `Remove "${displayTitle}" from the hub?\n\nOK = Archive\nCancel = keep`
+      `Remove "${displayTitle}" from the hub?\n\nOK = Archive\nCancel = Keep`
     );
     if (!archive) return;
 

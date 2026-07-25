@@ -1,9 +1,9 @@
 import cron from "node-cron";
 import EmailSchedule from "../models/EmailSchedule.js";
 import Account from "../models/Account.js";
-import Snapshot from "../models/Snapshot.js";
 import TrackedCompetitor from "../models/TrackedCompetitor.js";
 import { sendEmailReport } from "../services/emailService.js";
+import { getLatest } from "../services/analyticsEngine.js";
 
 /**
  * Builds HTML template and dispatches email reports to users
@@ -48,8 +48,11 @@ export const dispatchScheduledEmails = async (frequency) => {
           `;
 
           for (const acc of accounts) {
-            const snap = await Snapshot.findOne({ account: acc._id, userId: schedule.userId }).sort({ capturedAt: -1 });
-            const followersCount = snap ? snap.followers.toLocaleString() : "N/A";
+            const latest = await getLatest(acc._id, { userId: schedule.userId });
+            const followersCount =
+              latest.metrics?.subscribers != null
+                ? Number(latest.metrics.subscribers).toLocaleString()
+                : "Insufficient verified data";
             htmlContent += `
               <tr style="border-bottom: 1px solid #f1f5f9;">
                 <td style="padding: 8px 0; font-weight: bold;">${acc.name}</td>
@@ -85,11 +88,11 @@ export const dispatchScheduledEmails = async (frequency) => {
 
           for (const comp of competitors) {
             const account = await Account.findOne({ accountId: comp.accountId, userId: schedule.userId });
-            let followersCount = "N/A";
+            let followersCount = "Insufficient verified data";
             if (account) {
-              const snap = await Snapshot.findOne({ account: account._id }).sort({ capturedAt: -1 });
-              if (snap) {
-                followersCount = snap.followers.toLocaleString();
+              const latest = await getLatest(account._id, { userId: schedule.userId });
+              if (latest.metrics?.subscribers != null) {
+                followersCount = Number(latest.metrics.subscribers).toLocaleString();
               }
             }
 
@@ -109,13 +112,13 @@ export const dispatchScheduledEmails = async (frequency) => {
           `;
         }
 
-        // 3. AI Insights Recommendations Section
+        // 3. AI Insights — only link to in-app verified insights (never fabricate strategy copy)
         if (schedule.reportTypes.includes("ai")) {
           htmlContent += `
             <div style="margin-top: 25px; border-top: 1px solid #e2e8f0; padding-top: 15px; background-color: #f8fafc; border-radius: 8px; padding: 15px;">
-              <h2 style="font-size: 15px; color: #4f46e5; margin-top: 0;">✨ AI Strategic Suggestions</h2>
+              <h2 style="font-size: 15px; color: #4f46e5; margin-top: 0;">AI Strategic Suggestions</h2>
               <p style="font-size: 12px; line-height: 1.6; color: #334155; margin: 0;">
-                Focus on improving content distribution frequency mid-week. Our modeling suggests YouTube algorithms favor Wednesdays and Thursdays around 17:00 UTC for maximum initial viewer retention spikes. Avoid bulk posting video shorts concurrently to prevent internal catalog self-competition.
+                Open Social IQ → AI Strategy for verified, profile-specific insights. This email does not invent recommendations when insufficient verified data is available.
               </p>
             </div>
           `;

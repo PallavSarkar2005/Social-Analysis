@@ -7,8 +7,13 @@ import {
   Printer,
 } from "lucide-react";
 import IndiaMap from "../common/IndiaMap";
+import SafeImage from "../common/SafeImage";
 import { formatIndianDate, formatIndianDateTime } from "../../utils/dateFormatter";
 import { safeText } from "../../utils/safeData";
+import {
+  polishTimelineTitle,
+  polishTimelineDescription,
+} from "../../utils/timelineText";
 
 /**
  * Coerce any dossier cell value to a safe React-renderable string.
@@ -265,10 +270,14 @@ export default function ReportDossierPreview({
 
             <div className="flex flex-col sm:flex-row gap-6 items-start">
               {cover.photo && (
-                <img
+                <SafeImage
                   src={cover.photo}
                   alt={coverHeadline || "Portrait"}
-                  className="w-28 h-28 rounded-xl object-cover border border-white/20 shadow-lg shrink-0"
+                  className="w-28 h-28 rounded-xl border border-white/20 shadow-lg shrink-0"
+                  imgClassName="w-full h-full object-cover"
+                  size="medium"
+                  fallback="avatar"
+                  priority
                 />
               )}
               <div className="min-w-0 space-y-3">
@@ -403,8 +412,16 @@ export default function ReportDossierPreview({
                   <ol className="relative border-l-2 border-indigo-200 ml-2 space-y-5">
                     {sections.careerTimeline.events.map((e, i) => {
                       const yearLabel = safeText(e.year) || "";
-                      const desc = safeText(e.description);
-                      const title = safeText(e.title);
+                      // Intelligence Hub dossiers may still contain pre-repair titles
+                      // like "Won Won Re" — polish at render so Hub never shows them.
+                      const title = polishTimelineTitle(safeText(e.title), {
+                        category: e.category || "election",
+                      });
+                      const desc = polishTimelineDescription(
+                        safeText(e.description),
+                        e.year
+                      );
+                      if (!title && !yearLabel) return null;
                       const showDesc =
                         desc &&
                         desc.toLowerCase() !== title.toLowerCase() &&
@@ -415,7 +432,7 @@ export default function ReportDossierPreview({
                           <div className="text-[11px] font-bold text-indigo-700 tracking-wide">
                             {yearLabel || "—"}
                           </div>
-                          <div className="text-sm font-semibold text-slate-900">{title}</div>
+                          <div className="text-sm font-semibold text-slate-900">{title || "Milestone"}</div>
                           {showDesc && (
                             <p className="text-sm text-slate-600 mt-0.5 whitespace-pre-line">{desc}</p>
                           )}

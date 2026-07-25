@@ -3,6 +3,7 @@ import Content from "../models/Content.js";
 import Snapshot from "../models/Snapshot.js";
 import PoliticalProfile from "../models/PoliticalProfile.js";
 import { getCreatorAnalyticsData } from "../controllers/compareController.js";
+import { captureSnapshot as captureAnalyticsSnapshot } from "./analyticsEngine.js";
 export const buildRecentVideoRecord = (video) => ({
   id: {
     kind: "youtube#video",
@@ -174,6 +175,30 @@ export const syncYoutubeAccountTelemetry = async (
     console.log(`${logPrefix} Snapshot created for ${updatedAccount.name}.`);
   }
 
+  // Dual-write into AnalyticsEngine (SSoT for all graphs). Force when legacy snapshot written.
+  let analyticsCapture = null;
+  try {
+    analyticsCapture = await captureAnalyticsSnapshot({
+      userId: updatedAccount.userId,
+      accountId: updatedAccount._id,
+      source: "youtube_sync",
+      force: snapshotCreated,
+      account: updatedAccount,
+      politicalProfile: profile,
+      contentStats: {
+        totalLikes: recentVideoMetrics.totalLikes,
+        totalComments: recentVideoMetrics.totalComments,
+        averageEngagement: recentVideoMetrics.averageEngagement,
+      },
+      capturedAt: syncTimestamp,
+    });
+  } catch (analyticsErr) {
+    console.warn(
+      `${logPrefix} AnalyticsEngine capture failed for ${updatedAccount.name}:`,
+      analyticsErr.message
+    );
+  }
+
   return {
     account: updatedAccount,
     profile,
@@ -182,5 +207,6 @@ export const syncYoutubeAccountTelemetry = async (
     snapshot,
     snapshotCreated,
     snapshotSkipped,
+    analyticsCapture,
   };
 };

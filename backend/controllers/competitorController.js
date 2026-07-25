@@ -5,10 +5,15 @@ import axios from "axios";
 import { scrapeXProfile } from "../scrapers/xScraper.js";
 import { getChannelStats } from "../services/youtubeService.js";
 import { youtubeGet } from "../utils/youtubeClient.js";
+import {
+  captureSnapshot,
+  getLatest,
+  getChannelHistory,
+} from "../services/analyticsEngine.js";
 
 // Helper to find YouTube Channel ID by handle/query
 const getChannelIdByQuery = async (query) => {
-  const cleanQuery = query.startsWith("@") ? query : `@${query}`;
+  const cleanQuery = query.startsWith("@") ? query.substring(1) : query;
   try {
     const { data } = await youtubeGet(
       "getChannelIdByQuery",
@@ -174,13 +179,34 @@ export const addCompetitor = async (req, res, next) => {
       await account.save();
     }
 
-    // 2. Create snapshot
+    // 2. Dual-write: legacy Snapshot + AnalyticsEngine (SSoT)
+    const capturedAt = new Date();
     await Snapshot.create({
       userId: req.user._id,
       account: account._id,
       followers,
       views,
+      capturedAt,
     });
+
+    // Update account telemetry fields so engine computeMetrics has verified values
+    account.subscribers = followers;
+    account.views = views;
+    if (platform === "youtube") account.platform = "youtube";
+    await account.save();
+
+    try {
+      await captureSnapshot({
+        userId: req.user._id,
+        accountId: account._id,
+        source: "manual",
+        force: true,
+        account,
+        capturedAt,
+      });
+    } catch (captureErr) {
+      console.warn(`[Competitors] capture failed ${account._id}:`, captureErr.message);
+    }
 
     // 3. Create tracked competitor
     const competitor = await TrackedCompetitor.create({
@@ -239,7 +265,7 @@ export const removeCompetitor = async (req, res, next) => {
   }
 };
 
-// @desc    List competitors with analytics snapshots
+// @desc    List competitors with AnalyticsEngine snapshots (SSoT)
 // @route   GET /api/competitors
 // @access  Private
 export const listCompetitors = async (req, res, next) => {
@@ -256,20 +282,24 @@ export const listCompetitors = async (req, res, next) => {
 
       if (!account) continue;
 
-      const snapshots = await Snapshot.find({
-        account: account._id,
-        userId: req.user._id,
-      }).sort({ capturedAt: 1 });
+      const latest = await getLatest(account._id, { userId: req.user._id });
+      const historyRows = await getChannelHistory(account._id, { userId: req.user._id });
 
-      const latest = snapshots[snapshots.length - 1] || { followers: 0, views: 0, engagementRate: 0 };
-      const oldest = snapshots[0] || { followers: 0, views: 0, engagementRate: 0 };
+      const withSubs = historyRows.filter((r) => r.subscribers != null || r.followers != null);
+      const first = withSubs[0];
+      const last = withSubs[withSubs.length - 1];
+      let growthPercent = null;
+      if (first && last && (first.subscribers ?? first.followers) > 0 && withSubs.length >= 2) {
+        const start = first.subscribers ?? first.followers;
+        const end = last.subscribers ?? last.followers;
+        growthPercent = parseFloat((((end - start) / start) * 100).toFixed(2));
+      }
 
-      // Calculate growth rate based on snapshots
-      const growthDiff = latest.followers - oldest.followers;
-      const growthPercent =
-        oldest.followers > 0
-          ? parseFloat(((growthDiff / oldest.followers) * 100).toFixed(2))
-          : 0;
+      // Never fabricate engagement — null when unverified
+      const engagement =
+        latest.metrics?.engagementRate ??
+        latest.metrics?.averageEngagement ??
+        null;
 
       data.push({
         _id: comp._id,
@@ -280,17 +310,23 @@ export const listCompetitors = async (req, res, next) => {
         resolvedImage: account.resolvedImage || "",
         thumbnail: account.thumbnail || "",
         imageSource: account.imageSource || "youtube",
-        imageUpdatedAt: account.imageUpdatedAt ? new Date(account.imageUpdatedAt).getTime() : Date.now(),
+        imageUpdatedAt: account.imageUpdatedAt
+          ? new Date(account.imageUpdatedAt).getTime()
+          : Date.now(),
         trackedSince: comp.trackedSince,
-        followers: latest.followers,
-        views: latest.views,
-        engagement: latest.engagementRate || 2.4, // Fallback realistic engagement rate if 0
+        followers: latest.metrics?.subscribers ?? null,
+        views: latest.metrics?.views ?? null,
+        engagement,
         growth: growthPercent,
-        history: snapshots.map((s) => ({
-          date: new Date(s.capturedAt).toISOString().split("T")[0],
-          followers: s.followers,
-          views: s.views,
-        })),
+        influenceScore: latest.metrics?.influenceScore ?? null,
+        analyticsAvailable: latest.available === true,
+        history: historyRows
+          .filter((s) => s.subscribers != null || s.views != null)
+          .map((s) => ({
+            date: new Date(s.capturedAt).toISOString().split("T")[0],
+            followers: s.subscribers ?? s.followers ?? null,
+            views: s.views ?? null,
+          })),
       });
     }
 

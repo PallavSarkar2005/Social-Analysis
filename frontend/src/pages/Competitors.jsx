@@ -239,7 +239,7 @@ export default function Competitors() {
                       placeholder="Search tracked competitors..."
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      className="w-full h-8 pl-8 pr-3 bg-white/[0.02] border border-white/[0.08] rounded-lg text-xs text-white placeholder-slate-550 focus:outline-none focus:border-indigo-500/50 transition"
+                      className="w-full h-8 pl-8 pr-3 bg-white/[0.02] border border-white/[0.08] rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500/50 transition"
                     />
                   </div>
                 </div>
@@ -278,8 +278,13 @@ export default function Competitors() {
                                   {comp.platform}
                                 </span>
                               </td>
-                              <td className="px-6 py-4 font-mono font-semibold">{comp.followers.toLocaleString()}</td>
+                              <td className="px-6 py-4 font-mono font-semibold">
+                                {comp.followers != null ? Number(comp.followers).toLocaleString() : "—"}
+                              </td>
                               <td className="px-6 py-4">
+                                {comp.growth == null ? (
+                                  <span className="text-slate-500 text-xs">Insufficient verified data</span>
+                                ) : (
                                 <span
                                   className={`inline-flex items-center gap-1 font-semibold ${
                                     comp.growth >= 0 ? "text-emerald-400" : "text-rose-400"
@@ -289,13 +294,16 @@ export default function Competitors() {
                                   {comp.growth >= 0 ? "+" : ""}
                                   {comp.growth}%
                                 </span>
+                                )}
                               </td>
                               <td className="px-6 py-4 font-mono">
-                                {comp.views > 0 ? comp.views.toLocaleString() : "N/A"}
+                                {comp.views != null && comp.views > 0
+                                  ? Number(comp.views).toLocaleString()
+                                  : "—"}
                               </td>
                               <td className="px-6 py-4">
                                 <span className="px-2.5 py-1 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 font-semibold">
-                                  {comp.engagement}%
+                                  {comp.engagement != null ? `${comp.engagement}%` : "—"}
                                 </span>
                               </td>
                               <td className="px-6 py-4 text-right">

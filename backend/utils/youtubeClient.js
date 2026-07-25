@@ -43,6 +43,124 @@ const logUsage = async (apiKey, endpoint, quotaCost, status, cached) => {
   }
 };
 
+const maskKeyLast25 = (k) => {
+  if (!k) return "(empty)";
+  const s = String(k);
+  if (s.length <= 25) return "*".repeat(s.length);
+  return s.slice(0, s.length - 25) + "*".repeat(25);
+};
+
+const dumpOutgoingYoutubeRequest = (config) => {
+  const rawUrl = config.url || "";
+  const isYoutube =
+    rawUrl.includes("googleapis.com/youtube") ||
+    rawUrl.includes("youtube.googleapis.com");
+  if (!isYoutube) return config;
+
+  const params = { ...(config.params || {}) };
+  const query = new URLSearchParams();
+  for (const [k, v] of Object.entries(params)) {
+    if (v === undefined || v === null) continue;
+    query.set(k, String(v));
+  }
+  const qs = query.toString();
+  const fullUrl = qs ? `${rawUrl}?${qs}` : rawUrl;
+  const maskedFullUrl = fullUrl.replace(
+    /([?&]key=)([^&]*)/i,
+    (_, prefix, val) => `${prefix}${maskKeyLast25(decodeURIComponent(val))}`
+  );
+
+  const headers = { ...(config.headers || {}) };
+  // Flatten AxiosHeaders if present
+  const flatHeaders = {};
+  if (typeof headers.toJSON === "function") {
+    Object.assign(flatHeaders, headers.toJSON());
+  } else {
+    for (const [k, v] of Object.entries(headers)) {
+      if (v !== undefined && typeof v !== "function") flatHeaders[k] = v;
+    }
+  }
+  // Include axios defaults that will be merged
+  const common = axios.defaults?.headers?.common || {};
+  const methodDefaults = axios.defaults?.headers?.[String(config.method || "get").toLowerCase()] || {};
+  const mergedHeaders = { ...common, ...methodDefaults, ...flatHeaders };
+
+  console.log("------------------------------------");
+  console.log("FULL URL");
+  console.log(maskedFullUrl);
+  console.log("HTTP METHOD");
+  console.log(String(config.method || "get").toUpperCase());
+  console.log("QUERY PARAMETERS");
+  for (const [k, v] of Object.entries(params)) {
+    if (k === "key") {
+      console.log(`${k}=${maskKeyLast25(v)}`);
+    } else {
+      console.log(`${k}=${v}`);
+    }
+  }
+  console.log("HEADERS");
+  const auth =
+    mergedHeaders.Authorization ||
+    mergedHeaders.authorization ||
+    null;
+  console.log(`Authorization: ${auth ? String(auth).replace(/Bearer\s+.+/i, "Bearer ****") : "NONE"}`);
+  for (const [k, v] of Object.entries(mergedHeaders)) {
+    if (/^authorization$/i.test(k)) continue;
+    console.log(`${k}: ${v}`);
+  }
+  console.log("AXIOS CONFIG (pre-flight, secrets masked)");
+  console.log(
+    JSON.stringify(
+      {
+        method: config.method || "get",
+        url: config.url,
+        params: {
+          ...params,
+          key: params.key ? maskKeyLast25(params.key) : undefined,
+        },
+        headers: {
+          ...mergedHeaders,
+          Authorization: auth ? "PRESENT(masked)" : "NONE",
+          authorization: undefined,
+        },
+        baseURL: config.baseURL || axios.defaults.baseURL || null,
+        timeout: config.timeout ?? axios.defaults.timeout ?? null,
+        adapter: typeof config.adapter,
+      },
+      null,
+      2
+    )
+  );
+  console.log("------------------------------------");
+  return config;
+};
+
+// Inspection-only: capture exact outgoing YouTube requests after axios merges defaults
+const youtubeRequestInterceptorId = axios.interceptors.request.use(
+  dumpOutgoingYoutubeRequest,
+  (err) => Promise.reject(err)
+);
+
+console.log("[YT INSPECT] axios request interceptor registered id=", youtubeRequestInterceptorId);
+console.log("[YT INSPECT] axios.defaults.headers.common=", axios.defaults?.headers?.common || {});
+console.log(
+  "[YT INSPECT] global request interceptor count=",
+  axios.interceptors.request.handlers?.filter(Boolean).length ?? "(unknown)"
+);
+
+const maskApiKey = (k) =>
+  !k
+    ? "(empty)"
+    : `${String(k).substring(0, 4)}${"*".repeat(Math.max(0, String(k).length - 8))}${String(k).slice(-4)}`;
+
+const logYoutubeRequest = (url, params, key, { force = false } = {}) => {
+  if (!force && process.env.YT_DEBUG !== "1") return;
+  const safeParams = { ...params, key: maskApiKey(key) };
+  console.log("[YT] URL:", url);
+  console.log("[YT] Params:", safeParams);
+  console.log("[YT] Headers: Authorization: NONE");
+};
+
 // Internal function to call YouTube API with rotation
 const callYoutubeWithRotation = async (endpoint, url, params = {}) => {
   const keys = getApiKeys();
@@ -52,6 +170,7 @@ const callYoutubeWithRotation = async (endpoint, url, params = {}) => {
 
   let attempts = 0;
   const totalKeys = keys.length;
+  let lastError = null;
 
   while (attempts < totalKeys) {
     // Keep index inside bounds
@@ -65,22 +184,48 @@ const callYoutubeWithRotation = async (endpoint, url, params = {}) => {
     }
 
     try {
+      const requestParams = {
+        ...params,
+        key,
+      };
+      logYoutubeRequest(url, requestParams, key);
+
       const response = await axios.get(url, {
-        params: {
-          ...params,
-          key,
-        },
+        params: requestParams,
+        // Never send Authorization — YouTube Data API public reads use ?key= only
+        headers: {},
       });
 
       // Log success
       await logUsage(key, endpoint, quotaCost, "success", false);
       return response.data;
     } catch (error) {
+      lastError = error;
       const status = error.response?.status || 500;
       const errorData = error.response?.data;
       const errorDetails = errorData?.error?.errors?.[0] || {};
       const reason = (errorDetails.reason || "").toLowerCase();
-      const message = (errorData?.error?.message || error.message || "").toLowerCase();
+      const googleMessage = errorData?.error?.message || error.message || "";
+      const message = googleMessage.toLowerCase();
+
+      logYoutubeRequest(url, { ...params, key }, key, { force: true });
+      console.error("[YT] Request failed:", {
+        endpoint,
+        status,
+        reason: errorDetails.reason || null,
+        message: googleMessage,
+        key: maskApiKey(key),
+        authHeader: "NONE",
+      });
+
+      const isAuthFailure =
+        status === 401 ||
+        reason === "keyinvalid" ||
+        reason === "required" ||
+        message.includes("credentials_missing") ||
+        message.includes("api keys are not supported") ||
+        message.includes("key not valid") ||
+        message.includes("invalid api key");
 
       const isQuotaExceeded =
         reason === "quotaexceeded" ||
@@ -89,27 +234,32 @@ const callYoutubeWithRotation = async (endpoint, url, params = {}) => {
         reason === "userratelimitexceeded" ||
         message.includes("quota exceeded") ||
         message.includes("limit exceeded") ||
-        status === 403 ||
-        status === 429;
+        status === 429 ||
+        // Only treat 403 as quota when Google says so (not every 403)
+        (status === 403 &&
+          (reason.includes("quota") ||
+            reason.includes("limit") ||
+            message.includes("quota") ||
+            message.includes("limit exceeded")));
 
-      if (isQuotaExceeded) {
-        console.warn(`YouTube Key index ${currentKeyIndex} (ending in ${key.slice(-4)}) exhausted quota. Reason: ${reason || message}. Rotating...`);
-        
-        // Log quota failure
-        await logUsage(key, endpoint, quotaCost, `quotaExceeded: ${reason || message}`, false);
-        
-        // Move to the next key
+      if (isAuthFailure || isQuotaExceeded) {
+        const label = isAuthFailure ? "authFailure" : "quotaExceeded";
+        console.warn(
+          `YouTube key index ${currentKeyIndex} (${maskApiKey(key)}) ${label}: ${reason || message}. Rotating...`
+        );
+        await logUsage(key, endpoint, quotaCost, `${label}: ${reason || message}`, false);
         currentKeyIndex = (currentKeyIndex + 1) % totalKeys;
         attempts++;
       } else {
-        // Log other failures and throw immediately (non-quota errors)
         await logUsage(key, endpoint, quotaCost, `failed: ${message}`, false);
         throw error;
       }
     }
   }
 
-  // All keys exhausted
+  if (lastError) {
+    throw lastError;
+  }
   throw new Error("All YouTube API keys have exhausted their quota.");
 };
 

@@ -1,6 +1,8 @@
 /**
  * Professional Markdown Political Intelligence Report from assembled dossier.
  */
+import { cleanTimelineTitle } from "./politicalTimelineService.js";
+
 export function generateDossierMarkdown(dossier) {
   const s = dossier?.sections || {};
   const lines = [];
@@ -64,7 +66,7 @@ export function generateDossierMarkdown(dossier) {
   if (s.careerTimeline?.events?.length) {
     next("Career Timeline");
     for (const e of s.careerTimeline.events) {
-      const title = String(e.title || "").trim();
+      const title = cleanTimelineTitle(String(e.title || "").trim(), e.year);
       let description = String(e.description || "").trim();
       if (
         description &&

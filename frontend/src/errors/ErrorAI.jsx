@@ -65,7 +65,7 @@ Due to AI provider network congestion, we have loaded the pre-saved local intell
         <h1 className="text-3xl sm:text-4xl font-black text-white tracking-tight">AI Service Offline</h1>
         <h2 className="text-sm font-semibold text-slate-300">LLM Provider Unavailable</h2>
         <p className="text-xs sm:text-sm text-slate-400 leading-relaxed">
-          Groq or OpenAI endpoint keys are unconfigured, rate-limited, or timing out. You can load offline cached insights instead.
+          Groq or OpenAI endpoint keys are not configured, rate-limited, or timing out. You can load offline cached insights instead.
         </p>
       </motion.div>
 

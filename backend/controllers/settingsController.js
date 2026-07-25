@@ -3,7 +3,7 @@ import User from "../models/User.js";
 import UserApiKey from "../models/UserApiKey.js";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
-import { PLAN_PRICES } from "../controllers/billingController.js";
+import { PLAN_PRICES, PLAN_FEATURES } from "../config/plans.js";
 
 // @desc    Get user email report schedule
 // @route   GET /api/settings/email-schedule
@@ -605,19 +605,19 @@ export const getPlanCatalog = async (_req, res, next) => {
             id: "free",
             name: "Starter",
             prices: { monthly: 0, annual: 0 },
-            features: ["Up to 2 Tracked Accounts", "5 AI Reports per month", "CSV Data Exports", "Basic support"],
+            features: PLAN_FEATURES.free,
           },
           {
             id: "professional",
             name: "Professional",
             prices: PLAN_PRICES.professional,
-            features: ["Up to 15 Tracked Accounts", "100 AI Reports per cycle", "PDF / Excel / CSV Exports", "Priority Support"],
+            features: PLAN_FEATURES.professional,
           },
           {
             id: "enterprise",
             name: "Enterprise",
             prices: PLAN_PRICES.enterprise,
-            features: ["Up to 1000 Tracked Accounts", "10,000 AI requests per cycle", "White-labeled reports", "Dedicated Account Manager"],
+            features: PLAN_FEATURES.enterprise,
           },
         ],
       },

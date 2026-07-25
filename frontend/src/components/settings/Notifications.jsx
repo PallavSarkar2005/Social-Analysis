@@ -44,7 +44,7 @@ export default function Notifications({
         <h2 className="text-xl font-bold text-white flex items-center gap-2">
           <Bell className="text-indigo-400" size={20} /> Notifications
         </h2>
-        <p className="text-xs text-slate-400 mt-1">Configure subscription notification channels, AI report alerts, and Weekly digest schedules.</p>
+        <p className="text-xs text-slate-400 mt-1">Configure subscription notification channels, AI report alerts, and weekly digest schedules.</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

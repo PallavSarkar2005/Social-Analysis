@@ -21,10 +21,14 @@ export default function Pricing() {
 
   const handleSelectPlan = (plan) => {
     if (!isAuthenticated) {
-      navigate("/register?redirect=billing");
-    } else {
-      navigate("/billing");
+      navigate(`/register?redirect=${encodeURIComponent(`/billing/checkout?plan=${plan}&cycle=${cycle}`)}`);
+      return;
     }
+    if (plan === "free") {
+      navigate("/billing");
+      return;
+    }
+    navigate(`/billing/checkout?plan=${plan}&cycle=${cycle}`);
   };
 
   const faqItems = [
@@ -34,7 +38,7 @@ export default function Pricing() {
     },
     {
       q: "Is there a long-term contract requirement?",
-      a: "No long-term commitments are required. Our monthly plans run month-to-month and can be cancelled any time. Choosing the annual billing cycle saves you 20% on licensing fees.",
+      a: "No long-term commitments are required. Our monthly plans run month-to-month and can be cancelled at any time. Choosing the annual billing cycle saves you 20% on licensing fees.",
     },
     {
       q: "Which payment options are supported?",

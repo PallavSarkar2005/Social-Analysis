@@ -89,21 +89,31 @@ describe("Production-Grade Auth & Session Management Refactor Integration Tests"
     });
   });
 
-  describe("SaaS Provider Merging (Google OAuth)", () => {
-    it("should create a new google user if email does not exist", async () => {
+  describe("Google OAuth security", () => {
+    it("should reject development bypass tokens and invalid Google ID tokens", async () => {
+      const beforeCount = await User.countDocuments({
+        email: "dev.user@socialiq.ai",
+      });
+
       const res = await request(app).post("/api/auth/google").send({
         idToken: "dummy-developer-token",
       });
 
-      expect(res.status).toBe(200);
-      expect(res.body.success).toBe(true);
+      expect(res.status).toBe(400);
+      expect(res.body.success).toBe(false);
+      const errorText = [
+        res.body.message,
+        ...(res.body.errors || []).map((e) => e.message),
+      ]
+        .filter(Boolean)
+        .join(" ");
+      expect(errorText).toMatch(/failed|invalid/i);
 
-      const devUser = await User.findOne({ email: "dev.user@socialiq.ai" });
-      expect(devUser).toBeDefined();
-      expect(devUser.provider).toBe("google");
-      expect(devUser.isEmailVerified).toBe(true);
-
-      await User.deleteOne({ email: "dev.user@socialiq.ai" });
+      // Bypass must not create or refresh a session for the legacy dev identity
+      const afterCount = await User.countDocuments({
+        email: "dev.user@socialiq.ai",
+      });
+      expect(afterCount).toBe(beforeCount);
     });
   });
 

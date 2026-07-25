@@ -2,6 +2,7 @@ import dotenv from "dotenv";
 dotenv.config();
 
 const REQUIRED_ENV_VARS = ["MONGO_URI", "GROQ_API_KEY", "JWT_SECRET"];
+const MIN_JWT_SECRET_LENGTH = 32;
 
 export const validateEnv = () => {
   const missing = [];
@@ -26,6 +27,28 @@ export const validateEnv = () => {
     missing.forEach((v) => console.error(`  - ${v}`));
     console.error("==================================================");
     process.exit(1);
+  }
+
+  if (
+    process.env.JWT_SECRET &&
+    process.env.JWT_SECRET.length < MIN_JWT_SECRET_LENGTH
+  ) {
+    console.error("==================================================");
+    console.error("CRITICAL CONFIGURATION ERROR: WEAK JWT_SECRET!");
+    console.error(
+      `JWT_SECRET must be at least ${MIN_JWT_SECRET_LENGTH} characters long.`,
+    );
+    console.error("==================================================");
+    process.exit(1);
+  }
+
+  if (
+    process.env.NODE_ENV === "production" &&
+    !process.env.GOOGLE_CLIENT_ID
+  ) {
+    console.warn(
+      "[Config] GOOGLE_CLIENT_ID is not set. Google Sign-In will reject all tokens until configured.",
+    );
   }
 
   // Ensure default port fallback is safe

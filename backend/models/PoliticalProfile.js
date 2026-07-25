@@ -57,6 +57,16 @@ const politicalProfileSchema = new mongoose.Schema(
         evidence: { type: mongoose.Schema.Types.Mixed, default: null },
         related: { type: mongoose.Schema.Types.Mixed, default: null },
         details: { type: mongoose.Schema.Types.Mixed, default: null },
+        // Nested election payload for ElectionCard UI (must be persisted — strict schema otherwise strips it)
+        election: {
+          year: { type: String, default: null },
+          type: { type: String, default: "" },
+          constituency: { type: String, default: "" },
+          party: { type: String, default: "" },
+          result: { type: String, default: "" },
+          margin: { type: Number, default: null },
+          voteShare: { type: Number, default: null },
+        },
       },
     ],
 

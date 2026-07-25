@@ -3,24 +3,51 @@ import User from "../../models/User.js";
 import { logSecurityEvent } from "../../utils/securityLogger.js";
 import { sendTokenResponse } from "../../services/authService.js";
 
+const isGoogleEmailVerified = (value) => value === true || value === "true";
+
+/**
+ * Verify a Google ID token with Google's tokeninfo endpoint and enforce
+ * audience + email_verified checks. No development token shortcuts.
+ */
 const resolveGooglePayload = async (idToken) => {
-  if (
-    idToken === "dummy-developer-token" &&
-    (process.env.NODE_ENV === "test" ||
-      process.env.NODE_ENV === "development")
-  ) {
-    return {
-      sub: "dev-google-sub-123",
-      email: "dev.user@socialiq.ai",
-      name: "Developer Node",
-      picture: "https://api.dicebear.com/7.x/adventurer/svg?seed=dev",
-    };
+  if (typeof idToken !== "string" || idToken.length < 20 || idToken.length > 4096) {
+    throw new Error("Invalid Google ID token format");
+  }
+
+  // Reject known bypass tokens explicitly (defense in depth)
+  if (idToken === "dummy-developer-token") {
+    throw new Error("Invalid Google ID token");
   }
 
   const ticket = await axios.get(
-    `https://oauth2.googleapis.com/tokeninfo?id_token=${idToken}`,
+    "https://oauth2.googleapis.com/tokeninfo",
+    {
+      params: { id_token: idToken },
+      timeout: 10000,
+      validateStatus: (status) => status < 500,
+    },
   );
-  return ticket.data;
+
+  if (ticket.status !== 200 || !ticket.data?.sub) {
+    throw new Error("Google token verification failed");
+  }
+
+  const payload = ticket.data;
+  const expectedAud = process.env.GOOGLE_CLIENT_ID;
+
+  if (!expectedAud) {
+    throw new Error("GOOGLE_CLIENT_ID is not configured");
+  }
+
+  if (payload.aud !== expectedAud) {
+    throw new Error("Google token audience mismatch");
+  }
+
+  if (!payload.email || !isGoogleEmailVerified(payload.email_verified)) {
+    throw new Error("Google account email is not verified");
+  }
+
+  return payload;
 };
 
 export const googleSignIn = async (req, res, next) => {
@@ -34,40 +61,59 @@ export const googleSignIn = async (req, res, next) => {
 
   try {
     const payload = await resolveGooglePayload(idToken);
-
-    if (!payload.email) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid Google token, no email payload resolved.",
-      });
-    }
-
     const { sub, email, name, picture } = payload;
-    let user = await User.findOne({ email });
+
+    // Prefer lookup by Google subject to avoid email-based account takeover
+    let user = await User.findOne({ googleId: sub });
 
     if (!user) {
-      user = await User.create({
-        name,
-        email,
-        avatar:
-          picture ||
-          `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(name)}`,
-        isVerified: true,
-        isEmailVerified: true,
-        provider: "google",
-        googleId: sub,
-      });
-    } else {
-      user.provider = "google";
-      user.googleId = sub;
-      user.isEmailVerified = true;
-      user.isVerified = true;
-      if (!user.avatar) {
-        user.avatar =
-          picture ||
-          `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(name)}`;
+      const existingByEmail = await User.findOne({ email: email.toLowerCase() });
+
+      if (existingByEmail) {
+        // Do not silently link Google to a password-based account
+        if (
+          existingByEmail.passwordHash ||
+          existingByEmail.provider === "local"
+        ) {
+          return res.status(409).json({
+            success: false,
+            message:
+              "An account with this email already exists. Sign in with your password, then link Google from Settings.",
+          });
+        }
+
+        // Existing Google-linked account missing googleId (legacy) — attach subject
+        if (existingByEmail.googleId && existingByEmail.googleId !== sub) {
+          return res.status(409).json({
+            success: false,
+            message: "This email is already linked to a different Google account.",
+          });
+        }
+
+        user = existingByEmail;
+        user.googleId = sub;
+        user.provider = "google";
+        user.isEmailVerified = true;
+        user.isVerified = true;
+        if (!user.avatar && picture) {
+          user.avatar = picture;
+        }
+        await user.save();
+      } else {
+        user = await User.create({
+          name: name || email.split("@")[0],
+          email: email.toLowerCase(),
+          avatar:
+            picture ||
+            `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(name || email)}`,
+          isVerified: true,
+          isEmailVerified: true,
+          provider: "google",
+          googleId: sub,
+          role: "user",
+          plan: "free",
+        });
       }
-      await user.save();
     }
 
     await sendTokenResponse(user, 200, req, res);
@@ -95,6 +141,13 @@ export const googleConnect = async (req, res, next) => {
     const { sub, email } = payload;
     const user = await User.findById(req.user._id);
 
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found.",
+      });
+    }
+
     const existingLink = await User.findOne({
       googleId: sub,
       _id: { $ne: user._id },
@@ -104,6 +157,19 @@ export const googleConnect = async (req, res, next) => {
         success: false,
         message:
           "This Google account is already linked to another Social IQ user.",
+      });
+    }
+
+    // Prevent linking a Google identity whose email belongs to another user
+    const emailOwner = await User.findOne({
+      email: email.toLowerCase(),
+      _id: { $ne: user._id },
+    });
+    if (emailOwner) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "This Google account email is already associated with another user.",
       });
     }
 

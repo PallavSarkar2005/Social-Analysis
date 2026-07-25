@@ -123,7 +123,7 @@ export default function SettingsEngine() {
   const handleUpdatePassword = async (oldPassword, newPassword) => {
     try {
       const res = await client.post("/api/auth/change-password", {
-        currentPassword: oldPassword,
+        oldPassword,
         newPassword,
       });
       if (res.data && res.data.success) {
@@ -138,12 +138,11 @@ export default function SettingsEngine() {
 
   const handleConnectGoogle = async (idToken) => {
     try {
-      const token = idToken || (import.meta.env.DEV ? "dummy-developer-token" : null);
-      if (!token) {
+      if (!idToken) {
         toast.error("Google Sign-In is not configured.");
         return { success: false };
       }
-      const res = await connectGoogle(token);
+      const res = await connectGoogle(idToken);
       if (res.success) {
         toast.success("Connected Google Identity successfully!");
       } else {
@@ -273,7 +272,7 @@ export default function SettingsEngine() {
               Settings Engine
             </h1>
             <p className="text-xs sm:text-sm text-slate-400 font-medium mt-1">
-              Configure system API variables, manage developer profiles, configure email digests, and oversee notifications.
+              Manage your profile, notification preferences, and email digests.
             </p>
           </div>
 

@@ -367,4 +367,40 @@ describe("reportDossierService", () => {
     expect(dossier.sections.cover.title).toBe("A vs B");
     expect(dossier.sections.aiInsights.blocks.length).toBeGreaterThan(0);
   });
+
+  test("channelAnalytics section uses AnalyticsEngine latest values when provided", () => {
+    const dossier = assemblePoliticalDossier({
+      report,
+      profile,
+      account: { name: "Test Leader", _id: "acc1" },
+      analyticsLatest: {
+        available: true,
+        capturedAt: new Date("2026-07-01"),
+        source: "youtube_sync",
+        engineVersion: 1,
+        metrics: {
+          subscribers: 12345,
+          views: 999000,
+          engagementRate: 3.5,
+          influenceScore: 61,
+        },
+      },
+    });
+    expect(dossier.modulesIncluded).toContain("channelAnalytics");
+    const metrics = dossier.sections.channelAnalytics.metrics;
+    expect(metrics.find((m) => m.key === "subscribers").value).toBe(12345);
+    expect(metrics.find((m) => m.key === "views").value).toBe(999000);
+    expect(metrics.find((m) => m.key === "influenceScore").value).toBe(61);
+  });
+
+  test("channelAnalytics omitted when analytics unavailable (no fabrication)", () => {
+    const dossier = assemblePoliticalDossier({
+      report,
+      profile,
+      account: { name: "Test Leader" },
+      analyticsLatest: { available: false, metrics: null },
+    });
+    expect(dossier.modulesIncluded).not.toContain("channelAnalytics");
+    expect(dossier.sections.channelAnalytics).toBeUndefined();
+  });
 });

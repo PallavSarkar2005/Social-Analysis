@@ -66,7 +66,7 @@ export default function Compare() {
   const handleCompare = (e) => {
     e.preventDefault();
     if (!creator1 || !creator2) {
-      toast.error("Please fill in both YouTube URL or handle fields.");
+      toast.error("Please fill in both creator fields (YouTube URL or handle).");
       return;
     }
     setSearchParams({ c1: creator1, c2: creator2 });
@@ -243,7 +243,7 @@ export default function Compare() {
                   {loading ? (
                     <>
                       <RefreshCw size={14} className="animate-spin" />
-                      Comparing Channels...
+                      Comparing creators...
                     </>
                   ) : (
                     "Compare Creators"

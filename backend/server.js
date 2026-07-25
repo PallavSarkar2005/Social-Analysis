@@ -15,6 +15,7 @@ console.log("YOUTUBE_API_KEY loaded:", !!process.env.YOUTUBE_API_KEY);
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
+import compression from "compression";
 import rateLimit from "express-rate-limit";
 import connectDB from "./config/db.js";
 import cron from "node-cron";
@@ -22,6 +23,8 @@ import { mongoSanitizeMiddleware } from "./middleware/mongoSanitize.js";
 import { xssSanitizer } from "./middleware/xssSanitizer.js";
 import { cookieParser } from "./middleware/cookieParser.js";
 import { csrfProtection } from "./middleware/csrfMiddleware.js";
+import { responseCache } from "./middleware/responseCache.js";
+import { startCacheJanitor } from "./utils/memoryCache.js";
 
 // Route imports
 import authRoutes from "./routes/authRoutes.js";
@@ -50,6 +53,7 @@ import sharedRoutes from "./routes/sharedRoutes.js";
 import { syncAllYoutubeChannels } from "./jobs/youtubeSyncJob.js";
 import { startSnapshotJob } from "./jobs/snapshotJob.js";
 import { startEmailReportJobs } from "./jobs/emailReportJob.js";
+import { startBillingRenewalJobs } from "./jobs/billingRenewalJob.js";
 
 // Error handling middleware
 import { notFound } from "./middleware/notFound.js";
@@ -59,6 +63,7 @@ await connectDB();
 if (process.env.NODE_ENV !== "test") {
   startSnapshotJob();
   startEmailReportJobs();
+  startBillingRenewalJobs();
   // One-time legacy Intelligence Hub backfill (idempotent, no duplicates)
   import("./services/hubIndexService.js")
     .then(({ backfillAllHubIndexes }) => backfillAllHubIndexes())
@@ -67,10 +72,26 @@ if (process.env.NODE_ENV !== "test") {
 
 const app = express();
 
-// Disable ETag generation to prevent 304 responses on CSRF endpoint
-app.set("etag", false);
+// Enable weak ETags for cacheable GET JSON (CSRF still forces no-store)
+app.set("etag", "weak");
 
 app.set("trust proxy", 1);
+
+// Brotli/gzip response compression — skip already-compressed payloads
+app.use(
+  compression({
+    threshold: 1024,
+    level: 6,
+    filter: (req, res) => {
+      if (req.headers["x-no-compression"]) return false;
+      return compression.filter(req, res);
+    },
+  }),
+);
+
+if (process.env.NODE_ENV !== "test") {
+  startCacheJanitor();
+}
 
 // Strict CORS whitelisting with credentials support for HttpOnly cookies
 const corsWhitelist = [
@@ -88,6 +109,8 @@ const corsOptions = {
         origin.startsWith("http://127.0.0.1:") ||
         origin.startsWith("http://192.168."));
 
+    // Non-browser clients (no Origin) are allowed; browser origins must match whitelist.
+    // Localhost origins are only accepted outside production.
     if (
       !origin ||
       corsWhitelist.includes(origin) ||
@@ -192,12 +215,11 @@ app.use(mongoSanitizeMiddleware);
 // Sanitize user inputs to prevent Cross-Site Scripting (XSS)
 app.use(xssSanitizer);
 
-// Rate Limiters
+// Rate Limiters — always enforced outside of automated tests
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 mins
-  max: 1000, // Increased global threshold
-  skip: () =>
-    process.env.NODE_ENV === "test" || process.env.NODE_ENV === "development",
+  max: 1000,
+  skip: () => process.env.NODE_ENV === "test",
   standardHeaders: true,
   legacyHeaders: false,
   message: {
@@ -208,9 +230,8 @@ const apiLimiter = rateLimit({
 
 const strictLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 mins
-  max: 250, // Increased strict route threshold to prevent search/chat blockage
-  skip: () =>
-    process.env.NODE_ENV === "test" || process.env.NODE_ENV === "development",
+  max: 250,
+  skip: () => process.env.NODE_ENV === "test",
   skipSuccessfulRequests: false,
   standardHeaders: true,
   legacyHeaders: false,
@@ -220,11 +241,24 @@ const strictLimiter = rateLimit({
   },
 });
 
+// Dedicated auth brute-force protection (login/register/google/password reset)
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  skip: () => process.env.NODE_ENV === "test",
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    message: "Too many authentication attempts. Please try again in 15 minutes.",
+  },
+});
+
 // Apply global rate limiting to all api endpoints
 app.use("/api", apiLimiter);
 
 // Specific routes
-app.use("/api/auth", strictLimiter, authRoutes);
+app.use("/api/auth", authLimiter, strictLimiter, authRoutes);
 app.use("/api/analyzer", strictLimiter, analyzerRoutes);
 app.use("/api/compare", strictLimiter, compareRoutes);
 app.use("/api/ai", strictLimiter, aiRoutes);
@@ -240,22 +274,12 @@ app.use("/api/users", strictLimiter, userRoutes);
 app.use("/api/billing", billingRoutes);
 
 app.use("/api/youtube", youtubeRoutes);
-app.use("/api/accounts", accountRoutes);
-app.use("/api/analytics", analyticsRoutes);
-app.use("/api/history", historyRoutes);
+app.use("/api/accounts", responseCache({ ttlMs: 20_000 }), accountRoutes);
+app.use("/api/analytics", responseCache({ ttlMs: 30_000 }), analyticsRoutes);
+app.use("/api/history", responseCache({ ttlMs: 30_000 }), historyRoutes);
 app.use("/api/x", xRoutes);
-app.use("/api/groups", groupRoutes);
+app.use("/api/groups", responseCache({ ttlMs: 20_000 }), groupRoutes);
 app.use("/api/profile", strictLimiter, profileRoutes);
-
-app.get("/api/debug/youtube", (req, res) => {
-  const apiKey = process.env.YOUTUBE_API_KEY || "";
-  res.json({
-    youtubeApiKeyPresent: !!apiKey,
-    youtubeApiKeyLength: apiKey.length,
-    nodeEnv: process.env.NODE_ENV || null,
-    railway: process.env.RAILWAY_ENVIRONMENT || null,
-  });
-});
 
 app.get("/", (req, res) => {
   res.json({

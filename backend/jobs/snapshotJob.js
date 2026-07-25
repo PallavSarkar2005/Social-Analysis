@@ -6,6 +6,7 @@ import { scrapeXProfile } from "../scrapers/xScraper.js";
 import { syncAllYoutubeChannels } from "./youtubeSyncJob.js";
 import { syncAllProfileAccounts } from "../services/profileBuilderService.js";
 import { validateAllProfileIdentities } from "../services/profileIdentityValidationService.js";
+import { captureSnapshot as captureAnalyticsSnapshot } from "../services/analyticsEngine.js";
 
 // Helper to scrape/fetch metrics and save a snapshot
 export const runSnapshotSync = async (frequencyLabel = "Scheduled") => {
@@ -67,6 +68,7 @@ export const runSnapshotSync = async (frequencyLabel = "Scheduled") => {
 
         // Only save snapshot if we retrieved a valid status (e.g. followers > 0 or views > 0)
         if (followers > 0 || views > 0) {
+          const capturedAt = new Date();
           await Snapshot.create({
             account: account._id,
             userId: account.userId,
@@ -81,10 +83,33 @@ export const runSnapshotSync = async (frequencyLabel = "Scheduled") => {
             state: account.state || "Unknown State",
             name: account.name,
             profileImage,
-            capturedAt: new Date(),
+            capturedAt,
           });
           xSnapshotsCreated += 1;
           console.log(`[Snapshot Job] Captured snapshot for ${account.name} (${account.platform})`);
+
+          try {
+            await captureAnalyticsSnapshot({
+              userId: account.userId,
+              accountId: account._id,
+              source: "x_sync",
+              force: true,
+              account: {
+                ...account.toObject?.() || account,
+                subscribers: followers,
+                views,
+                videos,
+                engagement: engagementRate,
+                profileImage,
+              },
+              capturedAt,
+            });
+          } catch (analyticsErr) {
+            console.warn(
+              `[Snapshot Job] AnalyticsEngine capture failed for ${account.name}:`,
+              analyticsErr.message
+            );
+          }
         }
       } catch (err) {
         xFailures += 1;

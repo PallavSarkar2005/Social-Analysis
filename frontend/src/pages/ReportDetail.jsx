@@ -155,7 +155,7 @@ export default function ReportDetail() {
 
   const handleDelete = async () => {
     const archive = window.confirm(
-      `Remove "${displayTitle}" from the hub?\n\nOK = Archive\nCancel = keep`
+      `Remove "${displayTitle}" from the hub?\n\nOK = Archive\nCancel = Keep`
     );
     if (!archive) return;
     const wipe = window.confirm(

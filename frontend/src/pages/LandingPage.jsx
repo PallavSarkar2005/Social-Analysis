@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "../context/AuthContext";
+import SafeImage from "../components/common/SafeImage";
 import { 
   Sparkles, 
   TrendingUp, 
@@ -134,7 +135,7 @@ export default function LandingPage() {
     },
     {
       title: "AI Strategy Engine",
-      description: "Leverage state of the art language models to extract custom video hooks, title recommendations, and SEO summaries.",
+      description: "Leverage state-of-the-art language models to extract custom video hooks, title recommendations, and SEO summaries.",
       icon: Brain,
       color: "from-purple-500/20 to-indigo-500/20 text-purple-400 border-purple-500/30",
     },
@@ -361,8 +362,11 @@ export default function LandingPage() {
       {/* Live Preview Chart Container */}
       <section id="demo-preview" className="py-24 max-w-5xl mx-auto px-4">
         <div className="text-center mb-12 space-y-4">
-          <span className="text-[10px] uppercase font-bold tracking-widest text-indigo-400">Telemetry Live Playground</span>
+          <span className="text-[10px] uppercase font-bold tracking-widest text-indigo-400">Illustrative Preview</span>
           <h2 className="text-2xl sm:text-4xl font-extrabold text-white">Compare Dynamic Growth Timelines</h2>
+          <p className="text-sm text-slate-400 max-w-xl mx-auto">
+            Illustrative preview — not live data. Sign in to view verified analytics from your tracked profiles.
+          </p>
         </div>
 
         <div className="bg-[#121318]/50 backdrop-blur-md rounded-2xl border border-white/[0.06] p-6 shadow-2xl space-y-6">
@@ -442,7 +446,7 @@ export default function LandingPage() {
                   </div>
 
                   <h3 className="text-sm font-bold text-white mb-2">{p.title}</h3>
-                  <p className="text-xs text-slate-450 leading-relaxed font-medium">{p.description}</p>
+                  <p className="text-xs text-slate-500 leading-relaxed font-medium">{p.description}</p>
                 </motion.div>
               );
             })}
@@ -476,15 +480,17 @@ export default function LandingPage() {
                 </p>
 
                 <div className="flex items-center gap-3">
-                  <img
+                  <SafeImage
                     src={testimonials[activeTestimonial].avatar}
                     alt={testimonials[activeTestimonial].author}
-                    className="w-10 h-10 rounded-full object-cover border border-white/[0.08]"
-                    loading="lazy"
+                    className="w-10 h-10 rounded-full border border-white/[0.08]"
+                    imgClassName="w-full h-full object-cover"
+                    size="thumb"
+                    fallback="avatar"
                   />
                   <div>
                     <h4 className="text-xs font-bold text-white">{testimonials[activeTestimonial].author}</h4>
-                    <p className="text-[10px] text-slate-450 font-bold">{testimonials[activeTestimonial].role}</p>
+                    <p className="text-[10px] text-slate-500 font-bold">{testimonials[activeTestimonial].role}</p>
                   </div>
                 </div>
               </motion.div>
@@ -542,7 +548,7 @@ export default function LandingPage() {
                       exit={{ height: 0, opacity: 0 }}
                       transition={{ duration: 0.25 }}
                     >
-                      <div className="px-6 pb-6 text-xs sm:text-sm text-slate-450 leading-relaxed border-t border-white/[0.03] pt-4 font-medium">
+                      <div className="px-6 pb-6 text-xs sm:text-sm text-slate-500 leading-relaxed border-t border-white/[0.03] pt-4 font-medium">
                         {faq.a}
                       </div>
                     </motion.div>

@@ -10,6 +10,7 @@
     "lint": "eslint .",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand",
     "rebuild-profiles": "node scripts/rebuildProfiles.js",
+    "migrate-analytics": "node scripts/migrateAnalyticsSnapshots.js",
     "postinstall": "pip install --break-system-packages twscrape twikit || pip install twscrape twikit || true && npx playwright install chromium --with-deps || npx playwright install chromium"
   },
   "keywords": [],
@@ -19,6 +20,7 @@
   "dependencies": {
     "axios": "^1.17.0",
     "bcryptjs": "^3.0.3",
+    "compression": "^1.8.1",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",

@@ -11,9 +11,12 @@ import {
   getGrowthRate,
   getDashboardOverview,
   getForecast,
+  getAnalyticsSeries,
+  getAnalyticsLatest,
+  getAnalyticsCompare,
 } from "../controllers/analyticsController.js";
 import { protect } from "../middleware/authMiddleware.js";
-import { param } from "express-validator";
+import { param, query } from "express-validator";
 import { validateResult } from "../middleware/validationMiddleware.js";
 
 const router = express.Router();
@@ -24,13 +27,32 @@ router.get("/top-videos", getTopVideos);
 router.get("/highest-engagement", getHighestEngagement);
 router.get("/dashboard-overview", getDashboardOverview);
 router.get("/compare", compareAccounts);
+router.get(
+  "/compare-metrics",
+  query("ids").notEmpty().withMessage("ids is required"),
+  validateResult,
+  getAnalyticsCompare
+);
 
-// Param validations for endpoints requiring accountId
 router.get(
   "/channel-summary/:accountId",
   param("accountId").isMongoId().withMessage("Invalid account ID format"),
   validateResult,
   getChannelSummary
+);
+
+router.get(
+  "/series/:accountId",
+  param("accountId").isMongoId().withMessage("Invalid account ID format"),
+  validateResult,
+  getAnalyticsSeries
+);
+
+router.get(
+  "/latest/:accountId",
+  param("accountId").isMongoId().withMessage("Invalid account ID format"),
+  validateResult,
+  getAnalyticsLatest
 );
 
 router.get(

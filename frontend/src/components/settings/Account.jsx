@@ -53,7 +53,7 @@ export default function Account({ user }) {
     {
       title: "Workspace Identifier",
       value: stats?.workspaceId || `ws_${user?._id?.substring(0, 8) || "—"}`,
-      desc: "Team shared namespace",
+      desc: "Shared team namespace",
       icon: <Layers className="text-sky-400" size={18} />,
       isCode: true,
     },

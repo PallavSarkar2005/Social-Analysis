@@ -15,6 +15,8 @@ import {
   Tooltip as ChartTooltip, ResponsiveContainer, CartesianGrid
 } from "recharts";
 import { PARTY_LOGOS } from "../config/partyThemes";
+import SafeImage from "../components/common/SafeImage";
+import InsufficientData from "../components/charts/InsufficientData";
 
 // Utility to format large numbers
 const fmt = (n) => {
@@ -100,35 +102,35 @@ export default function HistoryLogs() {
     subscribers: {
       title: "Subscriber Growth",
       icon: TrendingUp,
-      color: "#6366f1", // Indigo
+      color: "#a855f7",
       dataKey: "followers",
       type: "area",
     },
     views: {
       title: "View Growth Timeline",
       icon: Eye,
-      color: "#10b981", // Emerald
+      color: "#3b82f6",
       dataKey: "views",
       type: "area",
     },
     engagement: {
       title: "Recent Video Engagement Rate",
       icon: Percent,
-      color: "#8b5cf6", // Violet
+      color: "#10b981",
       dataKey: "engagementRate",
       type: "line",
     },
     avgEngagement: {
       title: "Average Engagement Trend",
       icon: Sparkles,
-      color: "#f59e0b", // Amber
+      color: "#10b981",
       dataKey: "averageEngagement",
       type: "line",
     },
     videos: {
       title: "Video Upload Timeline",
       icon: Video,
-      color: "#ec4899", // Pink
+      color: "#ec4899",
       dataKey: "videos",
       type: "bar",
     },
@@ -301,8 +303,16 @@ export default function HistoryLogs() {
                     </div>
                   </div>
 
-                  {/* Chart rendering */}
+                  {/* Chart rendering — AnalyticsEngine history; never invent points */}
                   <div className="w-full h-[260px]">
+                    {history.length < 2 ? (
+                      <InsufficientData
+                        title="Insufficient verified data"
+                        reason={`Need at least 2 verified snapshots for ${activeChart.title}. Currently ${history.length}.`}
+                        metric={activeChartTab}
+                        minHeight={260}
+                      />
+                    ) : (
                     <ResponsiveContainer width="100%" height="100%">
                       {activeChart.type === "area" ? (
                         <AreaChart data={history} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
@@ -382,6 +392,7 @@ export default function HistoryLogs() {
                         </BarChart>
                       )}
                     </ResponsiveContainer>
+                    )}
                   </div>
                 </div>
 
@@ -576,7 +587,15 @@ function CustomTooltip({ active, payload, activeTab, color }) {
           <div className="flex items-center gap-1">
             <span>Party:</span>
             {PARTY_LOGOS[data.party] ? (
-              <img src={PARTY_LOGOS[data.party]} alt="" className="w-3.5 h-3.5 rounded-sm object-cover" />
+              <SafeImage
+                src={PARTY_LOGOS[data.party]}
+                alt={`${data.party} logo`}
+                className="w-3.5 h-3.5 rounded-sm"
+                imgClassName="w-full h-full object-contain"
+                size="thumb"
+                skeleton={false}
+                blurUp={false}
+              />
             ) : null}
             <span>{data.party}</span>
           </div>

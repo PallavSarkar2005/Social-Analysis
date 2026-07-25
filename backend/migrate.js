@@ -17,26 +17,38 @@ const runMigration = async () => {
     await mongoose.connect(process.env.MONGO_URI);
     console.log("Connected successfully!");
 
-    // 1. Create default user if not exists
-    const defaultEmail = "default@socialiq.com";
-    let defaultUser = await User.findOne({ email: defaultEmail });
+    // 1. Resolve migration owner user (never create weak hardcoded credentials)
+    const defaultEmail = process.env.MIGRATION_DEFAULT_EMAIL;
+    const defaultPassword = process.env.MIGRATION_DEFAULT_PASSWORD;
+    let defaultUser = defaultEmail
+      ? await User.findOne({ email: defaultEmail.toLowerCase() })
+      : null;
 
-    if (!defaultUser) {
-      console.log(`\nCreating default user: ${defaultEmail}...`);
-      const salt = await bcrypt.genSalt(10);
-      const passwordHash = await bcrypt.hash("password123", salt);
+    if (!defaultUser && defaultEmail && defaultPassword) {
+      if (defaultPassword.length < 12) {
+        throw new Error(
+          "MIGRATION_DEFAULT_PASSWORD must be at least 12 characters.",
+        );
+      }
+      console.log(`\nCreating migration user: ${defaultEmail}...`);
+      const salt = await bcrypt.genSalt(12);
+      const passwordHash = await bcrypt.hash(defaultPassword, salt);
 
       defaultUser = await User.create({
-        name: "Default User",
-        email: defaultEmail,
+        name: process.env.MIGRATION_DEFAULT_NAME || "Migration User",
+        email: defaultEmail.toLowerCase(),
         passwordHash,
         role: "user",
-        plan: "pro",
-        avatar: "https://api.dicebear.com/7.x/adventurer/svg?seed=Default",
+        plan: "free",
+        avatar: "https://api.dicebear.com/7.x/adventurer/svg?seed=Migration",
       });
-      console.log(`Default user created with ID: ${defaultUser._id}`);
+      console.log(`Migration user created with ID: ${defaultUser._id}`);
+    } else if (defaultUser) {
+      console.log(`\nMigration user already exists (ID: ${defaultUser._id})`);
     } else {
-      console.log(`\nDefault user already exists (ID: ${defaultUser._id})`);
+      throw new Error(
+        "Set MIGRATION_DEFAULT_EMAIL (and MIGRATION_DEFAULT_PASSWORD if creating) before running migrate.js. Hardcoded default credentials are not allowed.",
+      );
     }
 
     const defaultUserId = defaultUser._id;
