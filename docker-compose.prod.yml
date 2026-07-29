@@ -1,0 +1,49 @@
+# Production-oriented compose (self-hosted).
+# Prefer managed MongoDB in real production; mongo service is optional.
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    restart: always
+    env_file:
+      - ./backend/.env
+    environment:
+      NODE_ENV: production
+      PORT: "5000"
+    expose:
+      - "5000"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:5000/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+    # Scale: docker compose -f docker-compose.prod.yml up -d --scale backend=2
+    # Note: disable duplicate crons when scaling (run a single worker).
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+      args:
+        # Browser-facing origin (nginx proxies /api → backend). Replace with public HTTPS URL in real prod.
+        VITE_API_URL: http://localhost
+    restart: always
+    ports:
+      - "80:80"
+      # - "443:443"
+    depends_on:
+      backend:
+        condition: service_healthy
+    # volumes:
+    #   - ./certs:/etc/nginx/certs:ro
+
+  # Optional local Mongo (omit if using Atlas)
+  # mongo:
+  #   image: mongo:7
+  #   restart: always
+  #   volumes:
+  #     - mongo_prod:/data/db
+  #   command: ["--auth"]

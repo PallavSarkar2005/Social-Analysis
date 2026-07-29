@@ -1,0 +1,28 @@
+# Ignore dependency and build outputs
+**/node_modules
+**/dist
+**/coverage
+**/.git
+**/.venv
+**/__pycache__
+
+# Env and secrets
+**/.env
+**/.env.*
+!**/.env.example
+
+# Storage / caches
+backend/storage
+backend/tmp
+backend/scratch
+**/*.log
+
+# IDE / OS
+.cursor
+.vscode
+.idea
+.DS_Store
+Thumbs.db
+
+# Tests / docs assets not needed in image (optional keep)
+**/agent-transcripts
