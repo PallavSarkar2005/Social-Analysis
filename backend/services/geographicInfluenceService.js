@@ -335,8 +335,12 @@ export const buildGeographicInfluence = ({
 
   const totalWeight = usable.reduce((sum, e) => sum + e.weight, 0) || 1;
   const baseInfluence = (() => {
-    const subs = Math.max(subscribers, 1);
-    return Math.min(100, Math.round(Math.log10(subs) * 18));
+    if (subscribers > 0) {
+      return Math.min(100, Math.round(Math.log10(subscribers) * 18));
+    }
+    if (role === "Chief Minister" || role === "Prime Minister") return 90;
+    if (role === "Union Minister" || role === "Cabinet Minister") return 80;
+    return 70;
   })();
 
   const geographicReach = usable

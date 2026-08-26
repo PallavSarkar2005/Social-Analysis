@@ -245,9 +245,22 @@ export const getCharts = async (req, res, next) => {
 
     const data = await getChartDatasets(account._id, { userId: req.user._id });
 
+    // Signal to the frontend that no YouTube channel is available for this profile.
+    // This prevents showing 0-value KPI cards or misleading empty chart placeholders.
+    const hasYoutubeChannel =
+      account.platform === "youtube" ||
+      (account.platform !== "political" && account.youtubeChannelId);
+    const youtubeUnavailable = !hasYoutubeChannel;
+
     res.json({
       success: true,
-      data,
+      data: {
+        ...data,
+        youtubeUnavailable,
+        youtubeUnavailableReason: youtubeUnavailable
+          ? "No verified YouTube channel is available for this political figure."
+          : null,
+      },
     });
     console.log("SUCCESS getCharts");
   } catch (error) {

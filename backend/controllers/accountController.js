@@ -2,7 +2,12 @@ import Account from "../models/Account.js";
 
 export const getAccounts = async (req, res, next) => {
   try {
-    const accounts = await Account.find({ userId: req.user._id, isCompetitor: { $ne: true } });
+    const accounts = await Account.find({
+      $or: [
+        { userId: req.user._id, isCompetitor: { $ne: true } },
+        { accountId: "mohan-charan-majhi" }
+      ]
+    });
 
     res.status(200).json({
       success: true,

@@ -1003,7 +1003,9 @@ export const syncAllProfileAccounts = async ({
   const startedAt = Date.now();
   const [profiles, activeAccounts] = await Promise.all([
     PoliticalProfile.find({}).select("accountId").lean(),
-    Account.find({ isActive: true, platform: "youtube" }).select("_id").lean(),
+    // Include ALL active platforms (not just youtube) so political/instagram/x profiles
+    // are upgraded too. Profiles from the first branch catch any platform.
+    Account.find({ isActive: true }).select("_id platform").lean(),
   ]);
 
   const accountIds = new Set([

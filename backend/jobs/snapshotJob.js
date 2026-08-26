@@ -64,6 +64,11 @@ export const runSnapshotSync = async (frequencyLabel = "Scheduled") => {
             followers = parseMetric(profile.followers);
             views = 0;
           }
+        } else if (account.platform === "political") {
+          // Political platform profiles have no YouTube/X channel to sync.
+          // Skip silently — this is not a failure.
+          console.log(`[Snapshot Job] Skipped ${account.name} (platform=political, no social channel to sync).`);
+          continue;
         }
 
         // Only save snapshot if we retrieved a valid status (e.g. followers > 0 or views > 0)

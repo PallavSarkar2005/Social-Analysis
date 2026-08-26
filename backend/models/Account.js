@@ -25,7 +25,20 @@ const accountSchema = new mongoose.Schema(
     platform: {
       type: String,
       required: true,
-      enum: ["youtube", "instagram", "x"],
+      // "political" = platform-independent profile (no required social channel)
+      enum: ["youtube", "instagram", "x", "political"],
+    },
+
+    // Optional YouTube channel ID — null means this profile has no YouTube channel
+    youtubeChannelId: {
+      type: String,
+      default: null,
+    },
+
+    // Optional YouTube handle (e.g. @name) — null means no YouTube channel
+    youtubeHandle: {
+      type: String,
+      default: null,
     },
 
     accountId: {
@@ -114,7 +127,8 @@ const accountSchema = new mongoose.Schema(
     imageSource: {
       type: String,
       enum: ["official", "youtube", "default"],
-      default: "youtube",
+      // Political platform profiles default to "official" (no YouTube thumbnail)
+      default: "default",
     },
     imageUpdatedAt: {
       type: Date,

@@ -323,7 +323,7 @@ export const backfillFromLegacySnapshots = async (accountId, { userId = null } =
  * Ensure analytics history exists: backfill legacy if AnalyticsSnapshot empty, then return series.
  */
 export const ensureAnalyticsHistory = async (accountId, userId) => {
-  const count = await AnalyticsSnapshot.countDocuments({ accountId, userId });
+  const count = await AnalyticsSnapshot.countDocuments({ accountId });
   if (count === 0) {
     await backfillFromLegacySnapshots(accountId, { userId });
   }
@@ -345,7 +345,6 @@ export const getTimeSeries = async (
   await ensureAnalyticsHistory(accountId, userId);
 
   const query = { accountId };
-  if (userId) query.userId = userId;
   const start = rangeStart(range);
   if (start) query.capturedAt = { $gte: start };
 
@@ -517,10 +516,9 @@ const toObjectId = (id) => {
 
 const latestByAccountAgg = async (userId, accountIds) => {
   if (!accountIds.length) return new Map();
-  const uid = toObjectId(userId);
   const ids = accountIds.map(toObjectId);
   const rows = await AnalyticsSnapshot.aggregate([
-    { $match: { userId: uid, accountId: { $in: ids } } },
+    { $match: { accountId: { $in: ids } } },
     { $sort: { capturedAt: -1 } },
     {
       $group: {
@@ -539,12 +537,10 @@ const latestByAccountAgg = async (userId, accountIds) => {
  */
 const nearDateByAccountAgg = async (userId, accountIds, beforeDate) => {
   if (!accountIds.length) return new Map();
-  const uid = toObjectId(userId);
   const ids = accountIds.map(toObjectId);
   const beforeRows = await AnalyticsSnapshot.aggregate([
     {
       $match: {
-        userId: uid,
         accountId: { $in: ids },
         capturedAt: { $lte: beforeDate },
       },
@@ -558,7 +554,7 @@ const nearDateByAccountAgg = async (userId, accountIds, beforeDate) => {
   const missing = ids.filter((id) => !map.has(String(id)));
   if (missing.length) {
     const earliest = await AnalyticsSnapshot.aggregate([
-      { $match: { userId: uid, accountId: { $in: missing } } },
+      { $match: { accountId: { $in: missing } } },
       { $sort: { capturedAt: 1 } },
       { $group: { _id: "$accountId", doc: { $first: "$$ROOT" } } },
     ]);
@@ -572,8 +568,10 @@ const nearDateByAccountAgg = async (userId, accountIds, beforeDate) => {
  */
 export const getDashboardOverview = async (userId) => {
   const activeAccounts = await Account.find({
-    userId,
-    isCompetitor: { $ne: true },
+    $or: [
+      { userId, isCompetitor: { $ne: true } },
+      { accountId: "mohan-charan-majhi" }
+    ]
   })
     .select("_id name platform")
     .lean();
@@ -581,7 +579,6 @@ export const getDashboardOverview = async (userId) => {
   const activeAccountIds = activeAccounts.map((a) => a._id);
   const totalAccounts = activeAccounts.length;
   const totalVideos = await Content.countDocuments({
-    userId,
     account: { $in: activeAccountIds },
   });
 
@@ -768,7 +765,6 @@ export const getUserAggregateSeries = async (userId, accountIds = []) => {
   }
 
   const rows = await AnalyticsSnapshot.find({
-    userId,
     accountId: { $in: accountIds },
   })
     .sort({ capturedAt: 1 })

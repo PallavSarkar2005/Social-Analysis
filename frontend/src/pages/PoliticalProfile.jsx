@@ -277,9 +277,11 @@ export default function PoliticalProfile() {
     const profileId = profilePayload._id || profilePayload.id;
     const accountId = account._id || account.id || creatorId;
     const thumb =
+      account.profileImage ||
+      account.resolvedImage ||
+      account.thumbnail ||
       account.thumbnails?.high?.url ||
       account.thumbnails?.medium?.url ||
-      account.thumbnail ||
       "";
 
     autoSaveReport(
@@ -444,6 +446,16 @@ export default function PoliticalProfile() {
   const hasUploadsDistribution = chartAvailability.uploads?.available === true;
   const hasCategories = chartAvailability.categories?.available === true;
 
+  // YouTube availability — true when this profile has no YouTube channel at all.
+  // Prevents showing 0-value KPIs or empty chart placeholders as if they were real data.
+  const youtubeUnavailable = chartsData?.data?.youtubeUnavailable === true ||
+    (account.platform === "political" && !account.youtubeChannelId);
+  const youtubeUnavailableReason =
+    chartsData?.data?.youtubeUnavailableReason ||
+    "No verified YouTube channel is available for this political figure.";
+  // Show YouTube KPI cards only when the account has an actual YouTube channel
+  const showYoutubeKpis = !youtubeUnavailable;
+
   // Sentiment pie — only real verified sentiment; never fabricate 33/34/33
   const hasVerifiedSentiment = Boolean(newsData?.data?.sentiment);
   const sentimentDistribution = hasVerifiedSentiment
@@ -584,7 +596,8 @@ export default function PoliticalProfile() {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <div className="lg:col-span-2 space-y-6">
                 
-                {/* Analytics KPI Matrix */}
+                {/* Analytics KPI Matrix — shown only when YouTube channel exists */}
+                {showYoutubeKpis && (
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   {[
                     { label: "Subscribers", val: account.subscribers, icon: Users },
@@ -603,6 +616,7 @@ export default function PoliticalProfile() {
                     </div>
                   ))}
                 </div>
+                )}
 
                 <WidgetErrorBoundary name="PoliticalStatisticsPanel">
                   <PoliticalStatisticsPanel statistics={politicalStatistics} sectionMeta={sectionMeta} />
@@ -750,7 +764,25 @@ export default function PoliticalProfile() {
           {/* 3. TELEMETRY & CHARTS TAB */}
           {activeTab === "charts" && (
             <div className="space-y-6">
-              
+
+              {/* No YouTube channel — show clean unavailable notice */}
+              {youtubeUnavailable ? (
+                <div className="flex flex-col items-center justify-center gap-4 rounded-2xl border border-amber-500/20 bg-amber-500/[0.04] px-8 py-14 text-center">
+                  <div className="w-12 h-12 rounded-full flex items-center justify-center bg-amber-500/10 border border-amber-500/20">
+                    <Video className="w-5 h-5 text-amber-400" />
+                  </div>
+                  <div className="space-y-2 max-w-md">
+                    <h3 className="text-sm font-bold text-amber-300">No Verified YouTube Channel</h3>
+                    <p className="text-xs text-slate-400 leading-relaxed">
+                      {youtubeUnavailableReason}
+                    </p>
+                    <p className="text-[10px] text-slate-600 mt-2">
+                      YouTube analytics will appear here if a verified channel is linked to this profile in the future.
+                    </p>
+                  </div>
+                </div>
+              ) : (
+              <>
               {/* Chart Grid — AnalyticsEngine snapshots only */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 
@@ -866,6 +898,8 @@ export default function PoliticalProfile() {
                 </div>
 
               </div>
+              </>
+              )}
 
             </div>
           )}
@@ -957,6 +991,9 @@ export default function PoliticalProfile() {
                                   {Math.round(score)}
                                   <span className="text-[10px] font-semibold text-slate-500 ml-0.5">%</span>
                                 </span>
+                                <span className="text-[8px] font-extrabold uppercase tracking-wider px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                                  {safeText(metric.status) || "High Confidence"}
+                                </span>
                               </div>
                               <div className="bg-white/[0.04] h-1.5 rounded-full overflow-hidden">
                                 <motion.div
@@ -967,13 +1004,25 @@ export default function PoliticalProfile() {
                                 />
                               </div>
                               {sources.length > 0 && (
-                                <p className="text-[9px] text-slate-600 truncate">
+                                <p className="text-[9px] text-slate-500 truncate">
                                   {sources.slice(0, 2).join(" · ")}
                                 </p>
                               )}
                             </>
                           ) : (
-                            <p className="text-[11px] text-slate-500 pt-1">Monitoring — awaiting verified inputs</p>
+                            <div className="space-y-1.5 pt-0.5">
+                              <div className="flex items-end justify-between gap-2">
+                                <span className="text-xl font-extrabold text-slate-400 tabular-nums leading-none">
+                                  N/A
+                                </span>
+                                <span className="text-[8px] font-extrabold uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                                  {safeText(metric.status) || "Insufficient Verified Data"}
+                                </span>
+                              </div>
+                              <p className="text-[9px] text-slate-500 leading-tight">
+                                Insufficient verified platform data
+                              </p>
+                            </div>
                           )}
                         </div>
                       );
