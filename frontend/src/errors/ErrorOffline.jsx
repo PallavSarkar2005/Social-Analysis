@@ -1,4 +1,3 @@
-import React from "react";
 import { CloudOff, RefreshCw, Layers, ArrowLeft } from "lucide-react";
 import { motion } from "framer-motion";
 

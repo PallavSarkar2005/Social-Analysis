@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import SidebarLayout from "../components/layout/Sidebar";
 import Navbar from "../components/layout/Navbar";
 import { useAuth } from "../context/AuthContext";
@@ -163,7 +163,7 @@ export default function SettingsEngine() {
       } else {
         toast.error(res.message || "Failed to unlink Google account");
       }
-    } catch (err) {
+    } catch (_err) {
       toast.error("An error occurred during Google disconnection.");
     }
   };
@@ -175,7 +175,7 @@ export default function SettingsEngine() {
       if (res.data && res.data.success) {
         toast.success("Notification preferences updated.");
       }
-    } catch (err) {
+    } catch (_err) {
       toast.error("Failed to update notification preferences.");
     }
   };
@@ -218,7 +218,7 @@ export default function SettingsEngine() {
         toast.success("Logged out of all other devices.");
         await fetchSessions();
       }
-    } catch (err) {
+    } catch (_err) {
       toast.error("Failed to revoke other sessions.");
     }
   };

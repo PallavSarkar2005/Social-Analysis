@@ -74,8 +74,8 @@ const extractMemberContext = (html, name) => {
   const rowMatch = snippet.match(/<tr[^>]*>[\s\S]*?<\/tr>/i);
   const text = stripHtml(rowMatch ? rowMatch[0] : snippet);
 
-  const constituencyMatch = text.match(/(?:constituency|seat|from)\s*[:\-]?\s*([A-Za-z0-9\s\-()]+)/i);
-  const partyMatch = text.match(/(?:party|political party)\s*[:\-]?\s*([A-Za-z0-9\s\-()]+)/i);
+  const constituencyMatch = text.match(/(?:constituency|seat|from)\s*[:-]?\s*([A-Za-z0-9\s()-]+)/i);
+  const partyMatch = text.match(/(?:party|political party)\s*[:-]?\s*([A-Za-z0-9\s()-]+)/i);
 
   return {
     text: text.slice(0, 600),

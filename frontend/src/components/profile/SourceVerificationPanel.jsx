@@ -1,5 +1,4 @@
-import React from "react";
-import { CheckCircle2, Circle, ExternalLink, Shield } from "lucide-react";
+import { CheckCircle2, ExternalLink, Shield } from "lucide-react";
 
 import { safeArray } from "../../utils/profileFacts";
 import { formatIndianDate } from "../../utils/dateFormatter";

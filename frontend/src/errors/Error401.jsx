@@ -1,5 +1,4 @@
-import React from "react";
-import { Lock, LogIn, ArrowLeft, Layers } from "lucide-react";
+import { Lock, LogIn, ArrowLeft } from "lucide-react";
 import { motion } from "framer-motion";
 
 export default function Error401() {

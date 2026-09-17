@@ -1,4 +1,4 @@
-import React from "react";
+
 import {
   User,
   Calendar,
@@ -44,7 +44,7 @@ export default function VerifiedProfileCard({
   verifiedFacts: apiFacts = [],
   fieldProvenance = {},
   confidenceScore,
-  confidenceBreakdown = {},
+  confidenceBreakdown: _confidenceBreakdown = {},
   verifiedAt,
   sources = [],
 }) {

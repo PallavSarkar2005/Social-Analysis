@@ -63,7 +63,7 @@ export default function Register() {
       } else {
         toast.error(res.message || "Google Authentication failed");
       }
-    } catch (err) {
+    } catch (_err) {
       toast.error("An error occurred during Google sign-in.");
     } finally {
       setLoading(false);
@@ -74,7 +74,7 @@ export default function Register() {
   const hasMinLength = password.length >= 8;
   const hasNumber = /\d/.test(password);
   const hasUppercase = /[A-Z]/.test(password);
-  const hasSpecialChar = /[@$!%*?&#^()_+=\[\]{};':"\\|,.<>\/?~`-]/.test(password);
+  const hasSpecialChar = /[@$!%*?&#^()_+=[\]{};':"\\|,.<>/?~`-]/.test(password);
 
   const calculateStrength = () => {
     let score = 0;
@@ -115,7 +115,7 @@ export default function Register() {
       } else {
         toast.error(res.message || "Registration failed. Try again.");
       }
-    } catch (err) {
+    } catch (_err) {
       toast.error("An error occurred during registration.");
     } finally {
       setLoading(false);

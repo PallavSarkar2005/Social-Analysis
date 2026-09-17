@@ -3,11 +3,10 @@ import Sidebar from "../components/layout/Sidebar";
 import Navbar from "../components/layout/Navbar";
 import { useAccounts, useSnapshots } from "../hooks/useQueries";
 import {
-  Calendar, Layers, ShieldAlert, TrendingUp, TrendingDown,
-  Eye, Video, Percent, Sparkles, Clock, RefreshCw, BarChart2,
-  Tv, Heart, MessageSquare
+  Calendar, Layers, ShieldAlert, TrendingUp,
+  Eye, Video, Percent, Sparkles, Clock, RefreshCw
 } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+
 import { formatIndianDateTime } from "../utils/dateFormatter";
 import {
   AreaChart, Area, BarChart, Bar,

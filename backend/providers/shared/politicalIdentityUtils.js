@@ -56,7 +56,7 @@ const STATE_ALIASES = [
   { pattern: /\bandhra pradesh\b/i, state: "Andhra Pradesh" },
   { pattern: /\bkerala\b/i, state: "Kerala" },
   { pattern: /\bnct of delhi\b|\bnew delhi\b|\bdelhi\b/i, state: "Delhi" },
-  { pattern: /\bjammu (and|&) kashmir\b|\bj\&k\b/i, state: "Jammu and Kashmir" },
+  { pattern: /\bjammu (and|&) kashmir\b|\bj&k\b/i, state: "Jammu and Kashmir" },
   { pattern: /\bladakh\b/i, state: "Ladakh" },
   { pattern: /\bgoa\b/i, state: "Goa" },
   { pattern: /\bpuducherry\b|\bpondicherry\b/i, state: "Puducherry" },

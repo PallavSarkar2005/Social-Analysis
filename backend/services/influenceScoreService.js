@@ -212,7 +212,7 @@ export const calculateInfluenceMetrics = ({
 
   // Dynamic Overall Influence Calculation
   // If Digital Presence is N/A, normalize remaining weights (Political Reach 30%, Election Strength 25%, Media Visibility 20%, Public Engagement 15%, Verified Confidence 10%)
-  let influenceScore = 0;
+  let influenceScore;
   if (!hasVerifiedDigitalTelemetry) {
     const wPolitical = 0.30;
     const wElection = 0.25;

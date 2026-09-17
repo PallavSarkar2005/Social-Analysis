@@ -1,5 +1,4 @@
 import { scrapeXProfile } from "../scrapers/xScraper.js";
-import axios from "axios";
 import { generateCreatorComparisonReport } from "../services/aiCompareService.js";
 import { getChannelByHandle, unescapeUrl } from "./analyzerController.js";
 import { youtubeGet } from "../utils/youtubeClient.js";
@@ -169,8 +168,6 @@ const resolveChannelId = async (input) => {
 
   const cleanInput = unescapeUrl(input.trim());
   console.log("Unescaped Input:", cleanInput);
-
-  let targetHandleOrId = "";
 
   // 1. If it contains channel/channelId
   if (cleanInput.includes("/channel/")) {

@@ -69,7 +69,7 @@ export default function Login() {
       } else {
         toast.error(res.message || "Google Authentication failed");
       }
-    } catch (err) {
+    } catch (_err) {
       toast.error("An error occurred during Google sign-in.");
     } finally {
       setLoading(false);
@@ -98,7 +98,7 @@ export default function Login() {
       } else {
         toast.error(res.message || "Invalid credentials");
       }
-    } catch (err) {
+    } catch (_err) {
       toast.error("An error occurred. Please try again.");
     } finally {
       setLoading(false);

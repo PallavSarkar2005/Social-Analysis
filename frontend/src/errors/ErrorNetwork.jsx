@@ -1,5 +1,4 @@
-import React from "react";
-import { WifiOff, RefreshCw, Layers, ShieldCheck } from "lucide-react";
+import { WifiOff, RefreshCw, Layers } from "lucide-react";
 import { motion } from "framer-motion";
 
 export default function ErrorNetwork() {

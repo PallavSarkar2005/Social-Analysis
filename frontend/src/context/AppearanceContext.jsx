@@ -72,7 +72,7 @@ export function AppearanceProvider({ children }) {
     // Persist to localStorage immediately (works for guests and as backup for auth users)
     try {
       localStorage.setItem(LS_KEY, JSON.stringify(prefs));
-    } catch (_) {}
+    } catch (_e) { /* ignore storage errors */ }
   }, [prefs, applyToDOM]);
 
   // Listen for system color-scheme change when theme === "system"

@@ -123,7 +123,7 @@ export default function Navbar() {
       await logout();
       toast.success("Logged out successfully");
       navigate("/login");
-    } catch (e) {
+    } catch (_e) {
       toast.error("Logout failed");
     }
   };

@@ -24,7 +24,7 @@ export function stripReportTitleSuffix(title) {
   if (!hasText(title)) return title || "";
   return String(title)
     .replace(
-      /\s*[—–\-]\s*(Political Profile|Election Intelligence|Influence Intelligence|News & Sentiment|Timeline Report|Political Intelligence Report)\s*$/i,
+      /\s*[—–-]\s*(Political Profile|Election Intelligence|Influence Intelligence|News & Sentiment|Timeline Report|Political Intelligence Report)\s*$/i,
       ""
     )
     .trim();

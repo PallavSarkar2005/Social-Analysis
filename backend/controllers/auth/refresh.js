@@ -67,7 +67,7 @@ export const refresh = async (req, res, next) => {
       });
     }
 
-    const { accessToken, refreshToken, maxAgeMs, payload } =
+    const { refreshToken, maxAgeMs, payload } =
       await rotateRefreshToken(user, session, req);
 
     setRefreshTokenCookieWithMaxAge(res, req, refreshToken, maxAgeMs);

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { Shield, Key, Eye, EyeOff, Fingerprint, Lock, ShieldAlert, RefreshCw } from "lucide-react";
 import toast from "react-hot-toast";
 import { useSecurityPreferences, useUpdateSecurityPreferences } from "../../hooks/useQueries";

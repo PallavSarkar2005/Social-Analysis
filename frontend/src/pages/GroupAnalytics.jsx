@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useParams, Link } from "react-router-dom";
 import Sidebar from "../components/layout/Sidebar";
 import Navbar from "../components/layout/Navbar";
@@ -10,10 +10,10 @@ import { useQueryClient } from "@tanstack/react-query";
 import { healGroupImageUrls } from "../api/groupApi";
 
 import {
-  Users, Eye, Video, TrendingUp, Clock, ArrowLeft,
-  RefreshCw, Award, ChevronRight, Grid, List, Globe,
-  Star, Zap, BarChart2, UserCheck, CalendarDays,
-  TrendingDown, MapPin, Flame, Trash2, AlertTriangle, X,
+  Users, Eye, Video, TrendingUp,
+  RefreshCw, Award, Grid, List, Globe,
+  Zap, BarChart2, UserCheck, CalendarDays,
+  MapPin, Trash2, AlertTriangle, X,
 } from "lucide-react";
 
 // Reusable components
@@ -21,7 +21,7 @@ import StatCard from "../components/common/StatCard";
 import LeaderHeader from "../components/common/LeaderHeader";
 import CreatorCard from "../components/common/CreatorCard";
 import LeaderAvatar from "../components/common/LeaderAvatar";
-import PartyBadge from "../components/common/PartyBadge";
+
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const fmt = (n) => {

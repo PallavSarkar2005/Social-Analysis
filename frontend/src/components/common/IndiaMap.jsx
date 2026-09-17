@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Info, MapPin, ShieldCheck, Newspaper, Landmark, X } from "lucide-react";
 import { INDIA_MAP_VIEWBOX, INDIA_STATE_PATHS } from "../../data/indiaStatesPaths";

@@ -50,7 +50,7 @@ const resolveGooglePayload = async (idToken) => {
   return payload;
 };
 
-export const googleSignIn = async (req, res, next) => {
+export const googleSignIn = async (req, res) => {
   const { idToken } = req.body;
   if (!idToken) {
     return res.status(400).json({
@@ -127,7 +127,7 @@ export const googleSignIn = async (req, res, next) => {
   }
 };
 
-export const googleConnect = async (req, res, next) => {
+export const googleConnect = async (req, res) => {
   const { idToken } = req.body;
   if (!idToken) {
     return res.status(400).json({
@@ -191,7 +191,7 @@ export const googleConnect = async (req, res, next) => {
         provider: user.provider,
       },
     });
-  } catch (error) {
+  } catch {
     res.status(400).json({
       success: false,
       message: "Linking Google account failed.",

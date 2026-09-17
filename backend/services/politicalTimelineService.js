@@ -862,7 +862,7 @@ export const normalizeElectionTypeLabel = (typeRaw = "") => {
   const isByeElection = /\bbye[-\s]?elections?\b/i.test(t);
 
   t = t
-    .replace(/\s*[—–\-]\s*(Elected|Re-elected|Winner|Won).*$/i, "")
+    .replace(/\s*[—–-]\s*(Elected|Re-elected|Winner|Won).*$/i, "")
     .replace(/\bElected MLA\b/gi, "")
     .trim();
 
@@ -1466,8 +1466,8 @@ export function cleanTimelineTitle(title = "", year = null) {
       .replace(new RegExp(`[,;·]\\s*${y}\\b`, "g"), "")
       .replace(new RegExp(`\\s*[—–\\-]\\s*${y}\\b`, "g"), "")
       .replace(new RegExp(`\\b${y}\\b`, "g"), "")
-      .replace(/\s*[—–\-]\s*$/g, "")
-      .replace(/^\s*[—–\-]\s*/g, "")
+      .replace(/\s*[—–-]\s*$/g, "")
+      .replace(/^\s*[—–-]\s*/g, "")
       .replace(/\s{2,}/g, " ")
       .trim();
   }

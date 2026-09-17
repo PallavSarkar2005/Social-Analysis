@@ -335,10 +335,6 @@ export const youtubeGet = async (endpoint, url, params = {}, forceRefresh = fals
 
   activeRequests.set(cacheKey, fetchPromise);
 
-  try {
-    const data = await fetchPromise;
-    return { data, cached: false, cachedAt: new Date() };
-  } catch (error) {
-    throw error;
-  }
+  const data = await fetchPromise;
+  return { data, cached: false, cachedAt: new Date() };
 };

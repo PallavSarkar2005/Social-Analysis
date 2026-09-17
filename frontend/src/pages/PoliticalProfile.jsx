@@ -1,12 +1,12 @@
-import React, { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useParams, Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import {
-  User, Calendar, MapPin, Award, Shield, Clock, ExternalLink, Globe,
-  Briefcase, GraduationCap, Trophy, Newspaper, Send, ArrowLeft,
-  ChevronRight, Sparkles, TrendingUp, Users, Eye, Video, BarChart2,
-  PieChart as PieIcon, ThumbsUp, MessageSquare, AlertCircle, Bot, Info
+  MapPin, Award, Shield, Clock, ExternalLink, Globe,
+  Newspaper, Send, ArrowLeft,
+  ChevronRight, TrendingUp, Users, Eye, Video,
+  AlertCircle, Bot, Info
 } from "lucide-react";
 import { ensureAccessToken } from "../api/client";
 import Sidebar from "../components/layout/Sidebar";
@@ -41,8 +41,7 @@ import {
   buildModuleReportPayload,
 } from "../utils/autoSaveReport";
 import {
-  ResponsiveContainer, LineChart, Line, BarChart, Bar,
-  XAxis, YAxis, Tooltip, PieChart, Pie, Cell, Legend
+  ResponsiveContainer, Tooltip, PieChart, Pie, Cell, Legend
 } from "recharts";
 
 const SENTIMENT_COLORS = ["#10b981", "#64748b", "#ef4444"]; // Positive (green), Neutral (slate), Negative (red)
@@ -88,7 +87,7 @@ export default function PoliticalProfile() {
   });
 
 
-  const { data: newsData, isLoading: newsLoading } = useQuery({
+  const { data: newsData, isLoading: _newsLoading } = useQuery({
     queryKey: ["profile-news", creatorId],
     queryFn: () => getProfileNews(creatorId),
     staleTime: 15 * 60 * 1000,
@@ -96,7 +95,7 @@ export default function PoliticalProfile() {
     enabled: activeTab === "news",
   });
 
-  const { data: chartsData, isLoading: chartsLoading } = useQuery({
+  const { data: chartsData, isLoading: _chartsLoading } = useQuery({
     queryKey: ["profile-charts", creatorId],
     queryFn: () => getProfileCharts(creatorId),
     staleTime: 5 * 60 * 1000,
@@ -204,7 +203,7 @@ export default function PoliticalProfile() {
                   return updated;
                 });
               }
-            } catch (e) {
+            } catch (_e) {
               // Ignore partial parsing errors
             }
           }
@@ -1287,11 +1286,3 @@ export default function PoliticalProfile() {
   );
 }
 
-function ChartEmptyState({ title, message }) {
-  return (
-    <div className="h-full flex flex-col items-center justify-center text-center rounded-xl border border-white/[0.04] border-dashed bg-white/[0.01] px-6">
-      <p className="text-xs font-semibold text-slate-400">{title}</p>
-      <p className="mt-2 text-[11px] leading-relaxed text-slate-500 max-w-xs">{message}</p>
-    </div>
-  );
-}

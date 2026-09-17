@@ -57,7 +57,7 @@ export const getVideoInsights = async (req, res, next) => {
           ],
         });
         responseContent = response.choices[0]?.message?.content || "";
-      } catch (err) {
+      } catch {
         console.warn("Primary Groq connection failed for video insights, retrying via OpenAI fallback...");
       }
     }
@@ -103,7 +103,7 @@ export const getVideoInsights = async (req, res, next) => {
 };
 
 // Conversational Political Research Assistant with Fallbacks & Mongoose RAG context injection
-export const chatAssistant = async (req, res, next) => {
+export const chatAssistant = async (req, res) => {
   const { message, history = [] } = req.body;
   if (!message) {
     return res.status(400).json({ success: false, message: "Prompt message is required." });
@@ -255,7 +255,6 @@ Be extremely precise, professional, and report comparisons, growth trajectories,
     ];
 
     let activeStream = null;
-    let fallbackUsed = false;
 
     // 1. Attempt Groq client
     if (process.env.GROQ_API_KEY) {
@@ -287,7 +286,6 @@ Be extremely precise, professional, and report comparisons, growth trajectories,
           messages,
           stream: true,
         });
-        fallbackUsed = true;
       } catch (err) {
         console.error("OpenAI chat fallback stream creation failed:", err.message);
       }

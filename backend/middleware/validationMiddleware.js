@@ -175,7 +175,7 @@ export const validateYoutubeUrl = [
         val.includes("youtube.com") ||
         val.includes("youtu.be") ||
         val.includes("youtube-nocookie.com");
-      const isHandle = val.startsWith("@") && /^[a-zA-Z0-9_\-\.]+$/.test(val.slice(1));
+      const isHandle = val.startsWith("@") && /^[a-zA-Z0-9_.-]+$/.test(val.slice(1));
       
       if (!isYoutubeUrl && !isHandle) {
         throw new Error("Must be a valid YouTube URL or channel handle (starting with @)");
@@ -377,7 +377,7 @@ export const validateAddCompetitor = [
           val.includes("youtube.com") ||
           val.includes("youtu.be") ||
           val.includes("youtube-nocookie.com");
-        const isHandle = val.startsWith("@") && /^[a-zA-Z0-9_\-\.]+$/.test(val.slice(1));
+        const isHandle = val.startsWith("@") && /^[a-zA-Z0-9_.-]+$/.test(val.slice(1));
         const isId = /^[a-zA-Z0-9_-]{24}$/.test(val);
         if (!isYoutubeUrl && !isHandle && !isId) {
           throw new Error("Must be a valid YouTube URL, handle (starting with @), or channel ID");

@@ -60,7 +60,7 @@ queryClient.getQueryCache().config.onError = (error) => {
         errorMessage: error?.message,
         route: window.location.pathname,
       }));
-    } catch (_) {}
+    } catch (_e) { /* ignore storage errors */ }
     window.location.href = path;
   }
 };

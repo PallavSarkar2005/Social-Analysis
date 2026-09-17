@@ -1,4 +1,3 @@
-import React from "react";
 import { AlertCircle, RefreshCw, ArrowLeft, Layers } from "lucide-react";
 import { motion } from "framer-motion";
 

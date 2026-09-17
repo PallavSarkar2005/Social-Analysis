@@ -68,7 +68,7 @@ function buildMultiSheetXlsx(datasets) {
 }
 
 function attachmentFilename(basename, ext) {
-  const safe = String(basename || "export").replace(/[^\w.\-]+/g, "_").slice(0, 80);
+  const safe = String(basename || "export").replace(/[^\w.-]+/g, "_").slice(0, 80);
   return `attachment; filename="${safe}.${ext}"; filename*=UTF-8''${encodeURIComponent(`${safe}.${ext}`)}`;
 }
 

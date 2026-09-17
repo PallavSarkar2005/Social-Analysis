@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { Key, Plus, Copy, Trash2, Eye, EyeOff, Calendar, Clock, Lock, RefreshCw } from "lucide-react";
 import toast from "react-hot-toast";
 import { formatIndianDate } from "../../utils/dateFormatter";

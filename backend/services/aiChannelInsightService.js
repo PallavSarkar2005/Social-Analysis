@@ -68,15 +68,15 @@ Provide:
     const msg = error.message || "";
     
     if (status === 401 || msg.includes("401") || msg.toLowerCase().includes("unauthorized") || msg.toLowerCase().includes("invalid_api_key")) {
-      throw new Error("Unauthorized: The GROQ_API_KEY configured on the server is invalid or inactive.");
+      throw new Error("Unauthorized: The GROQ_API_KEY configured on the server is invalid or inactive.", { cause: error });
     }
     if (status === 429 || msg.includes("429") || msg.toLowerCase().includes("rate limit") || msg.toLowerCase().includes("too many requests")) {
-      throw new Error("Rate limited: The AI insights service is currently rate limited. Please retry in a few moments.");
+      throw new Error("Rate limited: The AI insights service is currently rate limited. Please retry in a few moments.", { cause: error });
     }
     if (status === 400 || msg.includes("400") || msg.toLowerCase().includes("invalid request") || msg.toLowerCase().includes("bad request")) {
-      throw new Error("Invalid prompt: The request payload contained parameter formats rejected by the AI model.");
+      throw new Error("Invalid prompt: The request payload contained parameter formats rejected by the AI model.", { cause: error });
     }
     
-    throw new Error(`Backend exception: Failed to reach Groq API. Details: ${msg}`);
+    throw new Error(`Backend exception: Failed to reach Groq API. Details: ${msg}`, { cause: error });
   }
 };

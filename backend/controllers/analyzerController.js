@@ -1,4 +1,3 @@
-import axios from "axios";
 import Account from "../models/Account.js";
 import Snapshot from "../models/Snapshot.js";
 import { youtubeGet } from "../utils/youtubeClient.js";
@@ -95,7 +94,7 @@ export const extractVideoId = (url) => {
   console.log("LOG: [extractVideoId] Attempting extraction on URL:", url);
   try {
     // Matches standard watch?v=, short links youtu.be/, /embed/, /shorts/, /live/
-    const regex = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?|shorts|live)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/;
+    const regex = /(?:youtube\.com\/(?:[^/]+\/.+\/|(?:v|e(?:mbed)?|shorts|live)\/|.*[?&]v=)|youtu\.be\/)([^"&?/\s]{11})/;
     const match = url.match(regex);
     if (match && match[1]) {
       console.log("LOG: [extractVideoId] Regex match success:", match[1]);

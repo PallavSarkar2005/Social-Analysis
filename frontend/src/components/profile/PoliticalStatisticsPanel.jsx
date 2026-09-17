@@ -1,4 +1,3 @@
-import React from "react";
 import { BarChart2 } from "lucide-react";
 
 import { safeArray } from "../../utils/profileFacts";

@@ -1,8 +1,8 @@
-import React, { useCallback } from "react";
+import { useCallback } from "react";
 import { motion } from "framer-motion";
 import {
   Sparkles, Monitor, Sun, Moon, Check, Eye,
-  ToggleLeft, ToggleRight, Sliders, Zap, Type, Layout,
+  Sliders, Zap, Type, Layout,
 } from "lucide-react";
 import { useAppearance } from "../../context/AppearanceContext";
 
@@ -30,7 +30,7 @@ export default function Appearance() {
   const handleToggleCompact = useCallback(() => update({ compact: !compact }), [compact, update]);
 
   // Live preview theme helper
-  const previewBg   = theme === "light" ? "#f8fafc" : "#0d0e14";
+  const _previewBg   = theme === "light" ? "#f8fafc" : "#0d0e14";
   const previewCard = theme === "light" ? "#ffffff" : "#12141c";
   const previewText = theme === "light" ? "#0f172a" : "#e2e8f0";
   const previewMut  = theme === "light" ? "#64748b" : "#64748b";

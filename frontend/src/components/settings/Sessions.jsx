@@ -1,4 +1,3 @@
-import React from "react";
 import { Laptop, Smartphone, LogOut, Clock, Globe, RefreshCw } from "lucide-react";
 
 export default function Sessions({ sessions = [], onRevokeSession, loadingSessions }) {

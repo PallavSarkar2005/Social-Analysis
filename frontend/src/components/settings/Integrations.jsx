@@ -1,4 +1,3 @@
-import React from "react";
 import { Layers, ArrowUpRight, RefreshCw } from "lucide-react";
 import toast from "react-hot-toast";
 import { useIntegrations, useUpdateIntegration } from "../../hooks/useQueries";

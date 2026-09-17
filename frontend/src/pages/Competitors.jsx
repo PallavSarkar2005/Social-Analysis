@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import Sidebar from "../components/layout/Sidebar";
 import Navbar from "../components/layout/Navbar";
 import { useCompetitors } from "../hooks/useQueries";
@@ -39,7 +39,7 @@ import {
   Legend,
   CartesianGrid,
 } from "recharts";
-import { motion, AnimatePresence } from "framer-motion";
+import { AnimatePresence } from "framer-motion";
 import toast, { Toaster } from "react-hot-toast";
 
 export default function Competitors() {

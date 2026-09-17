@@ -1,4 +1,3 @@
-import React from "react";
 import { CreditCard, AlertTriangle, ArrowLeft, Layers } from "lucide-react";
 import { motion } from "framer-motion";
 

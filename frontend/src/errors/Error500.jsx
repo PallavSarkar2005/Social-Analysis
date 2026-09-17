@@ -1,4 +1,4 @@
-import React from "react";
+import { useState } from "react";
 import { ServerCrash, RefreshCw, ArrowLeft, Layers, ShieldAlert } from "lucide-react";
 import { motion } from "framer-motion";
 
@@ -10,9 +10,12 @@ export default function Error500() {
     if (errorInfoStr) {
       telemetry = JSON.parse(errorInfoStr);
     }
-  } catch (e) {}
+  } catch (_e) { /* ignore parse errors */ }
 
-  const requestId = telemetry.requestId || "req-sys-" + Math.random().toString(36).substring(2, 8);
+  // Use useState so the random ID is stable across re-renders and not accessed via ref.current during render
+  const [requestId] = useState(
+    () => telemetry.requestId || ("req-sys-" + Math.random().toString(36).substring(2, 8))
+  );
 
   const handleRetry = () => {
     window.location.reload();

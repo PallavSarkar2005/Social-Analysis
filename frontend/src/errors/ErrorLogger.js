@@ -1,4 +1,3 @@
-import client from "../api/client";
 import { getTelemetryUserId } from "../api/authToken";
 
 class ErrorLogger {
@@ -6,7 +5,7 @@ class ErrorLogger {
     return "req-" + Math.random().toString(36).substring(2, 10);
   }
 
-  static async log(error, type = "client_error", severity = "medium", extraContext = {}) {
+  static async log(error, _type = "client_error", severity = "medium", extraContext = {}) {
     const requestId = this.generateId();
     const timestamp = new Date().toISOString();
     

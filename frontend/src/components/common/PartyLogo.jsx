@@ -1,4 +1,4 @@
-import React, { useState, memo } from "react";
+import { useState, memo } from "react";
 import { getPartyTheme } from "../../config/partyThemes";
 import SafeImage from "./SafeImage";
 

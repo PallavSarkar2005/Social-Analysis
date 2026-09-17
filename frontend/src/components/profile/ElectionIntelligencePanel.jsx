@@ -1,4 +1,3 @@
-import React from "react";
 import { Trophy, ExternalLink } from "lucide-react";
 import { isVerifiedValue, safeArray } from "../../utils/profileFacts";
 import { safeText } from "../../utils/safeData";

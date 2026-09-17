@@ -14,22 +14,13 @@ import {
   Cell,
 } from "recharts";
 import {
-  Users,
   Trophy,
-  Percent,
-  Video,
-  Eye,
   Sparkles,
   Search,
-  MessageSquare,
-  Heart,
-  Calendar,
   RefreshCw,
   Award,
   Clock,
-  ArrowRight,
   TrendingUp,
-  AlertCircle,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import toast, { Toaster } from "react-hot-toast";

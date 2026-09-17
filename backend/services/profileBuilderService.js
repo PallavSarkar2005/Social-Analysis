@@ -146,7 +146,7 @@ Respond with ONLY a JSON object:
 };
 
 export const fetchNewsForAccount = async (account, { logPrefix = "[NEWS]" } = {}) => {
-  let freshNews = [];
+  let freshNews;
 
   try {
     const rssUrl = `https://news.google.com/rss/search?hl=en-IN&gl=IN&ceid=IN:en&q=${encodeURIComponent(account.name)}`;
@@ -169,7 +169,7 @@ export const fetchNewsForAccount = async (account, { logPrefix = "[NEWS]" } = {}
     return null;
   }
 
-  let sentiment = null;
+  let sentiment;
   try {
     console.log(`${logPrefix} AI sentiment start`);
     sentiment = await analyzeNewsSentiment(

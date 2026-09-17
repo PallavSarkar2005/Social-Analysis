@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import { useEffect, useRef } from "react";
 import { Link2, Unlink, CheckCircle2, XCircle, RefreshCw } from "lucide-react";
 import toast from "react-hot-toast";
 import { useIntegrations } from "../../hooks/useQueries";

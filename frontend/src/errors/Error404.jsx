@@ -1,5 +1,4 @@
-import React from "react";
-import { Search, Home, ArrowLeft, Layers } from "lucide-react";
+import { Search, ArrowLeft, Layers } from "lucide-react";
 import { motion } from "framer-motion";
 
 export default function Error404() {

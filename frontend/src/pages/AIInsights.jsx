@@ -8,11 +8,9 @@ import { formatIndianTime } from "../utils/dateFormatter";
 import { devError, devWarn } from "../utils/devLog";
 import { autoSaveReport, buildAiInsightReportPayload } from "../utils/autoSaveReport";
 import {
-  Sparkles,
   Brain,
   Cpu,
   Send,
-  RefreshCw,
   User,
   Copy,
   Check,
@@ -21,15 +19,13 @@ import {
   Plus,
   Trash2,
   AlertCircle,
-  HelpCircle,
   Clock,
-  ArrowRight,
 } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+
 import toast, { Toaster } from "react-hot-toast";
 
 export default function AIInsights() {
-  const [accounts, setAccounts] = useState([]);
+  const [_accounts, setAccounts] = useState([]);
   const [totalStats, setTotalStats] = useState({ subscribers: 0, views: 0, count: 0 });
   const [sessions, setSessions] = useState([]);
   const [activeSessionId, setActiveSessionId] = useState("");
@@ -64,7 +60,7 @@ export default function AIInsights() {
                 subs += Number(sumRes.data.followers || 0);
                 views += Number(sumRes.data.totalViews || 0);
               }
-            } catch (e) {
+            } catch (_e) {
               devWarn(`Could not load summary for ${acc.name}`);
             }
           })
@@ -115,7 +111,7 @@ export default function AIInsights() {
       try {
         setChatHistory(JSON.parse(savedOffline));
         sessionStorage.removeItem("cached_offline_insights");
-      } catch (e) {}
+      } catch (_e) { /* ignore parse error */ }
     }
   }, []);
 
@@ -124,7 +120,7 @@ export default function AIInsights() {
   }, [chatHistory, streamingContent, loading]);
 
   // Load past chat sessions from LocalStorage
-  const loadChatSessions = () => {
+  function loadChatSessions() {
     try {
       const stored = localStorage.getItem("socialiq_chat_sessions_v1");
       if (stored) {
@@ -139,7 +135,7 @@ export default function AIInsights() {
       } else {
         createNewSession();
       }
-    } catch (e) {
+    } catch (_e) {
       createNewSession();
     }
   };
@@ -351,7 +347,7 @@ export default function AIInsights() {
     }
   };
 
-  const handleRegenerate = () => {
+  const _handleRegenerate = () => {
     // Find last user message
     const userMsgs = chatHistory.filter((m) => m.role === "user");
     if (userMsgs.length > 0) {

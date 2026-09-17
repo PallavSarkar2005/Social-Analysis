@@ -27,7 +27,7 @@ export default function ResetPassword() {
       return;
     }
 
-    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&#^()_+=\[\]{};':"\\|,.<>\/?~`-])[A-Za-z\d@$!%*?&#^()_+=\[\]{};':"\\|,.<>\/?~`-]{8,}$/;
+    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&#^()_+=[\]{};':"\\|,.<>/?~`-])[A-Za-z\d@$!%*?&#^()_+=[\]{};':"\\|,.<>/?~`-]{8,}$/;
     if (!passwordRegex.test(password)) {
       toast.error("Password must contain at least 1 uppercase, 1 lowercase, 1 number, and 1 special character.");
       return;

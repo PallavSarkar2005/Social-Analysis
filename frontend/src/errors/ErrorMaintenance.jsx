@@ -1,5 +1,4 @@
-import React from "react";
-import { Settings, RefreshCw, Globe, Layers } from "lucide-react";
+import { Settings, RefreshCw, Globe } from "lucide-react";
 import { motion } from "framer-motion";
 
 export default function ErrorMaintenance() {

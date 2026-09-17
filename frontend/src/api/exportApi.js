@@ -76,7 +76,7 @@ export const triggerDownload = async (endpointPath, format, filename) => {
       if (e.message && e.message !== "Export failed" && !e.message.includes("JSON")) {
         throw e;
       }
-      throw new Error("Export failed: unexpected JSON response");
+      throw new Error("Export failed: unexpected JSON response", { cause: e });
     }
   }
 

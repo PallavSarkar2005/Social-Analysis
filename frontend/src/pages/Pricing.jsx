@@ -4,13 +4,7 @@ import { useAuth } from "../context/AuthContext";
 import {
   CheckCircle,
   HelpCircle,
-  ArrowRight,
-  TrendingUp,
-  ShieldCheck,
-  Zap,
-  Globe,
-  Sparkles,
-  Award,
+  ArrowRight
 } from "lucide-react";
 import { motion } from "framer-motion";
 

@@ -1,4 +1,3 @@
-import React from "react";
 import { ShieldCheck, Eye, BarChart2, Sparkles, RefreshCw } from "lucide-react";
 import toast from "react-hot-toast";
 import { usePrivacyPreferences, useUpdatePrivacyPreferences } from "../../hooks/useQueries";

@@ -5,14 +5,9 @@ import { useAuth } from "../context/AuthContext";
 import SafeImage from "../components/common/SafeImage";
 import { 
   Sparkles, 
-  TrendingUp, 
-  BarChart3, 
-  Users, 
-  Search, 
   FileText, 
   Brain, 
   Globe, 
-  Check, 
   ChevronDown, 
   Play, 
   ArrowRight, 
@@ -20,8 +15,7 @@ import {
   ShieldCheck,
   Trophy,
   Zap,
-  Activity,
-  Award
+  Activity
 } from "lucide-react";
 import { XAxis, YAxis, Tooltip, ResponsiveContainer, AreaChart, Area } from "recharts";
 

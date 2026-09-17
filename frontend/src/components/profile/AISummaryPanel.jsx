@@ -1,4 +1,3 @@
-import React from "react";
 import { Sparkles } from "lucide-react";
 import { safeArray } from "../../utils/profileFacts";
 import { asObject, safeText } from "../../utils/safeData";

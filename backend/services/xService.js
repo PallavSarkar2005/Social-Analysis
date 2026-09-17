@@ -1,10 +1,10 @@
 import { fetchWithTwscrape } from "./providers/twscrapeProvider.js";
 import { fetchWithTwikit } from "./providers/twikitProvider.js";
-import { getCachedProfile, setCachedProfile } from "./providers/cacheProvider.js";
+import { setCachedProfile } from "./providers/cacheProvider.js";
 
 
 export const fetchXProfileData = async (username) => {
-  let twscrapeErr = null;
+  let twscrapeErr;
 
   // 1. Try Twscrape
   console.log("Provider Start:", "twscrape");

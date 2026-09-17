@@ -1,6 +1,4 @@
-import React from "react";
-import { Bell, Mail, ToggleLeft, ToggleRight, Sparkles, ShieldCheck, HelpCircle } from "lucide-react";
-import toast from "react-hot-toast";
+import { Bell, Mail, Sparkles, ShieldCheck } from "lucide-react";
 
 export default function Notifications({
   notificationPrefs = {

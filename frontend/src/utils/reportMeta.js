@@ -151,7 +151,7 @@ export function getReportDisplayTitle(report) {
   if (!raw) return "Untitled report";
   return raw
     .replace(
-      /\s*[—–\-]\s*(Political Profile|Election Intelligence|Influence Intelligence|News & Sentiment|Timeline Report|Political Intelligence Report)\s*$/i,
+      /\s*[—–-]\s*(Political Profile|Election Intelligence|Influence Intelligence|News & Sentiment|Timeline Report|Political Intelligence Report)\s*$/i,
       ""
     )
     .trim();

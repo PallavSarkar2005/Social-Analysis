@@ -34,7 +34,7 @@ const runRepair = async () => {
         console.log(`  - Found malformed URL: "${url}" for Account: ${account.name}`);
         
         // Extract the first valid URL
-        const match = url.match(/(https?:\/\/[^\]\)\s]+)/);
+        const match = url.match(/(https?:\/\/[^\])\s]+)/);
         if (match && match[1]) {
           url = match[1];
           modified = true;
@@ -43,7 +43,7 @@ const runRepair = async () => {
 
       // Check for double links or trailing brackets
       if (url.endsWith("]") || url.endsWith(")")) {
-        url = url.replace(/[\]\)]+$/, "");
+        url = url.replace(/[\])]+$/, "");
         modified = true;
       }
 

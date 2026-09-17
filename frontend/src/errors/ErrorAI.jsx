@@ -1,5 +1,4 @@
-import React from "react";
-import { Brain, ArrowLeft, Layers, Sparkles } from "lucide-react";
+import { Brain, Layers, Sparkles } from "lucide-react";
 import { motion } from "framer-motion";
 
 export default function ErrorAI() {

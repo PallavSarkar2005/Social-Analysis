@@ -16,7 +16,7 @@ import {
   updateAccountPartyState,
 } from "../api/accountApi";
 import { analyzeYoutubeUrl } from "../api/analyzerApi";
-import { compareAccounts, compareYoutubeCreators } from "../api/compareApi";
+import { compareYoutubeCreators } from "../api/compareApi";
 import { getChannelHistory } from "../api/historyApi";
 import { syncAllChannels } from "../api/youtubeApi";
 import { getNotifications, markAsRead, markAllAsRead } from "../api/notificationApi";
@@ -263,7 +263,7 @@ export const useAnalyzer = () => {
     }) => {
       return analyzeYoutubeUrl(searchUrl, group, force, state, party);
     },
-    onSuccess: async (result) => {
+    onSuccess: async (_result) => {
       await queryClient.refetchQueries({
         predicate: (q) => q.queryKey[0]?.toString().startsWith("party"),
         type: "active",
